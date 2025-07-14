@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - go build -o bulg ./cmd/bulg
+  run:
+    cmds:
+      - go run ./cmd/bulg
+  test:
+    cmds:
+      - go test ./...
+  install:
+    cmds:
+      - go install ./cmd/bulg
