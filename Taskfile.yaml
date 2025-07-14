@@ -3,13 +3,13 @@ version: '3'
 tasks:
   default:
     cmds:
-      - go build -o bulg ./cmd/bulg
+      - go build -o totalrecall ./cmd/totalrecall
   run:
     cmds:
-      - go run ./cmd/bulg
+      - go run ./cmd/totalrecall
   test:
     cmds:
       - go test ./...
   install:
     cmds:
-      - go install ./cmd/bulg
+      - go install ./cmd/totalrecall

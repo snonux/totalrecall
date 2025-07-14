@@ -1,6 +1,6 @@
-# bulg - Bulgarian Anki Flashcard Generator
+# totalrecall - Bulgarian Anki Flashcard Generator
 
-`bulg` is a command-line tool that generates Anki flashcard materials from Bulgarian words. It creates audio pronunciation files using espeak-ng or OpenAI TTS and downloads representative images from web search APIs.
+`totalrecall` is a command-line tool that generates Anki flashcard materials from Bulgarian words. It creates audio pronunciation files using espeak-ng or OpenAI TTS and downloads representative images from web search APIs.
 
 ## Features
 
@@ -41,42 +41,42 @@
    - Generate an API key at https://platform.openai.com/api-keys
    - Set the key using one of these methods:
      - Environment variable: `export OPENAI_API_KEY="sk-..."`
-     - Configuration file: Add to `.bulg.yaml`
+     - Configuration file: Add to `.totalrecall.yaml`
 
 ### Building from Source
 
 ```bash
-git clone https://github.com/yourusername/bulg.git
-cd bulg
-go build -o bulg ./cmd/bulg
+git clone https://github.com/yourusername/totalrecall.git
+cd totalrecall
+go build -o totalrecall ./cmd/totalrecall
 ```
 
 Or install directly:
 
 ```bash
-go install codeberg.org/snonux/bulg/cmd/bulg@latest
+go install codeberg.org/snonux/totalrecall/cmd/totalrecall@latest
 ```
 
 ## Quick Start
 
 1. Generate materials for a single word:
    ```bash
-   bulg ябълка
+   totalrecall ябълка
    ```
 
 2. Process multiple words from a file:
    ```bash
-   bulg --batch words.txt
+   totalrecall --batch words.txt
    ```
 
 3. Generate with Anki CSV:
    ```bash
-   bulg ябълка --anki
+   totalrecall ябълка --anki
    ```
 
 ## Configuration
 
-Create a `.bulg.yaml` file in your home directory or project folder:
+Create a `.totalrecall.yaml` file in your home directory or project folder:
 
 ```yaml
 audio:
@@ -112,7 +112,7 @@ output:
 ## Usage
 
 ```bash
-bulg [word] [flags]
+totalrecall [word] [flags]
 ```
 
 ### Flags
@@ -155,25 +155,25 @@ bulg [word] [flags]
 ### Basic Usage
 ```bash
 # Single word with espeak-ng
-bulg котка
+totalrecall котка
 
 # Using OpenAI TTS (requires API key in config)
-bulg котка --audio-provider openai
+totalrecall котка --audio-provider openai
 
 # High-quality OpenAI with specific voice
-bulg ябълка --audio-provider openai --openai-model tts-1-hd --openai-voice alloy
+totalrecall ябълка --audio-provider openai --openai-model tts-1-hd --openai-voice alloy
 
 # Multiple words with custom output
-bulg --batch animals.txt -o ./animal_cards
+totalrecall --batch animals.txt -o ./animal_cards
 
 # ESpeak with tuning
-bulg ябълка --pitch 40 --word-gap 3
+totalrecall ябълка --pitch 40 --word-gap 3
 
 # Skip images, audio only
-bulg куче --skip-images
+totalrecall куче --skip-images
 
 # Generate Anki import file
-bulg --batch words.txt --anki
+totalrecall --batch words.txt --anki
 ```
 
 ### Batch File Format
@@ -225,8 +225,8 @@ The Bulgarian voice in espeak-ng can sound robotic. To improve quality:
 espeak-ng -v bg -p 40 -s 140 "Здравей"  # Deeper, slower
 espeak-ng -v bg+f1 -p 60 -g 2 "Здравей"  # Higher pitch, word gaps
 
-# Using bulg with tuning
-bulg ябълка --pitch 40 --word-gap 2 --amplitude 120
+# Using totalrecall with tuning
+totalrecall ябълка --pitch 40 --word-gap 2 --amplitude 120
 ```
 
 Recommended settings for clearer pronunciation:
@@ -242,15 +242,15 @@ OpenAI TTS provides much more natural Bulgarian pronunciation:
 ```bash
 # Option 1: Use environment variable
 export OPENAI_API_KEY="sk-your-key-here"
-bulg ябълка --audio-provider openai
+totalrecall ябълка --audio-provider openai
 
-# Option 2: Set in .bulg.yaml
+# Option 2: Set in .totalrecall.yaml
 audio:
   provider: openai
   openai_key: "sk-your-key-here"
 
 # Use with custom voice
-bulg ябълка --audio-provider openai --openai-voice alloy
+totalrecall ябълка --audio-provider openai --openai-voice alloy
 ```
 
 **OpenAI Pricing**: 

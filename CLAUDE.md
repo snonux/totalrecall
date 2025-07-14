@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-**bulg** - Bulgarian Anki Flashcard Generator
+**totalrecall** - Bulgarian Anki Flashcard Generator
 
 A Go CLI tool that generates Anki flashcard materials from Bulgarian words:
 - Generates audio pronunciation using espeak-ng
@@ -35,10 +35,10 @@ task install
 ### Common Development Commands
 ```bash
 # Build for current platform
-go build -o bulg ./cmd/bulg
+go build -o totalrecall ./cmd/totalrecall
 
 # Run without building
-go run ./cmd/bulg "ябълка"
+go run ./cmd/totalrecall "ябълка"
 
 # Run tests with coverage
 go test -v -cover ./...
@@ -57,8 +57,8 @@ golangci-lint run
 
 ### Package Structure
 ```
-bulg/
-├── cmd/bulg/          # CLI entry point
+totalrecall/
+├── cmd/totalrecall/          # CLI entry point
 ├── internal/          # Private packages
 │   ├── audio/        # Audio generation (espeak-ng wrapper)
 │   ├── image/        # Image search functionality
@@ -109,7 +109,7 @@ espeak-ng -v bg+f1 "Здравей"
 ```
 
 ### Package Declaration Error
-If you see an error about `package main`, ensure `cmd/bulg/main.go` has:
+If you see an error about `package main`, ensure `cmd/totalrecall/main.go` has:
 ```go
 package main  // NOT package bulg
 ```
