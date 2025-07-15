@@ -2,6 +2,8 @@
 
 `totalrecall` is a command-line tool that generates Anki flashcard materials from Bulgarian words. It creates audio pronunciation files and generates images using AI.
 
+It has mainly been vibe coded using Claude Code CLI.
+
 ⚠️ **Important:** This tool uses OpenAI services by default, which requires an API key. See [Quick Start](#quick-start) for setup instructions or use the free alternatives with `--audio-provider espeak --image-api pixabay`.
 
 ## Features
