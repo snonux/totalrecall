@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
+	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	
@@ -27,6 +30,7 @@ var (
 	skipImages   bool
 	imagesPerWord int
 	generateAnki bool
+	listModels   bool
 	// Audio provider flags
 	audioProvider  string
 	// Audio tuning flags (espeak)
@@ -34,9 +38,10 @@ var (
 	audioAmplitude int
 	audioWordGap   int
 	// OpenAI flags
-	openAIModel    string
-	openAIVoice    string
-	openAISpeed    float64
+	openAIModel       string
+	openAIVoice       string
+	openAISpeed       float64
+	openAIInstruction string
 	// OpenAI Image flags
 	openAIImageModel   string
 	openAIImageSize    string
@@ -77,6 +82,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&skipImages, "skip-images", false, "Skip image download")
 	rootCmd.Flags().IntVar(&imagesPerWord, "images-per-word", 1, "Number of images to download per word")
 	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import CSV file")
+	rootCmd.Flags().BoolVar(&listModels, "list-models", false, "List available OpenAI models for the current API key")
 	
 	// Audio provider selection
 	rootCmd.Flags().StringVar(&audioProvider, "audio-provider", "openai", "Audio provider: espeak or openai")
@@ -87,13 +93,14 @@ func init() {
 	rootCmd.Flags().IntVar(&audioWordGap, "word-gap", 0, "Gap between words in 10ms units (default 0, espeak only)")
 	
 	// OpenAI flags
-	rootCmd.Flags().StringVar(&openAIModel, "openai-model", "tts-1", "OpenAI model: tts-1 or tts-1-hd")
-	rootCmd.Flags().StringVar(&openAIVoice, "openai-voice", "nova", "OpenAI voice: alloy, echo, fable, onyx, nova, shimmer")
-	rootCmd.Flags().Float64Var(&openAISpeed, "openai-speed", 1.0, "OpenAI speech speed (0.25 to 4.0)")
+	rootCmd.Flags().StringVar(&openAIModel, "openai-model", "gpt-4o-mini-tts", "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")
+	rootCmd.Flags().StringVar(&openAIVoice, "openai-voice", "nova", "OpenAI voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse")
+	rootCmd.Flags().Float64Var(&openAISpeed, "openai-speed", 0.8, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
+	rootCmd.Flags().StringVar(&openAIInstruction, "openai-instruction", "", "Voice instructions for gpt-4o-mini-tts model (e.g., 'speak slowly with a Bulgarian accent')")
 	
 	// OpenAI Image Generation flags
-	rootCmd.Flags().StringVar(&openAIImageModel, "openai-image-model", "dall-e-2", "OpenAI image model: dall-e-2 or dall-e-3")
-	rootCmd.Flags().StringVar(&openAIImageSize, "openai-image-size", "512x512", "Image size: 256x256, 512x512, 1024x1024 (dall-e-3: also 1024x1792, 1792x1024)")
+	rootCmd.Flags().StringVar(&openAIImageModel, "openai-image-model", "dall-e-3", "OpenAI image model: dall-e-2 or dall-e-3")
+	rootCmd.Flags().StringVar(&openAIImageSize, "openai-image-size", "1024x1024", "Image size: 256x256, 512x512, 1024x1024 (dall-e-3: also 1024x1792, 1792x1024)")
 	rootCmd.Flags().StringVar(&openAIImageQuality, "openai-image-quality", "standard", "Image quality: standard or hd (dall-e-3 only)")
 	rootCmd.Flags().StringVar(&openAIImageStyle, "openai-image-style", "natural", "Image style: natural or vivid (dall-e-3 only)")
 	
@@ -107,6 +114,7 @@ func init() {
 	viper.BindPFlag("audio.openai_model", rootCmd.Flags().Lookup("openai-model"))
 	viper.BindPFlag("audio.openai_voice", rootCmd.Flags().Lookup("openai-voice"))
 	viper.BindPFlag("audio.openai_speed", rootCmd.Flags().Lookup("openai-speed"))
+	viper.BindPFlag("audio.openai_instruction", rootCmd.Flags().Lookup("openai-instruction"))
 	viper.BindPFlag("output.directory", rootCmd.Flags().Lookup("output"))
 	viper.BindPFlag("image.provider", rootCmd.Flags().Lookup("image-api"))
 	// Bind OpenAI image flags
@@ -143,6 +151,11 @@ func initConfig() {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
+	// Handle --list-models flag
+	if listModels {
+		return listAvailableModels()
+	}
+	
 	// Determine words to process
 	var words []string
 	
@@ -238,10 +251,11 @@ func generateAudio(word string) error {
 		ESpeakWordGap:   audioWordGap,
 		
 		// OpenAI settings
-		OpenAIKey:   getOpenAIKey(),
-		OpenAIModel: openAIModel,
-		OpenAIVoice: openAIVoice,
-		OpenAISpeed: openAISpeed,
+		OpenAIKey:         getOpenAIKey(),
+		OpenAIModel:       openAIModel,
+		OpenAIVoice:       openAIVoice,
+		OpenAISpeed:       openAISpeed,
+		OpenAIInstruction: openAIInstruction,
 		
 		// Caching
 		EnableCache: viper.GetBool("audio.enable_cache"),
@@ -269,14 +283,17 @@ func generateAudio(word string) error {
 	if audioWordGap == 0 && viper.IsSet("audio.word_gap") {
 		providerConfig.ESpeakWordGap = viper.GetInt("audio.word_gap")
 	}
-	if openAIModel == "tts-1" && viper.IsSet("audio.openai_model") {
+	if openAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
 		providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
 	}
 	if openAIVoice == "nova" && viper.IsSet("audio.openai_voice") {
 		providerConfig.OpenAIVoice = viper.GetString("audio.openai_voice")
 	}
-	if openAISpeed == 1.0 && viper.IsSet("audio.openai_speed") {
+	if openAISpeed == 0.8 && viper.IsSet("audio.openai_speed") {
 		providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
+	}
+	if openAIInstruction == "" && viper.IsSet("audio.openai_instruction") {
+		providerConfig.OpenAIInstruction = viper.GetString("audio.openai_instruction")
 	}
 	
 	// Create the audio provider
@@ -337,10 +354,10 @@ func downloadImages(word string) error {
 		}
 		
 		// Use config file values if not overridden by flags
-		if openAIImageModel == "dall-e-2" && viper.IsSet("image.openai_model") {
+		if openAIImageModel == "dall-e-3" && viper.IsSet("image.openai_model") {
 			openaiConfig.Model = viper.GetString("image.openai_model")
 		}
-		if openAIImageSize == "512x512" && viper.IsSet("image.openai_size") {
+		if openAIImageSize == "1024x1024" && viper.IsSet("image.openai_size") {
 			openaiConfig.Size = viper.GetString("image.openai_size")
 		}
 		if openAIImageQuality == "standard" && viper.IsSet("image.openai_quality") {
@@ -495,6 +512,86 @@ func getOpenAIKey() string {
 	
 	// Then check config file
 	return viper.GetString("audio.openai_key")
+}
+
+func listAvailableModels() error {
+	// Get OpenAI API key
+	apiKey := getOpenAIKey()
+	if apiKey == "" {
+		return fmt.Errorf("OpenAI API key not found. Set OPENAI_API_KEY environment variable or configure in .totalrecall.yaml")
+	}
+	
+	// Create OpenAI client
+	client := openai.NewClient(apiKey)
+	
+	// List models
+	ctx := context.Background()
+	models, err := client.ListModels(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list models: %w", err)
+	}
+	
+	// Categorize models
+	ttsModels := []string{}
+	imageModels := []string{}
+	chatModels := []string{}
+	
+	for _, model := range models.Models {
+		modelID := model.ID
+		if strings.Contains(modelID, "tts") || strings.Contains(modelID, "audio") {
+			ttsModels = append(ttsModels, modelID)
+		} else if strings.Contains(modelID, "dall-e") {
+			imageModels = append(imageModels, modelID)
+		} else if strings.Contains(modelID, "gpt") || strings.Contains(modelID, "chat") {
+			chatModels = append(chatModels, modelID)
+		}
+	}
+	
+	// Sort models
+	sort.Strings(ttsModels)
+	sort.Strings(imageModels)
+	sort.Strings(chatModels)
+	
+	// Print models
+	fmt.Println("Available OpenAI Models:")
+	fmt.Println("\nText-to-Speech (TTS) Models:")
+	if len(ttsModels) == 0 {
+		fmt.Println("  No TTS models found")
+	} else {
+		for _, model := range ttsModels {
+			fmt.Printf("  %s\n", model)
+		}
+	}
+	
+	fmt.Println("\nImage Generation Models:")
+	if len(imageModels) == 0 {
+		fmt.Println("  No image models found")
+	} else {
+		for _, model := range imageModels {
+			fmt.Printf("  %s\n", model)
+		}
+	}
+	
+	fmt.Println("\nChat/Translation Models (for Bulgarian translation):")
+	if len(chatModels) > 10 {
+		// Show only relevant models
+		relevantModels := []string{}
+		for _, model := range chatModels {
+			if strings.Contains(model, "gpt-4") || strings.Contains(model, "gpt-3.5") {
+				relevantModels = append(relevantModels, model)
+			}
+		}
+		for _, model := range relevantModels {
+			fmt.Printf("  %s\n", model)
+		}
+		fmt.Printf("  ... and %d more models\n", len(chatModels)-len(relevantModels))
+	} else {
+		for _, model := range chatModels {
+			fmt.Printf("  %s\n", model)
+		}
+	}
+	
+	return nil
 }
 
 func main() {

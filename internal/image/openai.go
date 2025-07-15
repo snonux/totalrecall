@@ -48,10 +48,10 @@ func NewOpenAIClient(config *OpenAIConfig) *OpenAIClient {
 	
 	// Set defaults
 	if config.Model == "" {
-		config.Model = "dall-e-2"
+		config.Model = "dall-e-3"
 	}
 	if config.Size == "" {
-		config.Size = "512x512"
+		config.Size = "1024x1024"
 	}
 	if config.Quality == "" {
 		config.Quality = "standard"
@@ -97,6 +97,7 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		cacheFile := c.getCacheFilePath(opts.Query)
 		if info, err := os.Stat(cacheFile); err == nil && info.Size() > 0 {
 			// Return cached result
+			fmt.Printf("Using cached image for '%s'\n", opts.Query)
 			result := SearchResult{
 				ID:           c.generateImageID(opts.Query),
 				URL:          cacheFile,
@@ -112,10 +113,19 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 	}
 	
 	// Translate Bulgarian word to English for better results
-	translatedWord := translateBulgarianToEnglish(opts.Query)
+	translatedWord, err := c.translateBulgarianToEnglish(ctx, opts.Query)
+	if err != nil {
+		// If translation fails, fall back to using the original word
+		fmt.Printf("Translation failed: %v, using original word\n", err)
+		translatedWord = opts.Query
+	}
 	
 	// Create educational prompt
 	prompt := c.createEducationalPrompt(opts.Query, translatedWord)
+	
+	// Log the prompt to stdout for debugging
+	fmt.Printf("OpenAI Image Generation Prompt: %s\n", prompt)
+	fmt.Printf("OpenAI Image Generation: Using model '%s' with size '%s'\n", c.model, c.size)
 	
 	// Create the image generation request
 	req := openai.ImageRequest{
@@ -220,22 +230,47 @@ func (c *OpenAIClient) Name() string {
 
 // createEducationalPrompt generates a prompt optimized for language learning
 func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation string) string {
-	// Create a prompt that generates clear, educational images
-	// suitable for language learning flashcards
+	// Create a simple, clear prompt for educational images
 	return fmt.Sprintf(
-		"A simple, clear, photorealistic educational image showing %s, "+
-			"suitable for language learning flashcards. "+
-			"The image should be easily recognizable, with good lighting, "+
-			"plain background, and focused on a single clear subject. "+
+		"Generate a simple, clear image of: %s. "+
+			"This is for the Bulgarian word '%s' which means %s. "+
+			"The image should be educational and suitable for language learning flashcards. "+
+			"Requirements: single main subject, plain background, clear and recognizable. "+
 			"No text, labels, or writing in the image.",
-		englishTranslation,
+		englishTranslation, bulgarianWord, englishTranslation,
 	)
 }
 
-// translateBulgarianToEnglish translates a Bulgarian word to English
-func translateBulgarianToEnglish(word string) string {
-	// Use the existing translation function from translate.go
-	return translateBulgarianQuery(word)
+// translateBulgarianToEnglish translates a Bulgarian word to English using OpenAI
+func (c *OpenAIClient) translateBulgarianToEnglish(ctx context.Context, word string) (string, error) {
+	// Use OpenAI chat completion to translate
+	fmt.Printf("OpenAI Translation: Using model 'gpt-4o-mini' to translate '%s'\n", word)
+	
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf("Translate the Bulgarian word '%s' to English. Respond with only the English translation, nothing else.", word),
+			},
+		},
+		Temperature: 0.3, // Lower temperature for more consistent translations
+		MaxTokens:   50,
+	}
+	
+	resp, err := c.client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("translation failed: %w", err)
+	}
+	
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
+		return "", fmt.Errorf("no translation received")
+	}
+	
+	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
+	fmt.Printf("Translated '%s' to '%s'\n", word, translation)
+	
+	return translation, nil
 }
 
 // getCacheFilePath generates a cache file path for the given word

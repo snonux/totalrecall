@@ -1,0 +1,59 @@
+# TotalRecall Configuration Example
+# Copy this to ~/.totalrecall.yaml or ./.totalrecall.yaml
+
+# Audio configuration
+audio:
+  # Provider: espeak or openai
+  provider: openai
+  
+  # Audio output format
+  format: mp3
+  
+  # ESpeak settings
+  voice: bg+f1
+  speed: 150
+  pitch: 50
+  amplitude: 100
+  word_gap: 0
+  
+  # OpenAI TTS settings
+  openai_key: ${OPENAI_API_KEY}  # Can also use environment variable
+  openai_model: gpt-4o-mini-tts  # Options: tts-1, tts-1-hd, gpt-4o-mini-tts
+  openai_voice: nova              # Options: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse
+  openai_speed: 0.8               # Range: 0.25 to 4.0 (may be ignored by gpt-4o-mini models)
+  
+  # Voice instructions for gpt-4o-mini-tts model
+  # This allows you to customize how the AI speaks
+  openai_instruction: "Speak slowly and clearly with natural Bulgarian pronunciation, emphasizing each syllable distinctly"
+  
+  # Alternative instruction examples:
+  # openai_instruction: "Pronounce with a native Bulgarian accent, speaking at a moderate pace suitable for language learning"
+  # openai_instruction: "Speak as a patient Bulgarian language teacher, clearly articulating each sound"
+  # openai_instruction: "Use clear Bulgarian pronunciation with slight pauses between syllables"
+  
+  # Caching
+  enable_cache: true
+  cache_dir: ./.audio_cache
+
+# Image configuration
+image:
+  # Provider: pixabay, unsplash, or openai
+  provider: openai
+  
+  # API keys for image providers
+  pixabay_key: ""     # Optional for Pixabay (higher rate limits with key)
+  unsplash_key: ""    # Required for Unsplash
+  
+  # OpenAI DALL-E settings
+  openai_model: dall-e-3     # Options: dall-e-2, dall-e-3
+  openai_size: 1024x1024     # Options vary by model
+  openai_quality: standard   # Options: standard, hd (dall-e-3 only)
+  openai_style: natural      # Options: natural, vivid (dall-e-3 only)
+  
+  # Caching
+  enable_cache: true
+  cache_dir: ./.image_cache
+
+# Output configuration
+output:
+  directory: ./anki_cards

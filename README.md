@@ -107,9 +107,10 @@ audio:
   
   # OpenAI settings
   openai_key: "sk-..."  # Your OpenAI API key
-  openai_model: "tts-1" # Model: tts-1 or tts-1-hd
-  openai_voice: "nova"  # Voice: alloy, echo, fable, onyx, nova, shimmer
-  openai_speed: 1.0     # Speed: 0.25 to 4.0
+  openai_model: "gpt-4o-mini-tts" # Model: tts-1, tts-1-hd, or gpt-4o-mini-tts
+  openai_voice: "nova"  # Voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse
+  openai_speed: 0.8     # Speed: 0.25 to 4.0 (may be ignored by gpt-4o-mini models)
+  openai_instruction: "Speak slowly and clearly with natural Bulgarian pronunciation" # For gpt-4o-mini models only
   
   # Caching
   enable_cache: true
@@ -162,9 +163,10 @@ totalrecall [word] [flags]
 - `--word-gap int`: Gap between words in 10ms units (default 0, espeak only)
 
 #### OpenAI Audio Options
-- `--openai-model string`: Model - tts-1 or tts-1-hd (default "tts-1")
-- `--openai-voice string`: Voice - alloy, echo, fable, onyx, nova, shimmer (default "nova")
-- `--openai-speed float`: Speech speed 0.25-4.0 (default 1.0)
+- `--openai-model string`: Model - tts-1, tts-1-hd, or gpt-4o-mini-tts (default "gpt-4o-mini-tts", requires special access)
+- `--openai-voice string`: Voice - alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default "nova")
+- `--openai-speed float`: Speech speed 0.25-4.0 (default 0.8, may be ignored by gpt-4o-mini-tts)
+- `--openai-instruction string`: Voice instructions for gpt-4o-mini-tts model (e.g., "speak with a Bulgarian accent")
 
 #### OpenAI Image Options
 - `--openai-image-model string`: Model - dall-e-2 or dall-e-3 (default "dall-e-2")
@@ -200,6 +202,9 @@ totalrecall котка --audio-provider espeak
 
 # High-quality OpenAI with specific voice
 totalrecall ябълка --audio-provider openai --openai-model tts-1-hd --openai-voice alloy
+
+# Use gpt-4o-mini-tts with custom voice instructions
+totalrecall ябълка --openai-instruction "Speak like a patient Bulgarian teacher, very slowly and clearly"
 
 # Multiple words with custom output
 totalrecall --batch animals.txt -o ./animal_cards
@@ -314,11 +319,12 @@ audio:
 totalrecall ябълка --audio-provider openai --openai-voice alloy
 ```
 
-**OpenAI Pricing**: 
-- tts-1: $0.015 per 1K characters (~$0.0001 per word)
-- tts-1-hd: $0.030 per 1K characters (~$0.0002 per word)
+**OpenAI TTS Models**:
+- **gpt-4o-mini-tts** (default): New model with voice instruction support for customizable speech styles. Requires special API access.
+- **tts-1**: Standard quality at $0.015 per 1K characters (~$0.0001 per word)
+- **tts-1-hd**: Higher quality at $0.030 per 1K characters (~$0.0002 per word)
 
-The tool caches audio to avoid repeated API calls for the same words.
+The gpt-4o-mini-tts model allows you to control how the voice speaks using natural language instructions, making it ideal for language learning applications. The tool caches audio to avoid repeated API calls for the same words.
 
 ## License
 

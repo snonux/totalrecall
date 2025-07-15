@@ -62,12 +62,27 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 		}
 	}
 	
+	// Preprocess text for clearer Bulgarian pronunciation
+	processedText := p.preprocessBulgarianText(text)
+	
 	// Prepare the TTS request
+	// OpenAI TTS will automatically detect and pronounce Bulgarian text
+	fmt.Printf("OpenAI TTS: Using model '%s' with voice '%s' at speed %.2f\n", p.config.OpenAIModel, p.config.OpenAIVoice, p.config.OpenAISpeed)
+	if p.config.OpenAIInstruction != "" && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
+		fmt.Printf("OpenAI TTS Instruction: '%s'\n", p.config.OpenAIInstruction)
+	}
+	fmt.Printf("OpenAI TTS Input: '%s'\n", processedText)
+	
 	req := openai.CreateSpeechRequest{
 		Model: openai.SpeechModel(p.config.OpenAIModel),
-		Input: text,
+		Input: processedText,
 		Voice: openai.SpeechVoice(p.config.OpenAIVoice),
 		Speed: p.config.OpenAISpeed,
+	}
+	
+	// Add instructions for gpt-4o-mini-tts model
+	if p.config.OpenAIInstruction != "" && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
+		req.Instructions = p.config.OpenAIInstruction
 	}
 	
 	// Determine response format based on output file extension
@@ -93,6 +108,11 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 	// Make the API call
 	response, err := p.client.CreateSpeech(ctx, req)
 	if err != nil {
+		// Check if it's a model access error
+		errStr := err.Error()
+		if strings.Contains(errStr, "does not have access to model") && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
+			return fmt.Errorf("OpenAI TTS API error: %w\nNote: The %s model requires access. Try using --openai-model tts-1-hd instead", err, p.config.OpenAIModel)
+		}
 		return fmt.Errorf("OpenAI TTS API error: %w", err)
 	}
 	defer response.Close()
@@ -147,6 +167,21 @@ func (p *OpenAIProvider) IsAvailable() error {
 	return nil
 }
 
+// preprocessBulgarianText prepares Bulgarian text for clearer TTS pronunciation
+func (p *OpenAIProvider) preprocessBulgarianText(text string) string {
+	// For single words, we add subtle punctuation to create natural pauses
+	// without repeating the word
+	
+	// First, clean the text
+	cleanedText := strings.TrimSpace(text)
+	
+	// Add ellipsis after the word to create a natural pause and slow down
+	// This helps the TTS engine pronounce it more carefully
+	processedText := fmt.Sprintf("%s...", cleanedText)
+	
+	return processedText
+}
+
 // getCacheFilePath generates a cache file path for the given text
 func (p *OpenAIProvider) getCacheFilePath(text string) string {
 	// Create a hash of the text and settings
@@ -155,6 +190,10 @@ func (p *OpenAIProvider) getCacheFilePath(text string) string {
 	h.Write([]byte(p.config.OpenAIModel))
 	h.Write([]byte(p.config.OpenAIVoice))
 	h.Write([]byte(fmt.Sprintf("%.2f", p.config.OpenAISpeed)))
+	// Include instruction in cache key for gpt-4o-mini-tts
+	if p.config.OpenAIModel == "gpt-4o-mini-tts" && p.config.OpenAIInstruction != "" {
+		h.Write([]byte(p.config.OpenAIInstruction))
+	}
 	hash := hex.EncodeToString(h.Sum(nil))
 	
 	// Use first 2 chars as subdirectory for better file system performance

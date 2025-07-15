@@ -31,10 +31,11 @@ type Config struct {
 	ESpeakWordGap   int
 	
 	// OpenAI-specific settings
-	OpenAIKey      string
-	OpenAIModel    string // "tts-1" or "tts-1-hd"
-	OpenAIVoice    string // "alloy", "echo", "fable", "onyx", "nova", "shimmer"
-	OpenAISpeed    float64 // 0.25 to 4.0
+	OpenAIKey         string
+	OpenAIModel       string  // "tts-1", "tts-1-hd", or "gpt-4o-mini-tts"
+	OpenAIVoice       string  // "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"
+	OpenAISpeed       float64 // 0.25 to 4.0
+	OpenAIInstruction string  // Voice instructions for gpt-4o-mini-tts model
 	
 	// Caching settings
 	EnableCache bool
@@ -52,9 +53,10 @@ func DefaultProviderConfig() *Config {
 		ESpeakPitch:     50,
 		ESpeakAmplitude: 100,
 		ESpeakWordGap:   0,
-		OpenAIModel:     "tts-1",
-		OpenAIVoice:     "nova",
-		OpenAISpeed:     1.0,
+		OpenAIModel:       "gpt-4o-mini-tts", // New model with voice instructions support
+		OpenAIVoice:       "nova",
+		OpenAISpeed:       0.8, // Slightly slower for clarity (note: may be ignored by gpt-4o-mini-tts)
+		OpenAIInstruction: "Speak slowly and clearly with natural Bulgarian pronunciation, emphasizing each syllable distinctly",
 		EnableCache:     true,
 		CacheDir:        "./.audio_cache",
 	}

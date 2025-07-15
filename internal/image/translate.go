@@ -8,6 +8,15 @@ func translateBulgarianQuery(query string) string {
 	// Common Bulgarian words for flashcard creation
 	translations := map[string]string{
 		"ябълка": "apple",
+		"малинка": "raspberry",
+		"ягода":  "strawberry",
+		"череша": "cherry",
+		"круша":  "pear",
+		"праскова": "peach",
+		"грозде": "grapes",
+		"банан":  "banana",
+		"портокал": "orange",
+		"лимон":  "lemon",
 		"котка":  "cat",
 		"куче":   "dog",
 		"хляб":   "bread",
