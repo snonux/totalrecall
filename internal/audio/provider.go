@@ -44,7 +44,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultProviderConfig() *Config {
 	return &Config{
-		Provider:        "espeak",
+		Provider:        "openai",
 		OutputDir:       "./",
 		OutputFormat:    "mp3",
 		ESpeakVoice:     "bg",

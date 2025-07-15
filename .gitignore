@@ -43,3 +43,4 @@ anki_cards
 
 # Configuration with API keys
 .totalrecall.yaml
+.image_cache/
