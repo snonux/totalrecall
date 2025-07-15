@@ -11,12 +11,15 @@ It has mainly been vibe coded using Claude Code CLI.
 - Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
   - Random voice selection by default for variety
   - Option to generate in all 11 available voices
+- Automatic Bulgarian to English translation
+  - Saves translations to separate text files
+  - Includes translations in Anki CSV export
 - Image search and generation:
   - **Pixabay**: Free stock photo search (optional API key)
   - **Unsplash**: High-quality photo search (requires API key)
   - **OpenAI DALL-E**: AI-generated educational images with random art styles (requires API key)
 - Batch processing of multiple words
-- Anki-compatible CSV export
+- Anki-compatible CSV export with translations
 - Configurable voice variants and speech speed
 - Support for WAV and MP3 audio formats
 - Audio and image caching to save API costs
@@ -205,6 +208,16 @@ Create a text file with one Bulgarian word per line:
 хляб
 вода
 ```
+
+### Output Files
+For each word, the tool generates:
+- `word.mp3` - Audio pronunciation (random voice)
+- `word_translation.txt` - English translation
+- `word_1.jpg`, `word_2.jpg`, etc. - Generated images
+- `anki_import.csv` - Anki import file (when using --anki flag)
+
+With `--all-voices` flag:
+- `word_alloy.mp3`, `word_nova.mp3`, etc. - Audio in all 11 voices
 
 ## Anki Import
 

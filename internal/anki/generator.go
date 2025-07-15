@@ -59,6 +59,11 @@ func (g *Generator) AddCard(card Card) {
 	g.cards = append(g.cards, card)
 }
 
+// GetCards returns a slice of all cards for modification
+func (g *Generator) GetCards() []Card {
+	return g.cards
+}
+
 // GenerateCSV creates a CSV file for Anki import
 func (g *Generator) GenerateCSV() error {
 	// Create output file
