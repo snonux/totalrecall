@@ -19,16 +19,9 @@ type Provider interface {
 
 // Config holds common configuration for audio providers
 type Config struct {
-	Provider     string // Provider name: "espeak" or "openai"
+	Provider     string // Provider name: "openai"
 	OutputDir    string // Directory for output files
 	OutputFormat string // Output format: "mp3" or "wav"
-	
-	// ESpeak-specific settings
-	ESpeakVoice     string
-	ESpeakSpeed     int
-	ESpeakPitch     int
-	ESpeakAmplitude int
-	ESpeakWordGap   int
 	
 	// OpenAI-specific settings
 	OpenAIKey         string
@@ -48,15 +41,10 @@ func DefaultProviderConfig() *Config {
 		Provider:        "openai",
 		OutputDir:       "./",
 		OutputFormat:    "mp3",
-		ESpeakVoice:     "bg",
-		ESpeakSpeed:     150,
-		ESpeakPitch:     50,
-		ESpeakAmplitude: 100,
-		ESpeakWordGap:   0,
 		OpenAIModel:       "gpt-4o-mini-tts", // New model with voice instructions support
 		OpenAIVoice:       "nova",
 		OpenAISpeed:       0.8, // Slightly slower for clarity (note: may be ignored by gpt-4o-mini-tts)
-		OpenAIInstruction: "Speak slowly and clearly with natural Bulgarian pronunciation, emphasizing each syllable distinctly",
+		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
 		EnableCache:     true,
 		CacheDir:        "./.audio_cache",
 	}
@@ -69,17 +57,6 @@ func NewProvider(config *Config) (Provider, error) {
 	}
 	
 	switch config.Provider {
-	case "espeak", "espeak-ng":
-		espeakConfig := &ESpeakConfig{
-			Voice:     config.ESpeakVoice,
-			Speed:     config.ESpeakSpeed,
-			Pitch:     config.ESpeakPitch,
-			Amplitude: config.ESpeakAmplitude,
-			WordGap:   config.ESpeakWordGap,
-			OutputDir: config.OutputDir,
-		}
-		return NewESpeakProvider(espeakConfig)
-		
 	case "openai":
 		if config.OpenAIKey == "" {
 			return nil, fmt.Errorf("OpenAI API key is required")

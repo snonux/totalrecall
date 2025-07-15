@@ -4,46 +4,28 @@
 
 It has mainly been vibe coded using Claude Code CLI.
 
-⚠️ **Important:** This tool uses OpenAI services by default, which requires an API key. See [Quick Start](#quick-start) for setup instructions or use the free alternatives with `--audio-provider espeak --image-api pixabay`.
+⚠️ **Important:** This tool uses OpenAI services for audio generation, which requires an API key. See [Quick Start](#quick-start) for setup instructions.
 
 ## Features
 
-- Audio generation with multiple providers:
-  - **espeak-ng**: Free, offline Bulgarian voices (robotic quality)
-  - **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
+- Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
+  - Random voice selection by default for variety
+  - Option to generate in all 11 available voices
 - Image search and generation:
   - **Pixabay**: Free stock photo search (optional API key)
   - **Unsplash**: High-quality photo search (requires API key)
-  - **OpenAI DALL-E**: AI-generated educational images (requires API key)
+  - **OpenAI DALL-E**: AI-generated educational images with random art styles (requires API key)
 - Batch processing of multiple words
 - Anki-compatible CSV export
 - Configurable voice variants and speech speed
 - Support for WAV and MP3 audio formats
-- Audio caching to save API costs (OpenAI)
+- Audio and image caching to save API costs
 
 ## Installation
 
 ### Prerequisites
 
-1. **For espeak-ng audio** (free, offline):
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install espeak-ng
-   
-   # macOS
-   brew install espeak-ng
-   ```
-
-2. **ffmpeg** (optional, for MP3 conversion with espeak):
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install ffmpeg
-   
-   # macOS
-   brew install ffmpeg
-   ```
-
-3. **For OpenAI TTS** (paid, high quality):
+1. **For OpenAI TTS** (required for audio generation):
    - Create an account at https://platform.openai.com
    - Generate an API key at https://platform.openai.com/api-keys
    - Set the key using one of these methods:
@@ -76,9 +58,9 @@ export OPENAI_API_KEY="sk-..."
    totalrecall ябълка
    ```
 
-2. Use free alternatives (espeak + pixabay):
+2. Use free Pixabay for images:
    ```bash
-   totalrecall ябълка --audio-provider espeak --image-api pixabay
+   totalrecall ябълка --image-api pixabay
    ```
 
 3. Process multiple words from a file:
@@ -97,20 +79,14 @@ Create a `.totalrecall.yaml` file in your home directory or project folder:
 
 ```yaml
 audio:
-  provider: openai       # Audio provider (espeak or openai) - default: openai
   format: mp3           # Audio format (wav or mp3)
-  
-  # ESpeak settings
-  voice: bg+f1          # Voice variant (bg, bg+m1, bg+f1, etc.)
-  speed: 150            # Speech speed (80-450 words/minute)
-  pitch: 50             # Pitch adjustment (0-99)
   
   # OpenAI settings
   openai_key: "sk-..."  # Your OpenAI API key
   openai_model: "gpt-4o-mini-tts" # Model: tts-1, tts-1-hd, or gpt-4o-mini-tts
   openai_voice: "nova"  # Voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse
   openai_speed: 0.8     # Speed: 0.25 to 4.0 (may be ignored by gpt-4o-mini models)
-  openai_instruction: "Speak slowly and clearly with natural Bulgarian pronunciation" # For gpt-4o-mini models only
+  openai_instruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian." # For gpt-4o-mini models only
   
   # Caching
   enable_cache: true
@@ -153,18 +129,13 @@ totalrecall [word] [flags]
 - `--skip-images`: Skip image download
 - `--images-per-word int`: Number of images per word (default 1)
 - `--image-api string`: Image source - pixabay, unsplash, or openai (default "openai")
+- `--all-voices`: Generate audio in all available OpenAI voices (creates 11 files per word)
 
-#### Audio Provider Options
-- `--audio-provider string`: Audio provider - espeak or openai (default "openai")
-
-#### ESpeak Tuning Options
-- `--pitch int`: Pitch adjustment 0-99 (default 50, lower=deeper, espeak only)
-- `--amplitude int`: Volume 0-200 (default 100, espeak only)
-- `--word-gap int`: Gap between words in 10ms units (default 0, espeak only)
+#### Audio Options
 
 #### OpenAI Audio Options
 - `--openai-model string`: Model - tts-1, tts-1-hd, or gpt-4o-mini-tts (default "gpt-4o-mini-tts", requires special access)
-- `--openai-voice string`: Voice - alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default "nova")
+- `--openai-voice string`: Voice - alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default: random)
 - `--openai-speed float`: Speech speed 0.25-4.0 (default 0.8, may be ignored by gpt-4o-mini-tts)
 - `--openai-instruction string`: Voice instructions for gpt-4o-mini-tts model (e.g., "speak with a Bulgarian accent")
 
@@ -197,20 +168,14 @@ totalrecall [word] [flags]
 # Single word (uses OpenAI by default)
 totalrecall котка
 
-# Using espeak-ng (free alternative)
-totalrecall котка --audio-provider espeak
-
 # High-quality OpenAI with specific voice
-totalrecall ябълка --audio-provider openai --openai-model tts-1-hd --openai-voice alloy
+totalrecall ябълка --openai-model tts-1-hd --openai-voice alloy
 
 # Use gpt-4o-mini-tts with custom voice instructions
 totalrecall ябълка --openai-instruction "Speak like a patient Bulgarian teacher, very slowly and clearly"
 
 # Multiple words with custom output
 totalrecall --batch animals.txt -o ./animal_cards
-
-# ESpeak with tuning
-totalrecall ябълка --pitch 40 --word-gap 3
 
 # Skip images, audio only
 totalrecall куче --skip-images
@@ -225,7 +190,10 @@ totalrecall ябълка --image-api openai
 totalrecall котка --image-api openai --openai-image-model dall-e-3 --openai-image-quality hd
 
 # Combine OpenAI audio and images
-totalrecall куче --audio-provider openai --image-api openai
+totalrecall куче --image-api openai
+
+# Generate audio in all 11 OpenAI voices
+totalrecall котка --all-voices --skip-images
 ```
 
 ### Batch File Format
@@ -255,8 +223,6 @@ Available Bulgarian voices:
 
 ## Troubleshooting
 
-### espeak-ng not found
-Make sure espeak-ng is installed and in your PATH.
 
 ### No images found
 - Check your internet connection
@@ -275,48 +241,28 @@ Make sure espeak-ng is installed and in your PATH.
 - Both services cache results to avoid regenerating identical content
 
 ### Free Alternatives
-- **Audio**: Use espeak-ng (free but robotic quality)
 - **Images**: Use Pixabay without API key (limited rate)
 
 ### OpenAI Troubleshooting
 - Check the API key has proper permissions enabled
 - If you get rate limit errors, wait a moment and try again
-- The tool will automatically fall back to espeak-ng if OpenAI audio fails
 
-### Audio sounds robotic
-The Bulgarian voice in espeak-ng can sound robotic. To improve quality:
 
-```bash
-# Test with different settings
-espeak-ng -v bg -p 40 -s 140 "Здравей"  # Deeper, slower
-espeak-ng -v bg+f1 -p 60 -g 2 "Здравей"  # Higher pitch, word gaps
+### OpenAI TTS Configuration
 
-# Using totalrecall with tuning
-totalrecall ябълка --pitch 40 --word-gap 2 --amplitude 120
-```
-
-Recommended settings for clearer pronunciation:
-- `--pitch 40`: Slightly deeper voice (less robotic)
-- `--word-gap 2-5`: Small gaps between words
-- `--amplitude 120`: Slightly louder
-- `-v bg+f1`: Female variant often sounds clearer
-
-### Using OpenAI for Better Quality
-
-OpenAI TTS provides much more natural Bulgarian pronunciation:
+OpenAI TTS provides natural Bulgarian pronunciation:
 
 ```bash
 # Option 1: Use environment variable
 export OPENAI_API_KEY="sk-your-key-here"
-totalrecall ябълка --audio-provider openai
+totalrecall ябълка
 
 # Option 2: Set in .totalrecall.yaml
 audio:
-  provider: openai
   openai_key: "sk-your-key-here"
 
 # Use with custom voice
-totalrecall ябълка --audio-provider openai --openai-voice alloy
+totalrecall ябълка --openai-voice alloy
 ```
 
 **OpenAI TTS Models**:

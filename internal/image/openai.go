@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -230,14 +231,35 @@ func (c *OpenAIClient) Name() string {
 
 // createEducationalPrompt generates a prompt optimized for language learning
 func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation string) string {
+	// Define different art styles for variety
+	styles := []string{
+		"photorealistic, high quality photograph",
+		"detailed digital illustration, clean vector art style",
+		"vibrant cartoon style, animated movie quality",
+		"minimalist flat design, modern graphic style",
+		"watercolor painting, soft artistic style",
+		"pencil sketch, detailed drawing style",
+		"3D rendered, pixar-style animation",
+		"oil painting, classical art style",
+		"paper cut art, layered craft style",
+		"isometric illustration, technical drawing style",
+		"superhero comic book style, dynamic action pose, bold colors",
+		"yoga/wellness illustration style, peaceful zen aesthetic",
+		"cute illustration with cats interacting with the subject, whimsical cat-themed",
+	}
+	
+	// Select a random style
+	selectedStyle := styles[rand.Intn(len(styles))]
+	fmt.Printf("  Using image style: %s\n", selectedStyle)
+	
 	// Create a simple, clear prompt for educational images
 	return fmt.Sprintf(
-		"Generate a simple, clear image of: %s. "+
+		"Generate a %s of: %s. "+
 			"This is for the Bulgarian word '%s' which means %s. "+
 			"The image should be educational and suitable for language learning flashcards. "+
 			"Requirements: single main subject, plain background, clear and recognizable. "+
 			"No text, labels, or writing in the image.",
-		englishTranslation, bulgarianWord, englishTranslation,
+		selectedStyle, englishTranslation, bulgarianWord, englishTranslation,
 	)
 }
 

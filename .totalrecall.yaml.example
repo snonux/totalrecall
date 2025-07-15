@@ -1,20 +1,13 @@
-# TotalRecall Configuration Example
+# TotalRecalooConfiguration Example
 # Copy this to ~/.totalrecall.yaml or ./.totalrecall.yaml
 
 # Audio configuration
 audio:
-  # Provider: espeak or openai
-  provider: openai
+  # Audio is generated using OpenAI TTS
+  # Provider field removed - OpenAI is now the only option
   
   # Audio output format
   format: mp3
-  
-  # ESpeak settings
-  voice: bg+f1
-  speed: 150
-  pitch: 50
-  amplitude: 100
-  word_gap: 0
   
   # OpenAI TTS settings
   openai_key: ${OPENAI_API_KEY}  # Can also use environment variable
@@ -24,12 +17,12 @@ audio:
   
   # Voice instructions for gpt-4o-mini-tts model
   # This allows you to customize how the AI speaks
-  openai_instruction: "Speak slowly and clearly with natural Bulgarian pronunciation, emphasizing each syllable distinctly"
+  openai_instruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners."
   
   # Alternative instruction examples:
-  # openai_instruction: "Pronounce with a native Bulgarian accent, speaking at a moderate pace suitable for language learning"
-  # openai_instruction: "Speak as a patient Bulgarian language teacher, clearly articulating each sound"
-  # openai_instruction: "Use clear Bulgarian pronunciation with slight pauses between syllables"
+  # openai_instruction: "Speak in Bulgarian (not Russian!). Use native Bulgarian pronunciation with clear articulation for each syllable."
+  # openai_instruction: "You are a Bulgarian language teacher. Pronounce the Bulgarian words slowly with authentic Bulgarian accent and phonetics."
+  # openai_instruction: "Speak Bulgarian text with proper Bulgarian pronunciation. Avoid Russian accent. Speak clearly at a pace suitable for beginners."
   
   # Caching
   enable_cache: true

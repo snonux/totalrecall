@@ -123,28 +123,7 @@ func TestOpenAIClient_getCacheFilePath(t *testing.T) {
 	}
 }
 
-func TestOpenAIClient_translateBulgarianToEnglish(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"ябълка", "apple"},
-		{"котка", "cat"},
-		{"куче", "dog"},
-		{"хляб", "bread"},
-		{"unknown", "unknown"}, // Should return original if not in dictionary
-	}
-	
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := translateBulgarianToEnglish(tt.input)
-			if result != tt.expected {
-				t.Errorf("translateBulgarianToEnglish(%s) = %s, want %s", 
-					tt.input, result, tt.expected)
-			}
-		})
-	}
-}
+// translateBulgarianToEnglish test removed - now uses OpenAI API
 
 func TestOpenAIClient_getSizeWidthHeight(t *testing.T) {
 	tests := []struct {

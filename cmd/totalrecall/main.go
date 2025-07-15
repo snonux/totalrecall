@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
@@ -21,7 +23,7 @@ import (
 var (
 	// Flags
 	cfgFile      string
-	voice        string
+	// voice removed - was only for espeak
 	outputDir    string
 	audioFormat  string
 	imageAPI     string
@@ -31,12 +33,8 @@ var (
 	imagesPerWord int
 	generateAnki bool
 	listModels   bool
-	// Audio provider flags
-	audioProvider  string
-	// Audio tuning flags (espeak)
-	audioPitch     int
-	audioAmplitude int
-	audioWordGap   int
+	allVoices    bool
+	// Audio provider flags removed - now only OpenAI
 	// OpenAI flags
 	openAIModel       string
 	openAIVoice       string
@@ -55,7 +53,7 @@ var rootCmd = &cobra.Command{
 	Short: "Bulgarian Anki Flashcard Generator",
 	Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
-It creates audio pronunciation files using espeak-ng and downloads
+It creates audio pronunciation files using OpenAI TTS and downloads
 representative images from web search APIs.
 
 Example:
@@ -69,11 +67,13 @@ Example:
 func init() {
 	cobra.OnInitialize(initConfig)
 	
+	// Initialize random number generator
+	rand.Seed(time.Now().UnixNano())
+	
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.totalrecall.yaml)")
 	
 	// Local flags
-	rootCmd.Flags().StringVarP(&voice, "voice", "v", "bg+f1", "Voice variant (bg, bg+m1, bg+f1, etc.)")
 	rootCmd.Flags().StringVarP(&outputDir, "output", "o", "./anki_cards", "Output directory")
 	rootCmd.Flags().StringVarP(&audioFormat, "format", "f", "mp3", "Audio format (wav or mp3)")
 	rootCmd.Flags().StringVar(&imageAPI, "image-api", "openai", "Image source (pixabay, unsplash, or openai)")
@@ -83,18 +83,13 @@ func init() {
 	rootCmd.Flags().IntVar(&imagesPerWord, "images-per-word", 1, "Number of images to download per word")
 	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import CSV file")
 	rootCmd.Flags().BoolVar(&listModels, "list-models", false, "List available OpenAI models for the current API key")
+	rootCmd.Flags().BoolVar(&allVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
 	
-	// Audio provider selection
-	rootCmd.Flags().StringVar(&audioProvider, "audio-provider", "openai", "Audio provider: espeak or openai")
-	
-	// Audio tuning flags (espeak)
-	rootCmd.Flags().IntVar(&audioPitch, "pitch", 50, "Audio pitch adjustment (0-99, default 50, espeak only)")
-	rootCmd.Flags().IntVar(&audioAmplitude, "amplitude", 100, "Audio volume (0-200, default 100, espeak only)")
-	rootCmd.Flags().IntVar(&audioWordGap, "word-gap", 0, "Gap between words in 10ms units (default 0, espeak only)")
+	// Audio provider removed - now only OpenAI
 	
 	// OpenAI flags
 	rootCmd.Flags().StringVar(&openAIModel, "openai-model", "gpt-4o-mini-tts", "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")
-	rootCmd.Flags().StringVar(&openAIVoice, "openai-voice", "nova", "OpenAI voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse")
+	rootCmd.Flags().StringVar(&openAIVoice, "openai-voice", "", "OpenAI voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default: random)")
 	rootCmd.Flags().Float64Var(&openAISpeed, "openai-speed", 0.8, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
 	rootCmd.Flags().StringVar(&openAIInstruction, "openai-instruction", "", "Voice instructions for gpt-4o-mini-tts model (e.g., 'speak slowly with a Bulgarian accent')")
 	
@@ -237,23 +232,47 @@ func processWord(word string) error {
 }
 
 func generateAudio(word string) error {
+	allVoicesList := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	
+	// Get list of voices to use
+	var voices []string
+	if allVoices {
+		voices = allVoicesList
+	} else if openAIVoice != "" {
+		// Use explicitly specified voice
+		voices = []string{openAIVoice}
+		fmt.Printf("  Using specified voice: %s\n", openAIVoice)
+	} else {
+		// Select a random voice
+		randomVoice := allVoicesList[rand.Intn(len(allVoicesList))]
+		voices = []string{randomVoice}
+		fmt.Printf("  Using random voice: %s\n", randomVoice)
+	}
+	
+	// Generate audio for each voice
+	for i, voice := range voices {
+		if allVoices {
+			fmt.Printf("  Generating audio %d/%d (voice: %s)...\n", i+1, len(voices), voice)
+		}
+		if err := generateAudioWithVoice(word, voice); err != nil {
+			return fmt.Errorf("failed to generate audio with voice %s: %w", voice, err)
+		}
+	}
+	
+	return nil
+}
+
+func generateAudioWithVoice(word, voice string) error {
 	// Create audio provider configuration
 	providerConfig := &audio.Config{
-		Provider:     audioProvider,
+		Provider:     "openai",
 		OutputDir:    outputDir,
 		OutputFormat: audioFormat,
-		
-		// ESpeak settings
-		ESpeakVoice:     voice,
-		ESpeakSpeed:     viper.GetInt("audio.speed"),
-		ESpeakPitch:     audioPitch,
-		ESpeakAmplitude: audioAmplitude,
-		ESpeakWordGap:   audioWordGap,
 		
 		// OpenAI settings
 		OpenAIKey:         getOpenAIKey(),
 		OpenAIModel:       openAIModel,
-		OpenAIVoice:       openAIVoice,
+		OpenAIVoice:       voice,
 		OpenAISpeed:       openAISpeed,
 		OpenAIInstruction: openAIInstruction,
 		
@@ -263,26 +282,11 @@ func generateAudio(word string) error {
 	}
 	
 	// Set defaults
-	if providerConfig.ESpeakSpeed == 0 {
-		providerConfig.ESpeakSpeed = 150
-	}
 	if providerConfig.CacheDir == "" {
 		providerConfig.CacheDir = "./.audio_cache"
 	}
 	
 	// Use config file values if not overridden by flags
-	if audioProvider == "openai" && viper.IsSet("audio.provider") {
-		providerConfig.Provider = viper.GetString("audio.provider")
-	}
-	if audioPitch == 50 && viper.IsSet("audio.pitch") {
-		providerConfig.ESpeakPitch = viper.GetInt("audio.pitch")
-	}
-	if audioAmplitude == 100 && viper.IsSet("audio.amplitude") {
-		providerConfig.ESpeakAmplitude = viper.GetInt("audio.amplitude")
-	}
-	if audioWordGap == 0 && viper.IsSet("audio.word_gap") {
-		providerConfig.ESpeakWordGap = viper.GetInt("audio.word_gap")
-	}
 	if openAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
 		providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
 	}
@@ -299,25 +303,20 @@ func generateAudio(word string) error {
 	// Create the audio provider
 	provider, err := audio.NewProvider(providerConfig)
 	if err != nil {
-		// If OpenAI fails, try to create a fallback to espeak
-		if providerConfig.Provider == "openai" {
-			fmt.Printf("Warning: OpenAI audio provider failed (%v), falling back to espeak-ng\n", err)
-			providerConfig.Provider = "espeak"
-			fallbackProvider, fallbackErr := audio.NewProvider(providerConfig)
-			if fallbackErr != nil {
-				return fmt.Errorf("both OpenAI and espeak-ng failed: %v", fallbackErr)
-			}
-			provider = fallbackProvider
-		} else {
-			return err
-		}
+		return err
 	}
 	
 	// Generate audio file
-	filename := sanitizeFilename(word)
-	outputFile := filepath.Join(outputDir, fmt.Sprintf("%s.%s", filename, audioFormat))
-	
 	ctx := context.Background()
+	filename := sanitizeFilename(word)
+	
+	// Add voice name to filename if generating multiple voices
+	if allVoices {
+		outputFile := filepath.Join(outputDir, fmt.Sprintf("%s_%s.%s", filename, voice, audioFormat))
+		return provider.GenerateAudio(ctx, word, outputFile)
+	}
+	
+	outputFile := filepath.Join(outputDir, fmt.Sprintf("%s.%s", filename, audioFormat))
 	return provider.GenerateAudio(ctx, word, outputFile)
 }
 
