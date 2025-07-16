@@ -43,7 +43,7 @@ func DefaultProviderConfig() *Config {
 		OutputFormat:    "mp3",
 		OpenAIModel:       "gpt-4o-mini-tts", // New model with voice instructions support
 		OpenAIVoice:       "nova",
-		OpenAISpeed:       0.8, // Slightly slower for clarity (note: may be ignored by gpt-4o-mini-tts)
+		OpenAISpeed:       0.9, // Slightly slower for clarity (note: may be ignored by gpt-4o-mini-tts)
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
 		EnableCache:     true,
 		CacheDir:        "./.audio_cache",

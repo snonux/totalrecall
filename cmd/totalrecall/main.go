@@ -17,6 +17,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
@@ -34,6 +35,7 @@ var (
 	generateAnki bool
 	listModels   bool
 	allVoices    bool
+	guiMode      bool
 	// Audio provider flags removed - now only OpenAI
 	// OpenAI flags
 	openAIModel       string
@@ -84,13 +86,14 @@ func init() {
 	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import CSV file")
 	rootCmd.Flags().BoolVar(&listModels, "list-models", false, "List available OpenAI models for the current API key")
 	rootCmd.Flags().BoolVar(&allVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
+	rootCmd.Flags().BoolVar(&guiMode, "gui", false, "Launch interactive GUI mode")
 	
 	// Audio provider removed - now only OpenAI
 	
 	// OpenAI flags
 	rootCmd.Flags().StringVar(&openAIModel, "openai-model", "gpt-4o-mini-tts", "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")
 	rootCmd.Flags().StringVar(&openAIVoice, "openai-voice", "", "OpenAI voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default: random)")
-	rootCmd.Flags().Float64Var(&openAISpeed, "openai-speed", 0.8, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
+	rootCmd.Flags().Float64Var(&openAISpeed, "openai-speed", 0.9, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
 	rootCmd.Flags().StringVar(&openAIInstruction, "openai-instruction", "", "Voice instructions for gpt-4o-mini-tts model (e.g., 'speak slowly with a Bulgarian accent')")
 	
 	// OpenAI Image Generation flags
@@ -149,6 +152,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Handle --list-models flag
 	if listModels {
 		return listAvailableModels()
+	}
+	
+	// Handle --gui flag
+	if guiMode {
+		return runGUIMode()
 	}
 	
 	// Determine words to process
@@ -309,7 +317,7 @@ func generateAudioWithVoice(word, voice string) error {
 	if openAIVoice == "nova" && viper.IsSet("audio.openai_voice") {
 		providerConfig.OpenAIVoice = viper.GetString("audio.openai_voice")
 	}
-	if openAISpeed == 0.8 && viper.IsSet("audio.openai_speed") {
+	if openAISpeed == 0.9 && viper.IsSet("audio.openai_speed") {
 		providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
 	}
 	if openAIInstruction == "" && viper.IsSet("audio.openai_instruction") {
@@ -708,6 +716,26 @@ func saveAudioAttribution(word, audioFile string, config *audio.Config) error {
 	if err := os.WriteFile(attrPath, []byte(attribution), 0644); err != nil {
 		return fmt.Errorf("failed to write audio attribution file: %w", err)
 	}
+	
+	return nil
+}
+
+func runGUIMode() error {
+	// Create GUI configuration from command line flags and viper config
+	guiConfig := &gui.Config{
+		OutputDir:     outputDir,
+		AudioFormat:   audioFormat,
+		ImageProvider: imageAPI,
+		ImagesPerWord: imagesPerWord,
+		EnableCache:   viper.GetBool("cache.enable"),
+		OpenAIKey:     getOpenAIKey(),
+		PixabayKey:    viper.GetString("image.pixabay_key"),
+		UnsplashKey:   viper.GetString("image.unsplash_key"),
+	}
+	
+	// Create and run GUI application
+	app := gui.New(guiConfig)
+	app.Run()
 	
 	return nil
 }
