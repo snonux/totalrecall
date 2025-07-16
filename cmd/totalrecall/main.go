@@ -31,7 +31,6 @@ var (
 	batchFile    string
 	skipAudio    bool
 	skipImages   bool
-	imagesPerWord int
 	generateAnki bool
 	listModels   bool
 	allVoices    bool
@@ -82,7 +81,6 @@ func init() {
 	rootCmd.Flags().StringVar(&batchFile, "batch", "", "Process words from file (one per line)")
 	rootCmd.Flags().BoolVar(&skipAudio, "skip-audio", false, "Skip audio generation")
 	rootCmd.Flags().BoolVar(&skipImages, "skip-images", false, "Skip image download")
-	rootCmd.Flags().IntVar(&imagesPerWord, "images-per-word", 1, "Number of images to download per word")
 	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import CSV file")
 	rootCmd.Flags().BoolVar(&listModels, "list-models", false, "List available OpenAI models for the current API key")
 	rootCmd.Flags().BoolVar(&allVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
@@ -432,23 +430,13 @@ func downloadImages(word string) error {
 	
 	downloader := image.NewDownloader(searcher, downloadOpts)
 	
-	// Download images
+	// Download single image
 	ctx := context.Background()
-	if imagesPerWord == 1 {
-		_, path, err := downloader.DownloadBestMatch(ctx, word)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("    Downloaded: %s\n", path)
-	} else {
-		paths, err := downloader.DownloadMultiple(ctx, word, imagesPerWord)
-		if err != nil {
-			return err
-		}
-		for _, path := range paths {
-			fmt.Printf("    Downloaded: %s\n", path)
-		}
+	_, path, err := downloader.DownloadBestMatch(ctx, word)
+	if err != nil {
+		return err
 	}
+	fmt.Printf("    Downloaded: %s\n", path)
 	
 	return nil
 }
@@ -726,7 +714,6 @@ func runGUIMode() error {
 		OutputDir:     outputDir,
 		AudioFormat:   audioFormat,
 		ImageProvider: imageAPI,
-		ImagesPerWord: imagesPerWord,
 		EnableCache:   viper.GetBool("cache.enable"),
 		OpenAIKey:     getOpenAIKey(),
 		PixabayKey:    viper.GetString("image.pixabay_key"),

@@ -51,7 +51,7 @@ type Application struct {
 	// State management
 	currentWord      string
 	currentAudioFile string
-	currentImages    []string
+	currentImage     string
 	currentTranslation string
 	currentJobID     int
 	savedCards       []anki.Card
@@ -81,7 +81,6 @@ type Config struct {
 	OutputDir      string
 	AudioFormat    string
 	ImageProvider  string
-	ImagesPerWord  int
 	EnableCache    bool
 	OpenAIKey      string
 	PixabayKey     string
@@ -94,7 +93,6 @@ func DefaultConfig() *Config {
 		OutputDir:      "./anki_cards",
 		AudioFormat:    "mp3",
 		ImageProvider:  "openai",
-		ImagesPerWord:  1,
 		EnableCache:    true,
 	}
 }
@@ -361,7 +359,7 @@ func (a *Application) generateMaterials(word string) {
 	// Get custom prompt from UI
 	customPrompt := a.imagePromptEntry.Text
 	
-	images, err := a.generateImagesWithPrompt(word, customPrompt)
+	imageFile, err := a.generateImagesWithPrompt(word, customPrompt)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -371,10 +369,12 @@ func (a *Application) generateMaterials(word string) {
 		})
 		return
 	}
-	a.currentImages = images
-	fyne.Do(func() {
-		a.imageDisplay.SetImages(images)
-	})
+	if imageFile != "" {
+		a.currentImage = imageFile
+		fyne.Do(func() {
+			a.imageDisplay.SetImages([]string{imageFile})
+		})
+	}
 	
 	// Enable action buttons
 	fyne.Do(func() {
@@ -388,12 +388,12 @@ func (a *Application) generateMaterials(word string) {
 // onKeepAndContinue saves the current card and clears for a new word
 func (a *Application) onKeepAndContinue() {
 	// Check if we have a complete word to save
-	if a.currentWord != "" && a.currentAudioFile != "" && len(a.currentImages) > 0 {
+	if a.currentWord != "" && a.currentAudioFile != "" && a.currentImage != "" {
 		// Save current card
 		card := anki.Card{
 			Bulgarian:   a.currentWord,
 			AudioFile:   a.currentAudioFile,
-			ImageFiles:  a.currentImages,
+			ImageFile:   a.currentImage,
 			Translation: a.currentTranslation,
 		}
 		
@@ -457,16 +457,18 @@ func (a *Application) onRegenerateImage() {
 		defer a.wg.Done()
 		defer a.decrementProcessing() // Image processing ends
 		
-		images, err := a.generateImagesWithPrompt(a.currentWord, customPrompt)
+		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
 			})
 		} else {
-			a.currentImages = images
-			fyne.Do(func() {
-				a.imageDisplay.SetImages(images)
-			})
+			if imageFile != "" {
+				a.currentImage = imageFile
+				fyne.Do(func() {
+					a.imageDisplay.SetImages([]string{imageFile})
+				})
+			}
 		}
 		
 		fyne.Do(func() {
@@ -734,7 +736,7 @@ func (a *Application) processWordJob(job *WordJob) {
 	})
 	
 	// Use the custom prompt from the job
-	imageFiles, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt)
+	imageFile, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -749,18 +751,22 @@ func (a *Application) processWordJob(job *WordJob) {
 		a.updateStatus(fmt.Sprintf("Finalizing '%s'...", job.Word))
 	})
 	
-	a.queue.CompleteJob(job.ID, translation, audioFile, imageFiles)
+	a.queue.CompleteJob(job.ID, translation, audioFile, imageFile)
 	
 	// Update UI with results if this is still the current job
 	a.mu.Lock()
 	if a.currentJobID == job.ID {
 		a.currentTranslation = translation
 		a.currentAudioFile = audioFile
-		a.currentImages = imageFiles
+		if imageFile != "" {
+			a.currentImage = imageFile
+		}
 		
 		fyne.Do(func() {
 			a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, translation))
-			a.imageDisplay.SetImages(imageFiles)
+			if imageFile != "" {
+				a.imageDisplay.SetImages([]string{imageFile})
+			}
 			a.audioPlayer.SetAudioFile(audioFile)
 			a.hideProgress()
 			a.setActionButtonsEnabled(true)
@@ -817,7 +823,7 @@ func (a *Application) onJobComplete(job *WordJob) {
 			// Only update UI if the current word is still empty (waiting for this job)
 			if job.Word == a.currentWord && job.ID != a.currentJobID {
 				// Check if the UI is still empty/waiting for content
-				hasContent := a.currentAudioFile != "" || len(a.currentImages) > 0
+				hasContent := a.currentAudioFile != "" || a.currentImage != ""
 				
 				if !hasContent {
 					// Update the UI with the completed results since it's still waiting
@@ -831,9 +837,9 @@ func (a *Application) onJobComplete(job *WordJob) {
 						a.audioPlayer.SetAudioFile(job.AudioFile)
 						a.regenerateAudioBtn.Enable()
 					}
-					if len(job.ImageFiles) > 0 && len(a.currentImages) == 0 {
-						a.currentImages = job.ImageFiles
-						a.imageDisplay.SetImages(job.ImageFiles)
+					if job.ImageFile != "" && a.currentImage == "" {
+						a.currentImage = job.ImageFile
+						a.imageDisplay.SetImages([]string{job.ImageFile})
 						a.regenerateImageBtn.Enable()
 					}
 					

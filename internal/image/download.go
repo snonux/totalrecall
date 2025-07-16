@@ -200,48 +200,6 @@ func sanitizeFileName(name string) string {
 	return sanitized
 }
 
-// DownloadMultiple downloads multiple images for a query
-func (d *Downloader) DownloadMultiple(ctx context.Context, query string, count int) ([]string, error) {
-	// Search for images
-	opts := DefaultSearchOptions(query)
-	opts.PerPage = count * 2 // Get extra in case some fail
-	
-	results, err := d.searcher.Search(ctx, opts)
-	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
-	}
-	
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no images found for query: %s", query)
-	}
-	
-	// Download up to 'count' images
-	var downloaded []string
-	for i, result := range results {
-		if len(downloaded) >= count {
-			break
-		}
-		
-		// Generate filename
-		filename := d.generateFileName(query, &result, i)
-		outputPath := filepath.Join(d.options.OutputDir, filename)
-		
-		// Try to download
-		err := d.DownloadImage(ctx, &result, outputPath)
-		if err == nil {
-			downloaded = append(downloaded, outputPath)
-		} else {
-			// Log error and continue
-			fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
-		}
-	}
-	
-	if len(downloaded) == 0 {
-		return nil, fmt.Errorf("failed to download any images for query: %s", query)
-	}
-	
-	return downloaded, nil
-}
 
 // DownloadBestMatchWithOptions downloads the best matching image for given search options
 func (d *Downloader) DownloadBestMatchWithOptions(ctx context.Context, opts *SearchOptions) (*SearchResult, string, error) {
@@ -277,45 +235,3 @@ func (d *Downloader) DownloadBestMatchWithOptions(ctx context.Context, opts *Sea
 	return nil, "", fmt.Errorf("failed to download any images for query: %s", opts.Query)
 }
 
-// DownloadMultipleWithOptions downloads multiple images for given search options
-func (d *Downloader) DownloadMultipleWithOptions(ctx context.Context, opts *SearchOptions, count int) ([]string, error) {
-	// Search for images
-	searchOpts := *opts // Copy to avoid modifying original
-	searchOpts.PerPage = count * 2 // Get extra in case some fail
-	
-	results, err := d.searcher.Search(ctx, &searchOpts)
-	if err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
-	}
-	
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no images found for query: %s", opts.Query)
-	}
-	
-	// Download up to 'count' images
-	var downloaded []string
-	for i, result := range results {
-		if len(downloaded) >= count {
-			break
-		}
-		
-		// Generate filename
-		filename := d.generateFileName(opts.Query, &result, i)
-		outputPath := filepath.Join(d.options.OutputDir, filename)
-		
-		// Try to download
-		err := d.DownloadImage(ctx, &result, outputPath)
-		if err == nil {
-			downloaded = append(downloaded, outputPath)
-		} else {
-			// Log error and continue
-			fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
-		}
-	}
-	
-	if len(downloaded) == 0 {
-		return nil, fmt.Errorf("failed to download any images for query: %s", opts.Query)
-	}
-	
-	return downloaded, nil
-}

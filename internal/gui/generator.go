@@ -86,12 +86,12 @@ func (a *Application) generateAudio(word string) (string, error) {
 }
 
 // generateImages downloads images for a word
-func (a *Application) generateImages(word string) ([]string, error) {
+func (a *Application) generateImages(word string) (string, error) {
 	return a.generateImagesWithPrompt(word, "")
 }
 
-// generateImagesWithPrompt downloads images for a word with optional custom prompt
-func (a *Application) generateImagesWithPrompt(word string, customPrompt string) ([]string, error) {
+// generateImagesWithPrompt downloads a single image for a word with optional custom prompt
+func (a *Application) generateImagesWithPrompt(word string, customPrompt string) (string, error) {
 	// Create image searcher based on provider
 	var searcher image.ImageSearcher
 	var err error
@@ -102,11 +102,11 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		
 	case "unsplash":
 		if a.config.UnsplashKey == "" {
-			return nil, fmt.Errorf("Unsplash API key is required")
+			return "", fmt.Errorf("Unsplash API key is required")
 		}
 		searcher, err = image.NewUnsplashClient(a.config.UnsplashKey)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		
 	case "openai":
@@ -127,7 +127,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		}
 		
 	default:
-		return nil, fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
+		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
 	
 	// Create downloader
@@ -147,20 +147,10 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		searchOpts.CustomPrompt = customPrompt
 	}
 	
-	// Download images
-	var paths []string
-	
-	if a.config.ImagesPerWord == 1 {
-		_, path, err := downloader.DownloadBestMatchWithOptions(a.ctx, searchOpts)
-		if err != nil {
-			return nil, err
-		}
-		paths = []string{path}
-	} else {
-		paths, err = downloader.DownloadMultipleWithOptions(a.ctx, searchOpts, a.config.ImagesPerWord)
-		if err != nil {
-			return nil, err
-		}
+	// Download single image
+	_, path, err := downloader.DownloadBestMatchWithOptions(a.ctx, searchOpts)
+	if err != nil {
+		return "", err
 	}
 	
 	// If using OpenAI, get the last used prompt and update the UI
@@ -175,7 +165,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		}
 	}
 	
-	return paths, nil
+	return path, nil
 }
 
 // saveAudioAttribution saves attribution info for generated audio

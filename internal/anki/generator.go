@@ -12,7 +12,7 @@ import (
 type Card struct {
 	Bulgarian   string   // The Bulgarian word/phrase
 	AudioFile   string   // Path to audio file
-	ImageFiles  []string // Paths to image files
+	ImageFile   string   // Path to image file
 	Translation string   // Optional translation
 	Notes       string   // Optional notes
 }
@@ -90,7 +90,7 @@ func (g *Generator) GenerateCSV() error {
 		record := []string{
 			card.Bulgarian,
 			g.formatAudioField(card.AudioFile),
-			g.formatImageField(card.ImageFiles),
+			g.formatImageField(card.ImageFile),
 			card.Translation,
 			card.Notes,
 		}
@@ -116,29 +116,15 @@ func (g *Generator) formatAudioField(audioFile string) string {
 	return fmt.Sprintf("[sound:%s]", filename)
 }
 
-// formatImageField formats image file references for Anki
-func (g *Generator) formatImageField(imageFiles []string) string {
-	if len(imageFiles) == 0 {
+// formatImageField formats image file reference for Anki
+func (g *Generator) formatImageField(imageFile string) string {
+	if imageFile == "" {
 		return ""
 	}
 	
-	// For multiple images, we'll use HTML to display them
-	if len(imageFiles) == 1 {
-		filename := filepath.Base(imageFiles[0])
-		return fmt.Sprintf(`<img src="%s">`, filename)
-	}
-	
-	// Multiple images - create a simple layout
-	var html strings.Builder
-	html.WriteString(`<div style="display: flex; flex-wrap: wrap; gap: 10px;">`)
-	
-	for _, imageFile := range imageFiles {
-		filename := filepath.Base(imageFile)
-		html.WriteString(fmt.Sprintf(`<img src="%s" style="max-width: 200px; height: auto;">`, filename))
-	}
-	
-	html.WriteString(`</div>`)
-	return html.String()
+	// Get just the filename
+	filename := filepath.Base(imageFile)
+	return fmt.Sprintf(`<img src="%s">`, filename)
 }
 
 // GenerateFromDirectory creates cards from a directory of materials
@@ -179,8 +165,7 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 		card, exists := wordFiles[word]
 		if !exists {
 			card = &Card{
-				Bulgarian:  word,
-				ImageFiles: make([]string, 0),
+				Bulgarian: word,
 			}
 			wordFiles[word] = card
 		}
@@ -192,7 +177,9 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 				card.AudioFile = path
 			}
 		case ".jpg", ".jpeg", ".png", ".gif":
-			card.ImageFiles = append(card.ImageFiles, path)
+			if card.ImageFile == "" { // Use first image file found
+				card.ImageFile = path
+			}
 		}
 		
 		return nil
@@ -234,16 +221,14 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 			g.cards[i].AudioFile = newPath
 		}
 		
-		// Copy image files
-		newImagePaths := make([]string, 0, len(card.ImageFiles))
-		for _, imagePath := range card.ImageFiles {
-			newPath, err := g.copyMediaFile(imagePath, mediaDir)
+		// Copy image file
+		if card.ImageFile != "" {
+			newPath, err := g.copyMediaFile(card.ImageFile, mediaDir)
 			if err != nil {
 				return fmt.Errorf("failed to copy image file: %w", err)
 			}
-			newImagePaths = append(newImagePaths, newPath)
+			g.cards[i].ImageFile = newPath
 		}
-		g.cards[i].ImageFiles = newImagePaths
 	}
 	
 	// Update output path to package directory
@@ -314,7 +299,7 @@ func (g *Generator) Stats() (totalCards, withAudio, withImages int) {
 		if card.AudioFile != "" {
 			withAudio++
 		}
-		if len(card.ImageFiles) > 0 {
+		if card.ImageFile != "" {
 			withImages++
 		}
 	}

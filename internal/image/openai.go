@@ -261,7 +261,7 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 		if creativeStyle := c.getCreativeStyleFromOpenAI(context.Background(), englishTranslation); creativeStyle != "" {
 			fmt.Printf("  Using OpenAI-suggested style: %s\n", creativeStyle)
 			return fmt.Sprintf(
-				"Generate %s of: %s. "+
+				"Generate %s of %s. "+
 					"The image should be educational and suitable for language learning flashcards. "+
 					"Requirements: single main subject, plain background, clear and recognizable. "+
 					"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
@@ -331,7 +331,7 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 
 	// Create a simple, clear prompt for educational images
 	return fmt.Sprintf(
-		"Generate a %s of: %s. "+
+		"Generate a %s of %s. "+
 			"The image should be educational and suitable for language learning flashcards. "+
 			"Requirements: single main subject, plain background, clear and recognizable. "+
 			"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",

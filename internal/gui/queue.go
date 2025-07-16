@@ -13,7 +13,7 @@ type WordJob struct {
 	Word         string
 	Translation  string
 	AudioFile    string
-	ImageFiles   []string
+	ImageFile    string // Changed from ImageFiles []string to single image
 	Status       JobStatus
 	Error        error
 	StartedAt    time.Time
@@ -194,7 +194,7 @@ func (q *WordQueue) Stop() {
 }
 
 // CompleteJob marks a job as completed with results
-func (q *WordQueue) CompleteJob(jobID int, translation, audioFile string, imageFiles []string) {
+func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, imageFile string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	
@@ -202,7 +202,7 @@ func (q *WordQueue) CompleteJob(jobID int, translation, audioFile string, imageF
 		job.Status = StatusCompleted
 		job.Translation = translation
 		job.AudioFile = audioFile
-		job.ImageFiles = imageFiles
+		job.ImageFile = imageFile
 		job.CompletedAt = time.Now()
 		
 		delete(q.processing, jobID)

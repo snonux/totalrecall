@@ -175,7 +175,7 @@ func (a *Application) loadWordByIndex(index int) {
 			// Load from queue job
 			a.currentTranslation = job.Translation
 			a.currentAudioFile = job.AudioFile
-			a.currentImages = job.ImageFiles
+			a.currentImage = job.ImageFile
 			
 			fyne.Do(func() {
 				if job.Translation != "" {
@@ -184,8 +184,8 @@ func (a *Application) loadWordByIndex(index int) {
 				if job.AudioFile != "" {
 					a.audioPlayer.SetAudioFile(job.AudioFile)
 				}
-				if len(job.ImageFiles) > 0 {
-					a.imageDisplay.SetImages(job.ImageFiles)
+				if job.ImageFile != "" {
+					a.imageDisplay.SetImages([]string{job.ImageFile})
 				}
 				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
 			})
@@ -234,8 +234,8 @@ func (a *Application) loadExistingFiles(word string) {
 		})
 	}
 	
-	// Load image files
-	a.currentImages = []string{}
+	// Load image file
+	a.currentImage = ""
 	// Try to find images with different patterns
 	patterns := []string{
 		fmt.Sprintf("%s.jpg", sanitized),
@@ -249,20 +249,20 @@ func (a *Application) loadExistingFiles(word string) {
 	for _, pattern := range patterns {
 		imagePath := filepath.Join(a.config.OutputDir, pattern)
 		if _, err := os.Stat(imagePath); err == nil {
-			a.currentImages = append(a.currentImages, imagePath)
+			a.currentImage = imagePath
 			break // Just load the first image found
 		}
 	}
 	
-	if len(a.currentImages) > 0 {
+	if a.currentImage != "" {
 		fyne.Do(func() {
-			a.imageDisplay.SetImages(a.currentImages)
+			a.imageDisplay.SetImages([]string{a.currentImage})
 		})
 		
 		// Try to load the prompt from attribution file if using OpenAI
-		if a.config.ImageProvider == "openai" && len(a.currentImages) > 0 {
+		if a.config.ImageProvider == "openai" {
 			// Look for attribution file
-			baseImagePath := a.currentImages[0]
+			baseImagePath := a.currentImage
 			attrPath := strings.TrimSuffix(baseImagePath, filepath.Ext(baseImagePath)) + "_attribution.txt"
 			if data, err := os.ReadFile(attrPath); err == nil {
 				// Parse prompt from attribution file
