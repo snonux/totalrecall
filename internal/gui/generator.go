@@ -97,18 +97,6 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 	var err error
 	
 	switch a.config.ImageProvider {
-	case "pixabay":
-		searcher = image.NewPixabayClient(a.config.PixabayKey)
-		
-	case "unsplash":
-		if a.config.UnsplashKey == "" {
-			return "", fmt.Errorf("Unsplash API key is required")
-		}
-		searcher, err = image.NewUnsplashClient(a.config.UnsplashKey)
-		if err != nil {
-			return "", err
-		}
-		
 	case "openai":
 		openaiConfig := &image.OpenAIConfig{
 			APIKey:      a.config.OpenAIKey,
@@ -122,8 +110,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		
 		searcher = image.NewOpenAIClient(openaiConfig)
 		if openaiConfig.APIKey == "" {
-			// Fall back to Pixabay
-			searcher = image.NewPixabayClient("")
+			return "", fmt.Errorf("OpenAI API key is required for image generation")
 		}
 		
 	default:

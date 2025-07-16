@@ -30,12 +30,8 @@ audio:
 
 # Image configuration
 image:
-  # Provider: pixabay, unsplash, or openai
+  # Provider: currently only openai is supported
   provider: openai
-  
-  # API keys for image providers
-  pixabay_key: ""     # Optional for Pixabay (higher rate limits with key)
-  unsplash_key: ""    # Required for Unsplash
   
   # OpenAI DALL-E settings
   openai_model: dall-e-3     # Options: dall-e-2, dall-e-3

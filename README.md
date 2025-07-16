@@ -14,9 +14,7 @@ It has mainly been vibe coded using Claude Code CLI.
 - Automatic Bulgarian to English translation
   - Saves translations to separate text files
   - Includes translations in Anki CSV export
-- Image search and generation:
-  - **Pixabay**: Free stock photo search (optional API key)
-  - **Unsplash**: High-quality photo search (requires API key)
+- Image generation:
   - **OpenAI DALL-E**: AI-generated educational images with random art styles (requires API key)
 - Batch processing of multiple words
 - Anki-compatible CSV export with translations
@@ -61,9 +59,9 @@ export OPENAI_API_KEY="sk-..."
    totalrecall ябълка
    ```
 
-2. Use free Pixabay for images:
+2. Generate with specific DALL-E model:
    ```bash
-   totalrecall ябълка --image-api pixabay
+   totalrecall ябълка --openai-image-model dall-e-3
    ```
 
 3. Process multiple words from a file:
@@ -96,9 +94,7 @@ audio:
   cache_dir: "./.audio_cache"
 
 image:
-  provider: openai       # Image provider (pixabay, unsplash, or openai) - default: openai
-  pixabay_key: ""        # Optional API key for higher limits
-  unsplash_key: ""       # Required for Unsplash
+  provider: openai       # Image provider (currently only openai is supported)
   
   # OpenAI DALL-E settings
   openai_model: "dall-e-2"  # Model: dall-e-2 or dall-e-3
@@ -131,7 +127,7 @@ totalrecall [word] [flags]
 - `--skip-audio`: Skip audio generation
 - `--skip-images`: Skip image download
 - `--images-per-word int`: Number of images per word (default 1)
-- `--image-api string`: Image source - pixabay, unsplash, or openai (default "openai")
+- `--image-api string`: Image source - currently only openai is supported (default "openai")
 - `--all-voices`: Generate audio in all available OpenAI voices (creates 11 files per word)
 
 #### Audio Options
@@ -149,14 +145,6 @@ totalrecall [word] [flags]
 - `--openai-image-style string`: Style - natural or vivid (default "natural", dall-e-3 only)
 
 ## API Keys
-
-### Pixabay
-- Optional - works without key but with lower rate limits
-- Get your key at: https://pixabay.com/api/docs/
-
-### Unsplash
-- Required for Unsplash searches
-- Get your key at: https://unsplash.com/developers
 
 ### OpenAI
 - Required for both OpenAI TTS audio and DALL-E image generation
@@ -253,8 +241,8 @@ Available Bulgarian voices:
 - **DALL-E 3 Images**: ~$0.04 per image (standard), ~$0.08 (HD)
 - Both services cache results to avoid regenerating identical content
 
-### Free Alternatives
-- **Images**: Use Pixabay without API key (limited rate)
+### Cost Savings
+- Both audio and images are cached to avoid regenerating identical content
 
 ### OpenAI Troubleshooting
 - Check the API key has proper permissions enabled

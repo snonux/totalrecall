@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Go CLI tool that generates Anki flashcard materials from Bulgarian words:
 - Generates audio pronunciation using OpenAI TTS
-- Downloads representative images via web search
+- Generates images using OpenAI DALL-E
 - Creates Anki-compatible output files
 
 ## Important: Task Tracking
@@ -61,7 +61,7 @@ totalrecall/
 ├── cmd/totalrecall/          # CLI entry point
 ├── internal/          # Private packages
 │   ├── audio/        # Audio generation (OpenAI TTS)
-│   ├── image/        # Image search functionality
+│   ├── image/        # Image generation functionality
 │   ├── anki/         # Anki format generation
 │   ├── config/       # Configuration management
 │   └── version.go    # Version information
@@ -69,17 +69,12 @@ totalrecall/
 
 ### Key Design Decisions
 1. **OpenAI TTS**: High-quality, natural-sounding Bulgarian pronunciation
-2. **Modular image search**: Support multiple providers (Pixabay, Unsplash, OpenAI DALL-E)
+2. **Image generation**: Uses OpenAI DALL-E for AI-generated images
 3. **Configuration via YAML**: User-friendly configuration with viper
 4. **Cobra for CLI**: Industry-standard CLI framework
 
 ### External Dependencies
-- **OpenAI API Key**: Required for audio generation
-
-### API Configuration
-Image search APIs require configuration in `.bulg.yaml`:
-- **Pixabay**: Optional API key for higher rate limits
-- **Unsplash**: Required API key
+- **OpenAI API Key**: Required for both audio generation and image creation
 
 ## Testing Approach
 1. Unit tests mock API calls

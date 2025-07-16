@@ -77,7 +77,7 @@ func init() {
 	// Local flags
 	rootCmd.Flags().StringVarP(&outputDir, "output", "o", "./anki_cards", "Output directory")
 	rootCmd.Flags().StringVarP(&audioFormat, "format", "f", "mp3", "Audio format (wav or mp3)")
-	rootCmd.Flags().StringVar(&imageAPI, "image-api", "openai", "Image source (pixabay, unsplash, or openai)")
+	rootCmd.Flags().StringVar(&imageAPI, "image-api", "openai", "Image source (only openai supported)")
 	rootCmd.Flags().StringVar(&batchFile, "batch", "", "Process words from file (one per line)")
 	rootCmd.Flags().BoolVar(&skipAudio, "skip-audio", false, "Skip audio generation")
 	rootCmd.Flags().BoolVar(&skipImages, "skip-images", false, "Skip image download")
@@ -360,20 +360,6 @@ func downloadImages(word string) error {
 	var err error
 	
 	switch imageAPI {
-	case "pixabay":
-		apiKey := viper.GetString("image.pixabay_key")
-		searcher = image.NewPixabayClient(apiKey)
-		
-	case "unsplash":
-		apiKey := viper.GetString("image.unsplash_key")
-		if apiKey == "" {
-			return fmt.Errorf("Unsplash API key is required in config")
-		}
-		searcher, err = image.NewUnsplashClient(apiKey)
-		if err != nil {
-			return err
-		}
-		
 	case "openai":
 		// Create OpenAI image configuration
 		openaiConfig := &image.OpenAIConfig{
@@ -410,9 +396,7 @@ func downloadImages(word string) error {
 		
 		searcher = image.NewOpenAIClient(openaiConfig)
 		if openaiConfig.APIKey == "" {
-			fmt.Printf("Warning: OpenAI API key not found, falling back to Pixabay for images\n")
-			imageAPI = "pixabay"
-			searcher = image.NewPixabayClient("")
+			return fmt.Errorf("OpenAI API key is required for image generation")
 		}
 		
 	default:
@@ -716,8 +700,6 @@ func runGUIMode() error {
 		ImageProvider: imageAPI,
 		EnableCache:   viper.GetBool("cache.enable"),
 		OpenAIKey:     getOpenAIKey(),
-		PixabayKey:    viper.GetString("image.pixabay_key"),
-		UnsplashKey:   viper.GetString("image.unsplash_key"),
 	}
 	
 	// Create and run GUI application

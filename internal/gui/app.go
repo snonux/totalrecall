@@ -83,8 +83,6 @@ type Config struct {
 	ImageProvider  string
 	EnableCache    bool
 	OpenAIKey      string
-	PixabayKey     string
-	UnsplashKey    string
 }
 
 // DefaultConfig returns default GUI configuration

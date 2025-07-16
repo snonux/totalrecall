@@ -463,6 +463,11 @@ func (c *OpenAIClient) getSizeHeight() int {
 
 // getCreativeStyleFromOpenAI asks OpenAI for a creative photo style suggestion
 func (c *OpenAIClient) getCreativeStyleFromOpenAI(ctx context.Context, subject string) string {
+	// Check if client is nil or API key is empty
+	if c.client == nil || c.apiKey == "" {
+		return ""
+	}
+	
 	fmt.Printf("  Asking OpenAI for creative style suggestion for '%s'...\n", subject)
 
 	req := openai.ChatCompletionRequest{
