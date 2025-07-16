@@ -48,7 +48,7 @@ The GUI provides:
   - Audio player with play controls
   - Translation display
 - **Bottom Section**: Action buttons
-  - "Keep & Continue" - saves the current card
+  - "New Word" - saves the current card and clears for a new word
   - "Regenerate Image" - gets a new image
   - "Regenerate Audio" - generates with a different voice
   - "Regenerate All" - regenerates everything

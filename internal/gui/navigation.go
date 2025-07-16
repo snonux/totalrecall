@@ -9,6 +9,8 @@ import (
 	
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
+	
+	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
 // scanExistingWords scans the output directory for existing words
@@ -62,53 +64,100 @@ func (a *Application) scanExistingWords() {
 
 // updateNavigation updates the navigation button states
 func (a *Application) updateNavigation() {
-	if len(a.existingWords) > 0 {
+	// Get all available words (existing + completed from queue)
+	allWords := a.getAllAvailableWords()
+	
+	if len(allWords) > 1 {
+		// Enable both buttons when there's more than one word (allows circular navigation)
 		a.prevWordBtn.Enable()
 		a.nextWordBtn.Enable()
 		
 		// Find current word index
 		a.currentWordIndex = -1
-		for i, word := range a.existingWords {
+		for i, word := range allWords {
 			if word == a.currentWord {
 				a.currentWordIndex = i
 				break
 			}
 		}
-		
-		// Disable at boundaries
-		if a.currentWordIndex <= 0 {
-			a.prevWordBtn.Disable()
-		}
-		if a.currentWordIndex >= len(a.existingWords)-1 || a.currentWordIndex == -1 {
-			a.nextWordBtn.Disable()
-		}
+	} else if len(allWords) == 1 {
+		// With only one word, disable navigation
+		a.prevWordBtn.Disable()
+		a.nextWordBtn.Disable()
 	} else {
+		// No words at all
 		a.prevWordBtn.Disable()
 		a.nextWordBtn.Disable()
 	}
 }
 
+// getAllAvailableWords returns all words (from disk and completed queue jobs)
+func (a *Application) getAllAvailableWords() []string {
+	// Start with existing words from disk
+	words := make([]string, len(a.existingWords))
+	copy(words, a.existingWords)
+	
+	// Add completed jobs from queue
+	completedJobs := a.queue.GetCompletedJobs()
+	for _, job := range completedJobs {
+		// Check if this word is already in the list
+		found := false
+		for _, w := range words {
+			if w == job.Word {
+				found = true
+				break
+			}
+		}
+		if !found {
+			words = append(words, job.Word)
+		}
+	}
+	
+	// Sort the combined list
+	sort.Strings(words)
+	return words
+}
+
 // onPrevWord loads the previous word
 func (a *Application) onPrevWord() {
-	if a.currentWordIndex > 0 {
-		a.loadWordByIndex(a.currentWordIndex - 1)
+	allWords := a.getAllAvailableWords()
+	if len(allWords) == 0 {
+		return
 	}
+	
+	newIndex := a.currentWordIndex - 1
+	// Wrap around to the end if at beginning
+	if newIndex < 0 {
+		newIndex = len(allWords) - 1
+	}
+	
+	a.loadWordByIndex(newIndex)
 }
 
 // onNextWord loads the next word
 func (a *Application) onNextWord() {
-	if a.currentWordIndex < len(a.existingWords)-1 && a.currentWordIndex >= 0 {
-		a.loadWordByIndex(a.currentWordIndex + 1)
-	}
-}
-
-// loadWordByIndex loads a word by its index in existingWords
-func (a *Application) loadWordByIndex(index int) {
-	if index < 0 || index >= len(a.existingWords) {
+	allWords := a.getAllAvailableWords()
+	if len(allWords) == 0 {
 		return
 	}
 	
-	word := a.existingWords[index]
+	newIndex := a.currentWordIndex + 1
+	// Wrap around to the beginning if at end
+	if newIndex >= len(allWords) {
+		newIndex = 0
+	}
+	
+	a.loadWordByIndex(newIndex)
+}
+
+// loadWordByIndex loads a word by its index in the combined word list
+func (a *Application) loadWordByIndex(index int) {
+	allWords := a.getAllAvailableWords()
+	if index < 0 || index >= len(allWords) {
+		return
+	}
+	
+	word := allWords[index]
 	a.currentWord = word
 	a.currentWordIndex = index
 	
@@ -118,8 +167,38 @@ func (a *Application) loadWordByIndex(index int) {
 	// Clear UI
 	a.clearUI()
 	
-	// Load existing files
-	a.loadExistingFiles(word)
+	// Check if this word is from a completed queue job
+	var fromQueue bool
+	completedJobs := a.queue.GetCompletedJobs()
+	for _, job := range completedJobs {
+		if job.Word == word && job.Status == StatusCompleted {
+			// Load from queue job
+			a.currentTranslation = job.Translation
+			a.currentAudioFile = job.AudioFile
+			a.currentImages = job.ImageFiles
+			
+			fyne.Do(func() {
+				if job.Translation != "" {
+					a.translationText.SetText(fmt.Sprintf("%s = %s", word, job.Translation))
+				}
+				if job.AudioFile != "" {
+					a.audioPlayer.SetAudioFile(job.AudioFile)
+				}
+				if len(job.ImageFiles) > 0 {
+					a.imageDisplay.SetImages(job.ImageFiles)
+				}
+				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
+			})
+			
+			fromQueue = true
+			break
+		}
+	}
+	
+	// If not from queue, load existing files from disk
+	if !fromQueue {
+		a.loadExistingFiles(word)
+	}
 	
 	// Update navigation
 	a.updateNavigation()
@@ -243,12 +322,28 @@ func (a *Application) deleteCurrentWord() {
 	}
 	a.existingWords = newWords
 	
+	// Also remove from saved cards if present
+	a.mu.Lock()
+	newSavedCards := make([]anki.Card, 0, len(a.savedCards))
+	for _, card := range a.savedCards {
+		if card.Bulgarian != a.currentWord {
+			newSavedCards = append(newSavedCards, card)
+		}
+	}
+	a.savedCards = newSavedCards
+	a.mu.Unlock()
+	
+	// Also remove from completed queue jobs
+	a.queue.RemoveCompletedJobByWord(a.currentWord)
+	
 	// Clear UI
 	a.clearUI()
 	
 	// Update status
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Deleted %d files for '%s'", deletedCount, a.currentWord))
+		// Update queue status to reflect the reduced card count
+		a.updateQueueStatus()
 	})
 	
 	// Clear current word

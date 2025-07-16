@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	
+	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 )
@@ -33,6 +34,7 @@ type Application struct {
 	translationText *widget.Label
 	progressBar     *widget.ProgressBar
 	statusLabel     *widget.Label
+	queueStatusLabel *widget.Label
 	
 	// Navigation buttons
 	prevWordBtn     *widget.Button
@@ -50,9 +52,16 @@ type Application struct {
 	currentAudioFile string
 	currentImages    []string
 	currentTranslation string
+	currentJobID     int
 	savedCards       []anki.Card
 	existingWords    []string  // Words already in anki_cards folder
 	currentWordIndex int
+	
+	// Word processing queue
+	queue *WordQueue
+	
+	// Processing statistics
+	processingCount int  // Number of tasks currently processing (audio/image)
 	
 	// Configuration
 	config      *Config
@@ -107,6 +116,10 @@ func New(config *Config) *Application {
 		savedCards: make([]anki.Card, 0),
 	}
 	
+	// Initialize the word processing queue
+	app.queue = NewWordQueue(ctx)
+	app.queue.SetCallbacks(app.onQueueStatusUpdate, app.onJobComplete)
+	
 	// Set up audio configuration
 	app.audioConfig = &audio.Config{
 		Provider:          "openai",
@@ -126,12 +139,15 @@ func New(config *Config) *Application {
 	// Scan existing words in output directory
 	app.scanExistingWords()
 	
+	// Update initial queue status
+	app.updateQueueStatus()
+	
 	return app
 }
 
 // setupUI creates the main user interface
 func (a *Application) setupUI() {
-	a.window = a.app.NewWindow("TotalRecall - Bulgarian Flashcard Generator")
+	a.window = a.app.NewWindow(fmt.Sprintf("TotalRecall v%s - Bulgarian Flashcard Generator", internal.Version))
 	a.window.Resize(fyne.NewSize(800, 600))
 	
 	// Create input section with navigation
@@ -164,7 +180,7 @@ func (a *Application) setupUI() {
 	)
 	
 	// Create action buttons
-	a.keepButton = widget.NewButton("Keep & Continue", a.onKeepAndContinue)
+	a.keepButton = widget.NewButton("New Word", a.onKeepAndContinue)
 	a.regenerateImageBtn = widget.NewButton("Regenerate Image", a.onRegenerateImage)
 	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio", a.onRegenerateAudio)
 	a.regenerateAllBtn = widget.NewButton("Regenerate All", a.onRegenerateAll)
@@ -188,12 +204,16 @@ func (a *Application) setupUI() {
 	a.progressBar = widget.NewProgressBar()
 	a.progressBar.Hide()
 	a.statusLabel = widget.NewLabel("Ready")
+	a.queueStatusLabel = widget.NewLabel("Queue: Empty")
+	a.queueStatusLabel.TextStyle = fyne.TextStyle{Italic: true}
 	
 	statusSection := container.NewBorder(
 		nil, nil, nil, nil,
 		container.NewVBox(
 			a.progressBar,
 			a.statusLabel,
+			widget.NewSeparator(),
+			a.queueStatusLabel,
 		),
 	)
 	
@@ -225,6 +245,7 @@ func (a *Application) setupUI() {
 	a.window.SetContent(content)
 	a.window.SetOnClosed(func() {
 		a.cancel()
+		a.queue.Stop()
 		a.wg.Wait()
 	})
 }
@@ -247,22 +268,23 @@ func (a *Application) onSubmit() {
 		return
 	}
 	
-	// Clear previous content
-	a.clearUI()
+	// Add word to processing queue
+	job := a.queue.AddWord(word)
 	
-	a.currentWord = word
-	a.setUIEnabled(false)
-	a.showProgress("Generating materials for: " + word)
+	// Clear the input field for next word
+	a.wordInput.SetText("")
 	
-	// Generate in background
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		a.generateMaterials(word)
-	}()
+	// Update status to show word was queued
+	a.updateStatus(fmt.Sprintf("Added '%s' to queue (Job #%d)", word, job.ID))
+	
+	// Update queue status immediately
+	a.updateQueueStatus()
+	
+	// Start processing if not already processing
+	a.processNextInQueue()
 }
 
-// generateMaterials generates all materials for a word
+// generateMaterials generates all materials for a word (used by regenerate functions)
 func (a *Application) generateMaterials(word string) {
 	// Translate word
 	fyne.Do(func() {
@@ -284,8 +306,11 @@ func (a *Application) generateMaterials(word string) {
 	// Generate audio
 	fyne.Do(func() {
 		a.updateStatus("Generating audio...")
+		a.incrementProcessing() // Audio processing starts
 	})
 	audioFile, err := a.generateAudio(word)
+	a.decrementProcessing() // Audio processing ends
+	
 	if err != nil {
 		fyne.Do(func() {
 			a.showError(fmt.Errorf("Audio generation failed: %w", err))
@@ -301,8 +326,11 @@ func (a *Application) generateMaterials(word string) {
 	// Generate images
 	fyne.Do(func() {
 		a.updateStatus("Downloading images...")
+		a.incrementProcessing() // Image processing starts
 	})
 	images, err := a.generateImages(word)
+	a.decrementProcessing() // Image processing ends
+	
 	if err != nil {
 		fyne.Do(func() {
 			a.showError(fmt.Errorf("Image download failed: %w", err))
@@ -324,37 +352,58 @@ func (a *Application) generateMaterials(word string) {
 	})
 }
 
-// onKeepAndContinue saves the current card and clears for next
+// onKeepAndContinue saves the current card and clears for a new word
 func (a *Application) onKeepAndContinue() {
-	// Save current card
-	card := anki.Card{
-		Bulgarian:   a.currentWord,
-		AudioFile:   a.currentAudioFile,
-		ImageFiles:  a.currentImages,
-		Translation: a.currentTranslation,
+	// Check if we have a complete word to save
+	if a.currentWord != "" && a.currentAudioFile != "" && len(a.currentImages) > 0 {
+		// Save current card
+		card := anki.Card{
+			Bulgarian:   a.currentWord,
+			AudioFile:   a.currentAudioFile,
+			ImageFiles:  a.currentImages,
+			Translation: a.currentTranslation,
+		}
+		
+		a.mu.Lock()
+		a.savedCards = append(a.savedCards, card)
+		count := len(a.savedCards)
+		a.mu.Unlock()
+		
+		// Save translation file for future navigation
+		if a.currentTranslation != "" {
+			filename := sanitizeFilename(a.currentWord)
+			translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+			content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
+			os.WriteFile(translationFile, []byte(content), 0644)
+		}
+		
+		// Rescan existing words to include the new one
+		a.scanExistingWords()
+		
+		a.updateStatus(fmt.Sprintf("Card saved! Total cards: %d", count))
 	}
 	
+	// Clear current job ID to allow navigation back to this word
 	a.mu.Lock()
-	a.savedCards = append(a.savedCards, card)
-	count := len(a.savedCards)
+	currentJobID := a.currentJobID
+	a.currentJobID = 0
 	a.mu.Unlock()
 	
-	// Save translation file for future navigation
-	if a.currentTranslation != "" {
-		filename := sanitizeFilename(a.currentWord)
-		translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
-		content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
-		os.WriteFile(translationFile, []byte(content), 0644)
+	// If there was a job in progress, it will continue in the background
+	if currentJobID != 0 {
+		a.updateStatus("Previous word continues processing in background")
 	}
-	
-	// Rescan existing words to include the new one
-	a.scanExistingWords()
 	
 	// Clear UI for next word
 	a.clearUI()
-	a.updateStatus(fmt.Sprintf("Card saved! Total cards: %d", count))
 	a.wordInput.SetText("")
 	a.wordInput.FocusGained() // Focus input for next word
+	
+	// Hide progress bar if it was showing
+	a.hideProgress()
+	
+	// Re-enable submit button
+	a.submitButton.Enable()
 }
 
 // onRegenerateImage regenerates only the image
@@ -365,9 +414,12 @@ func (a *Application) onRegenerateImage() {
 	// Clear the current image immediately
 	a.imageDisplay.Clear()
 	
+	a.incrementProcessing() // Image processing starts
+	
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
+		defer a.decrementProcessing() // Image processing ends
 		
 		images, err := a.generateImages(a.currentWord)
 		if err != nil {
@@ -393,9 +445,12 @@ func (a *Application) onRegenerateAudio() {
 	a.setActionButtonsEnabled(false)
 	a.showProgress("Regenerating audio...")
 	
+	a.incrementProcessing() // Audio processing starts
+	
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
+		defer a.decrementProcessing() // Audio processing ends
 		
 		audioFile, err := a.generateAudio(a.currentWord)
 		if err != nil {
@@ -504,7 +559,8 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 		a.regenerateAllBtn.Enable()
 		a.deleteButton.Enable()
 	} else {
-		a.keepButton.Disable()
+		// Keep "New Word" button enabled to allow starting a new word during processing
+		// a.keepButton.Disable() // Don't disable this
 		a.regenerateImageBtn.Disable()
 		a.regenerateAudioBtn.Disable()
 		a.regenerateAllBtn.Disable()
@@ -514,7 +570,7 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 
 func (a *Application) showProgress(message string) {
 	a.progressBar.Show()
-	a.progressBar.SetValue(0.5) // Indeterminate progress
+	a.progressBar.SetValue(0.1) // Start at 10%
 	a.statusLabel.SetText(message)
 }
 
@@ -537,3 +593,265 @@ func (a *Application) clearUI() {
 	a.translationText.SetText("")
 	a.setActionButtonsEnabled(false)
 }
+
+// processNextInQueue processes the next word in the queue
+func (a *Application) processNextInQueue() {
+	// Check if we're already processing
+	if a.currentJobID != 0 {
+		return
+	}
+	
+	// Get next job from queue
+	job := a.queue.ProcessNextJob()
+	if job == nil {
+		return
+	}
+	
+	// Set current job
+	a.mu.Lock()
+	a.currentJobID = job.ID
+	a.currentWord = job.Word
+	a.mu.Unlock()
+	
+	// Clear UI for new word
+	fyne.Do(func() {
+		a.clearUI()
+		a.showProgress("Processing: " + job.Word)
+		a.updateQueueStatus() // Update to show item moved from queued to processing
+	})
+	
+	// Process in background
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		a.processWordJob(job)
+	}()
+}
+
+// processWordJob processes a single word job
+func (a *Application) processWordJob(job *WordJob) {
+	// Translate word
+	fyne.Do(func() {
+		a.updateStatus(fmt.Sprintf("Translating '%s'...", job.Word))
+	})
+	
+	translation, err := a.translateWord(job.Word)
+	if err != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("translation failed: %w", err))
+		a.finishCurrentJob()
+		return
+	}
+	
+	// Update UI with translation immediately if this is still the current job
+	a.mu.Lock()
+	if a.currentJobID == job.ID {
+		a.currentTranslation = translation
+		fyne.Do(func() {
+			a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, translation))
+		})
+	}
+	a.mu.Unlock()
+	
+	// Generate audio
+	fyne.Do(func() {
+		a.updateStatus(fmt.Sprintf("Generating audio for '%s'...", job.Word))
+		a.progressBar.SetValue(0.4)
+		a.incrementProcessing() // Audio processing starts
+	})
+	
+	audioFile, err := a.generateAudio(job.Word)
+	a.decrementProcessing() // Audio processing ends
+	
+	if err != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("audio generation failed: %w", err))
+		a.finishCurrentJob()
+		return
+	}
+	
+	// Update UI with audio immediately if this is still the current job
+	a.mu.Lock()
+	if a.currentJobID == job.ID {
+		a.currentAudioFile = audioFile
+		fyne.Do(func() {
+			a.audioPlayer.SetAudioFile(audioFile)
+			// Enable audio-related actions
+			a.regenerateAudioBtn.Enable()
+		})
+	}
+	a.mu.Unlock()
+	
+	// Generate images
+	fyne.Do(func() {
+		a.updateStatus(fmt.Sprintf("Downloading images for '%s'...", job.Word))
+		a.progressBar.SetValue(0.7)
+		a.incrementProcessing() // Image processing starts
+	})
+	
+	imageFiles, err := a.generateImages(job.Word)
+	a.decrementProcessing() // Image processing ends
+	
+	if err != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("image download failed: %w", err))
+		a.finishCurrentJob()
+		return
+	}
+	
+	// Mark job as completed
+	fyne.Do(func() {
+		a.progressBar.SetValue(0.95)
+		a.updateStatus(fmt.Sprintf("Finalizing '%s'...", job.Word))
+	})
+	
+	a.queue.CompleteJob(job.ID, translation, audioFile, imageFiles)
+	
+	// Update UI with results if this is still the current job
+	a.mu.Lock()
+	if a.currentJobID == job.ID {
+		a.currentTranslation = translation
+		a.currentAudioFile = audioFile
+		a.currentImages = imageFiles
+		
+		fyne.Do(func() {
+			a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, translation))
+			a.imageDisplay.SetImages(imageFiles)
+			a.audioPlayer.SetAudioFile(audioFile)
+			a.hideProgress()
+			a.setActionButtonsEnabled(true)
+			a.updateStatus(fmt.Sprintf("Completed: %s", job.Word))
+		})
+	}
+	a.mu.Unlock()
+	
+	// Finish this job
+	a.finishCurrentJob()
+	
+	// Update queue status
+	fyne.Do(func() {
+		a.updateQueueStatus()
+	})
+}
+
+// finishCurrentJob clears the current job and processes next in queue
+func (a *Application) finishCurrentJob() {
+	a.mu.Lock()
+	a.currentJobID = 0
+	a.mu.Unlock()
+	
+	// Process next in queue
+	fyne.Do(func() {
+		a.processNextInQueue()
+	})
+}
+
+// onQueueStatusUpdate handles queue status updates
+func (a *Application) onQueueStatusUpdate(job *WordJob) {
+	fyne.Do(func() {
+		a.updateQueueStatus()
+	})
+}
+
+// onJobComplete handles job completion
+func (a *Application) onJobComplete(job *WordJob) {
+	fyne.Do(func() {
+		a.updateQueueStatus()
+		
+		// If this was the current job and it failed, show error
+		if job.ID == a.currentJobID && job.Status == StatusFailed {
+			a.showError(job.Error)
+			a.hideProgress()
+			a.finishCurrentJob()
+		}
+		
+		// Update navigation to include the newly completed word
+		if job.Status == StatusCompleted {
+			a.updateNavigation()
+			
+			// Check if the completed job is for the currently displayed word
+			// Only update UI if the current word is still empty (waiting for this job)
+			if job.Word == a.currentWord && job.ID != a.currentJobID {
+				// Check if the UI is still empty/waiting for content
+				hasContent := a.currentAudioFile != "" || len(a.currentImages) > 0
+				
+				if !hasContent {
+					// Update the UI with the completed results since it's still waiting
+					// Update each component individually to show progress
+					if job.Translation != "" && a.currentTranslation == "" {
+						a.currentTranslation = job.Translation
+						a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, job.Translation))
+					}
+					if job.AudioFile != "" && a.currentAudioFile == "" {
+						a.currentAudioFile = job.AudioFile
+						a.audioPlayer.SetAudioFile(job.AudioFile)
+						a.regenerateAudioBtn.Enable()
+					}
+					if len(job.ImageFiles) > 0 && len(a.currentImages) == 0 {
+						a.currentImages = job.ImageFiles
+						a.imageDisplay.SetImages(job.ImageFiles)
+						a.regenerateImageBtn.Enable()
+					}
+					
+					// Enable all action buttons since we now have complete content
+					a.setActionButtonsEnabled(true)
+					a.updateStatus(fmt.Sprintf("Processing completed: %s", job.Word))
+				} else {
+					// Word already has content, just show notification
+					a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
+				}
+			} else if job.ID != a.currentJobID {
+				// Show a subtle notification for other background completions
+				a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
+			}
+		}
+	})
+}
+
+// updateQueueStatus updates the queue status label
+func (a *Application) updateQueueStatus() {
+	a.mu.Lock()
+	processing := a.processingCount
+	a.mu.Unlock()
+	
+	// Count total cards from various sources
+	// 1. Saved cards from the session
+	savedCount := len(a.savedCards)
+	
+	// 2. Existing words from disk
+	existingCount := len(a.existingWords)
+	
+	// 3. Completed jobs from queue
+	completedJobs := a.queue.GetCompletedJobs()
+	queueCompleted := len(completedJobs)
+	
+	totalCards := savedCount + existingCount + queueCompleted
+	
+	status := fmt.Sprintf("Processing: %d | Total cards: %d", processing, totalCards)
+	
+	a.queueStatusLabel.SetText(status)
+}
+
+// incrementProcessing increments the processing count and updates the status
+func (a *Application) incrementProcessing() {
+	a.mu.Lock()
+	a.processingCount++
+	a.mu.Unlock()
+	
+	// Update UI on main thread
+	fyne.Do(func() {
+		a.updateQueueStatus()
+	})
+}
+
+// decrementProcessing decrements the processing count and updates the status
+func (a *Application) decrementProcessing() {
+	a.mu.Lock()
+	if a.processingCount > 0 {
+		a.processingCount--
+	}
+	a.mu.Unlock()
+	
+	// Update UI on main thread
+	fyne.Do(func() {
+		a.updateQueueStatus()
+	})
+}
+
