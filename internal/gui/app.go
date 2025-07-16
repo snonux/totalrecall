@@ -157,7 +157,7 @@ func (a *Application) setupUI() {
 	a.wordInput.SetPlaceHolder("Enter Bulgarian word...")
 	a.wordInput.OnSubmitted = func(string) { a.onSubmit() }
 	
-	a.submitButton = widget.NewButton("Generate (G)", a.onSubmit)
+	a.submitButton = widget.NewButton("Generate (g)", a.onSubmit)
 	a.prevWordBtn = widget.NewButton("◀ Prev (←)", a.onPrevWord)
 	a.nextWordBtn = widget.NewButton("Next (→) ▶", a.onNextWord)
 	
@@ -203,11 +203,11 @@ func (a *Application) setupUI() {
 	)
 	
 	// Create action buttons
-	a.keepButton = widget.NewButton("New Word (N)", a.onKeepAndContinue)
-	a.regenerateImageBtn = widget.NewButton("Regenerate Image (I)", a.onRegenerateImage)
-	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio (A)", a.onRegenerateAudio)
-	a.regenerateAllBtn = widget.NewButton("Regenerate All (R)", a.onRegenerateAll)
-	a.deleteButton = widget.NewButton("Delete (D)", a.onDelete)
+	a.keepButton = widget.NewButton("New Word (n)", a.onKeepAndContinue)
+	a.regenerateImageBtn = widget.NewButton("Regenerate Image (i)", a.onRegenerateImage)
+	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio (a)", a.onRegenerateAudio)
+	a.regenerateAllBtn = widget.NewButton("Regenerate All (r)", a.onRegenerateAll)
+	a.deleteButton = widget.NewButton("Delete (d)", a.onDelete)
 	a.deleteButton.Importance = widget.DangerImportance
 	
 	// Initially disable action buttons
@@ -561,12 +561,21 @@ func (a *Application) onExportToAnki() {
 		}
 		
 		dialog.ShowInformation("Export Complete", 
-			fmt.Sprintf("Exported %d cards to:\n%s", len(a.savedCards), outputPath), 
+			fmt.Sprintf("Exported %d cards to:\n%s\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
+				len(a.savedCards), outputPath, a.config.OutputDir), 
 			a.window)
 	}, a.window)
 	
 	saveDialog.SetFileName("anki_import.csv")
 	saveDialog.SetFilter(storage.NewExtensionFileFilter([]string{".csv"}))
+	
+	// Try to set the default location to the anki_cards directory
+	if uri, err := storage.ParseURI("file://" + a.config.OutputDir); err == nil {
+		if listableURI, ok := uri.(fyne.ListableURI); ok {
+			saveDialog.SetLocation(listableURI)
+		}
+	}
+	
 	saveDialog.Show()
 }
 

@@ -31,7 +31,7 @@ func NewAudioPlayer() *AudioPlayer {
 	p := &AudioPlayer{}
 	
 	// Create controls
-	p.playButton = widget.NewButton("▶ Play (P)", p.onPlay)
+	p.playButton = widget.NewButton("▶ Play (p)", p.onPlay)
 	p.stopButton = widget.NewButton("■ Stop", p.onStop)
 	p.statusLabel = widget.NewLabel("No audio loaded")
 	
@@ -98,7 +98,7 @@ func (p *AudioPlayer) onPlay() {
 	}
 	
 	p.isPlaying = true
-	p.playButton.SetText("⏸ Pause (P)")
+	p.playButton.SetText("⏸ Pause (p)")
 	p.stopButton.Enable()
 	p.statusLabel.SetText("Playing: " + filepath.Base(p.audioFile))
 }
@@ -111,7 +111,7 @@ func (p *AudioPlayer) onStop() {
 	}
 	
 	p.isPlaying = false
-	p.playButton.SetText("▶ Play (P)")
+	p.playButton.SetText("▶ Play (p)")
 	p.stopButton.Disable()
 	p.statusLabel.SetText("Stopped: " + filepath.Base(p.audioFile))
 }
@@ -164,7 +164,7 @@ func (p *AudioPlayer) startPlayback() error {
 			// Playback finished normally
 			fyne.Do(func() {
 				p.isPlaying = false
-				p.playButton.SetText("▶ Play (P)")
+				p.playButton.SetText("▶ Play (p)")
 				p.stopButton.Disable()
 				p.statusLabel.SetText("Finished: " + filepath.Base(p.audioFile))
 			})

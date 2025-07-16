@@ -294,7 +294,7 @@ func (a *Application) onDelete() {
 	}
 	
 	// Create custom confirmation dialog with keyboard support
-	message := fmt.Sprintf("Delete all files for '%s'?\n\nPress Y to confirm or N to cancel", a.currentWord)
+	message := fmt.Sprintf("Delete all files for '%s'?\n\nPress y to confirm or n to cancel", a.currentWord)
 	confirmDialog := dialog.NewConfirm("Delete Word", message, func(confirm bool) {
 		a.deleteConfirming = false
 		if confirm {
