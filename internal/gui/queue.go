@@ -9,15 +9,16 @@ import (
 
 // WordJob represents a single word processing job
 type WordJob struct {
-	ID          int
-	Word        string
-	Translation string
-	AudioFile   string
-	ImageFiles  []string
-	Status      JobStatus
-	Error       error
-	StartedAt   time.Time
-	CompletedAt time.Time
+	ID           int
+	Word         string
+	Translation  string
+	AudioFile    string
+	ImageFiles   []string
+	Status       JobStatus
+	Error        error
+	StartedAt    time.Time
+	CompletedAt  time.Time
+	CustomPrompt string // Custom prompt for image generation
 }
 
 // JobStatus represents the current state of a job
@@ -93,11 +94,17 @@ func (q *WordQueue) SetCallbacks(onStatusUpdate func(*WordJob), onJobComplete fu
 
 // AddWord adds a word to the processing queue
 func (q *WordQueue) AddWord(word string) *WordJob {
+	return q.AddWordWithPrompt(word, "")
+}
+
+// AddWordWithPrompt adds a word to the processing queue with a custom prompt
+func (q *WordQueue) AddWordWithPrompt(word, customPrompt string) *WordJob {
 	q.mu.Lock()
 	job := &WordJob{
-		ID:     q.nextID,
-		Word:   word,
-		Status: StatusQueued,
+		ID:           q.nextID,
+		Word:         word,
+		Status:       StatusQueued,
+		CustomPrompt: customPrompt,
 	}
 	q.nextID++
 	q.results[job.ID] = job

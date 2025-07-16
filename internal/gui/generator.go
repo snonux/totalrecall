@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/sashabaranov/go-openai"
 	
 	"codeberg.org/snonux/totalrecall/internal/audio"
@@ -86,6 +87,11 @@ func (a *Application) generateAudio(word string) (string, error) {
 
 // generateImages downloads images for a word
 func (a *Application) generateImages(word string) ([]string, error) {
+	return a.generateImagesWithPrompt(word, "")
+}
+
+// generateImagesWithPrompt downloads images for a word with optional custom prompt
+func (a *Application) generateImagesWithPrompt(word string, customPrompt string) ([]string, error) {
 	// Create image searcher based on provider
 	var searcher image.ImageSearcher
 	var err error
@@ -135,19 +141,37 @@ func (a *Application) generateImages(word string) ([]string, error) {
 	
 	downloader := image.NewDownloader(searcher, downloadOpts)
 	
+	// Create search options with custom prompt if provided
+	searchOpts := image.DefaultSearchOptions(word)
+	if customPrompt != "" {
+		searchOpts.CustomPrompt = customPrompt
+	}
+	
 	// Download images
 	var paths []string
 	
 	if a.config.ImagesPerWord == 1 {
-		_, path, err := downloader.DownloadBestMatch(a.ctx, word)
+		_, path, err := downloader.DownloadBestMatchWithOptions(a.ctx, searchOpts)
 		if err != nil {
 			return nil, err
 		}
 		paths = []string{path}
 	} else {
-		paths, err = downloader.DownloadMultiple(a.ctx, word, a.config.ImagesPerWord)
+		paths, err = downloader.DownloadMultipleWithOptions(a.ctx, searchOpts, a.config.ImagesPerWord)
 		if err != nil {
 			return nil, err
+		}
+	}
+	
+	// If using OpenAI, get the last used prompt and update the UI
+	if a.config.ImageProvider == "openai" {
+		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
+			usedPrompt := openaiClient.GetLastPrompt()
+			if usedPrompt != "" {
+				fyne.Do(func() {
+					a.imagePromptEntry.SetText(usedPrompt)
+				})
+			}
 		}
 	}
 	

@@ -35,6 +35,7 @@ type Application struct {
 	progressBar     *widget.ProgressBar
 	statusLabel     *widget.Label
 	queueStatusLabel *widget.Label
+	imagePromptEntry *widget.Entry
 	
 	// Navigation buttons
 	prevWordBtn     *widget.Button
@@ -56,6 +57,7 @@ type Application struct {
 	savedCards       []anki.Card
 	existingWords    []string  // Words already in anki_cards folder
 	currentWordIndex int
+	deleteConfirming bool      // Track if we're in delete confirmation mode
 	
 	// Word processing queue
 	queue *WordQueue
@@ -155,9 +157,9 @@ func (a *Application) setupUI() {
 	a.wordInput.SetPlaceHolder("Enter Bulgarian word...")
 	a.wordInput.OnSubmitted = func(string) { a.onSubmit() }
 	
-	a.submitButton = widget.NewButton("Generate", a.onSubmit)
-	a.prevWordBtn = widget.NewButton("◀ Prev", a.onPrevWord)
-	a.nextWordBtn = widget.NewButton("Next ▶", a.onNextWord)
+	a.submitButton = widget.NewButton("Generate (G)", a.onSubmit)
+	a.prevWordBtn = widget.NewButton("◀ Prev (←)", a.onPrevWord)
+	a.nextWordBtn = widget.NewButton("Next (→) ▶", a.onNextWord)
 	
 	inputSection := container.NewBorder(
 		nil, nil, 
@@ -172,19 +174,40 @@ func (a *Application) setupUI() {
 	a.translationText = widget.NewLabel("")
 	a.translationText.Alignment = fyne.TextAlignCenter
 	
+	// Create image prompt entry
+	a.imagePromptEntry = widget.NewMultiLineEntry()
+	a.imagePromptEntry.SetPlaceHolder("Custom image prompt (optional)...")
+	a.imagePromptEntry.Wrapping = fyne.TextWrapWord // Enable word wrapping
+	
+	// Create container for image and prompt with proper sizing
+	promptContainer := container.NewBorder(
+		widget.NewLabel("Image Prompt:"),
+		nil,
+		nil,
+		nil,
+		container.NewScroll(a.imagePromptEntry),
+	)
+	
+	// Use a split container to give equal space to image and prompt
+	imageSection := container.NewHSplit(
+		a.imageDisplay,
+		promptContainer,
+	)
+	imageSection.SetOffset(0.5) // Equal 50/50 split
+	
 	displaySection := container.NewBorder(
 		a.translationText,
 		a.audioPlayer,
 		nil, nil,
-		a.imageDisplay,
+		imageSection,
 	)
 	
 	// Create action buttons
-	a.keepButton = widget.NewButton("New Word", a.onKeepAndContinue)
-	a.regenerateImageBtn = widget.NewButton("Regenerate Image", a.onRegenerateImage)
-	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio", a.onRegenerateAudio)
-	a.regenerateAllBtn = widget.NewButton("Regenerate All", a.onRegenerateAll)
-	a.deleteButton = widget.NewButton("Delete", a.onDelete)
+	a.keepButton = widget.NewButton("New Word (N)", a.onKeepAndContinue)
+	a.regenerateImageBtn = widget.NewButton("Regenerate Image (I)", a.onRegenerateImage)
+	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio (A)", a.onRegenerateAudio)
+	a.regenerateAllBtn = widget.NewButton("Regenerate All (R)", a.onRegenerateAll)
+	a.deleteButton = widget.NewButton("Delete (D)", a.onDelete)
 	a.deleteButton.Importance = widget.DangerImportance
 	
 	// Initially disable action buttons
@@ -248,6 +271,9 @@ func (a *Application) setupUI() {
 		a.queue.Stop()
 		a.wg.Wait()
 	})
+	
+	// Set up keyboard shortcuts
+	a.setupKeyboardShortcuts()
 }
 
 // Run starts the GUI application
@@ -268,8 +294,11 @@ func (a *Application) onSubmit() {
 		return
 	}
 	
-	// Add word to processing queue
-	job := a.queue.AddWord(word)
+	// Get custom prompt from the UI
+	customPrompt := a.imagePromptEntry.Text
+	
+	// Add word to processing queue with custom prompt
+	job := a.queue.AddWordWithPrompt(word, customPrompt)
 	
 	// Clear the input field for next word
 	a.wordInput.SetText("")
@@ -323,12 +352,16 @@ func (a *Application) generateMaterials(word string) {
 		a.audioPlayer.SetAudioFile(audioFile)
 	})
 	
-	// Generate images
+	// Generate images with custom prompt if provided
 	fyne.Do(func() {
 		a.updateStatus("Downloading images...")
 		a.incrementProcessing() // Image processing starts
 	})
-	images, err := a.generateImages(word)
+	
+	// Get custom prompt from UI
+	customPrompt := a.imagePromptEntry.Text
+	
+	images, err := a.generateImagesWithPrompt(word, customPrompt)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -414,6 +447,9 @@ func (a *Application) onRegenerateImage() {
 	// Clear the current image immediately
 	a.imageDisplay.Clear()
 	
+	// Get custom prompt from UI
+	customPrompt := a.imagePromptEntry.Text
+	
 	a.incrementProcessing() // Image processing starts
 	
 	a.wg.Add(1)
@@ -421,7 +457,7 @@ func (a *Application) onRegenerateImage() {
 		defer a.wg.Done()
 		defer a.decrementProcessing() // Image processing ends
 		
-		images, err := a.generateImages(a.currentWord)
+		images, err := a.generateImagesWithPrompt(a.currentWord, customPrompt)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
@@ -591,6 +627,7 @@ func (a *Application) clearUI() {
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
 	a.translationText.SetText("")
+	a.imagePromptEntry.SetText("")
 	a.setActionButtonsEnabled(false)
 }
 
@@ -687,7 +724,8 @@ func (a *Application) processWordJob(job *WordJob) {
 		a.incrementProcessing() // Image processing starts
 	})
 	
-	imageFiles, err := a.generateImages(job.Word)
+	// Use the custom prompt from the job
+	imageFiles, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -852,6 +890,80 @@ func (a *Application) decrementProcessing() {
 	// Update UI on main thread
 	fyne.Do(func() {
 		a.updateQueueStatus()
+	})
+}
+
+// setupKeyboardShortcuts sets up keyboard shortcuts for the application
+func (a *Application) setupKeyboardShortcuts() {
+	// Create a custom shortcut handler
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		// Don't process shortcuts if the word input is focused
+		if a.window.Canvas().Focused() == a.wordInput || a.window.Canvas().Focused() == a.imagePromptEntry {
+			return
+		}
+		
+		// Don't process if we're in delete confirmation mode (handled by dialog)
+		if a.deleteConfirming {
+			return
+		}
+		
+		switch ev.Name {
+		case fyne.KeyG: // Generate
+			if a.submitButton.Disabled() {
+				return
+			}
+			a.onSubmit()
+			
+		case fyne.KeyN: // New Word
+			if a.keepButton.Disabled() {
+				return
+			}
+			a.onKeepAndContinue()
+			
+		case fyne.KeyI: // Regenerate Image
+			if a.regenerateImageBtn.Disabled() {
+				return
+			}
+			a.onRegenerateImage()
+			
+		case fyne.KeyA: // Regenerate Audio
+			if a.regenerateAudioBtn.Disabled() {
+				return
+			}
+			a.onRegenerateAudio()
+			
+		case fyne.KeyR: // Regenerate All
+			if a.regenerateAllBtn.Disabled() {
+				return
+			}
+			a.onRegenerateAll()
+			
+		case fyne.KeyD: // Delete
+			if a.deleteButton.Disabled() {
+				return
+			}
+			a.onDelete()
+			
+		case fyne.KeyLeft: // Previous word
+			if a.prevWordBtn.Disabled() {
+				return
+			}
+			a.onPrevWord()
+			
+		case fyne.KeyRight: // Next word
+			if a.nextWordBtn.Disabled() {
+				return
+			}
+			a.onNextWord()
+			
+		case fyne.KeyP: // Play audio
+			if a.currentAudioFile != "" {
+				a.audioPlayer.Play()
+			}
+			
+		case fyne.KeyEscape: // Cancel any operation
+			a.deleteConfirming = false
+		}
 	})
 }
 

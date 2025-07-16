@@ -258,6 +258,28 @@ func (a *Application) loadExistingFiles(word string) {
 		fyne.Do(func() {
 			a.imageDisplay.SetImages(a.currentImages)
 		})
+		
+		// Try to load the prompt from attribution file if using OpenAI
+		if a.config.ImageProvider == "openai" && len(a.currentImages) > 0 {
+			// Look for attribution file
+			baseImagePath := a.currentImages[0]
+			attrPath := strings.TrimSuffix(baseImagePath, filepath.Ext(baseImagePath)) + "_attribution.txt"
+			if data, err := os.ReadFile(attrPath); err == nil {
+				// Parse prompt from attribution file
+				content := string(data)
+				lines := strings.Split(content, "\n")
+				for i, line := range lines {
+					if strings.HasPrefix(line, "Prompt used:") && i+1 < len(lines) {
+						// The prompt is on the next line
+						prompt := strings.TrimSpace(lines[i+1])
+						fyne.Do(func() {
+							a.imagePromptEntry.SetText(prompt)
+						})
+						break
+					}
+				}
+			}
+		}
 	}
 	
 	fyne.Do(func() {
@@ -271,14 +293,41 @@ func (a *Application) onDelete() {
 		return
 	}
 	
-	// Confirm deletion
-	dialog.ShowConfirm("Delete Word",
-		fmt.Sprintf("Delete all files for '%s'?", a.currentWord),
-		func(confirm bool) {
-			if confirm {
+	// Create custom confirmation dialog with keyboard support
+	message := fmt.Sprintf("Delete all files for '%s'?\n\nPress Y to confirm or N to cancel", a.currentWord)
+	confirmDialog := dialog.NewConfirm("Delete Word", message, func(confirm bool) {
+		a.deleteConfirming = false
+		if confirm {
+			a.deleteCurrentWord()
+		}
+	}, a.window)
+	
+	// Set up keyboard handler for the dialog
+	a.deleteConfirming = true
+	
+	// Create a custom key handler for the dialog window
+	oldKeyHandler := a.window.Canvas().OnTypedKey()
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if a.deleteConfirming {
+			switch ev.Name {
+			case fyne.KeyY:
+				confirmDialog.Hide()
+				a.deleteConfirming = false
 				a.deleteCurrentWord()
+				// Restore original key handler
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+			case fyne.KeyN, fyne.KeyEscape:
+				confirmDialog.Hide()
+				a.deleteConfirming = false
+				// Restore original key handler
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
 			}
-		}, a.window)
+		} else if oldKeyHandler != nil {
+			oldKeyHandler(ev)
+		}
+	})
+	
+	confirmDialog.Show()
 }
 
 // deleteCurrentWord deletes all files for the current word

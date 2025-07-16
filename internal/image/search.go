@@ -26,6 +26,7 @@ type SearchOptions struct {
 	Page        int      // Page number (1-based)
 	ImageType   string   // Type: "photo", "illustration", "vector", "all"
 	Orientation string   // Orientation: "horizontal", "vertical", "all"
+	CustomPrompt string  // Custom prompt for AI image generation (OpenAI)
 }
 
 // DefaultSearchOptions returns sensible defaults for Bulgarian word searches

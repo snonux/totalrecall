@@ -123,8 +123,14 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		translatedWord = opts.Query
 	}
 	
-	// Create educational prompt
-	prompt := c.createEducationalPrompt(opts.Query, translatedWord)
+	// Create prompt - use custom if provided, otherwise generate educational prompt
+	var prompt string
+	if opts.CustomPrompt != "" {
+		prompt = opts.CustomPrompt
+		fmt.Printf("Using custom prompt: %s\n", prompt)
+	} else {
+		prompt = c.createEducationalPrompt(opts.Query, translatedWord)
+	}
 	
 	// Store the prompt for attribution
 	c.lastPrompt = prompt
@@ -243,8 +249,28 @@ func (c *OpenAIClient) Name() string {
 	return "openai"
 }
 
+// GetLastPrompt returns the last prompt used for image generation
+func (c *OpenAIClient) GetLastPrompt() string {
+	return c.lastPrompt
+}
+
 // createEducationalPrompt generates a prompt optimized for language learning
 func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation string) string {
+	// 25% chance to ask OpenAI for a creative style
+	if rand.Float32() < 0.25 {
+		if creativeStyle := c.getCreativeStyleFromOpenAI(context.Background(), englishTranslation); creativeStyle != "" {
+			fmt.Printf("  Using OpenAI-suggested style: %s\n", creativeStyle)
+			return fmt.Sprintf(
+				"Generate a %s of: %s. "+
+					"This is for the Bulgarian word '%s' which means %s. "+
+					"The image should be educational and suitable for language learning flashcards. "+
+					"Requirements: single main subject, plain background, clear and recognizable. "+
+					"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+				creativeStyle, englishTranslation, bulgarianWord, englishTranslation,
+			)
+		}
+	}
+	
 	// Define different art styles for variety (42 styles total)
 	styles := []string{
 		// Original styles (1-10)
@@ -435,4 +461,42 @@ func (c *OpenAIClient) getSizeHeight() int {
 	default:
 		return 512
 	}
+}
+
+// getCreativeStyleFromOpenAI asks OpenAI for a creative photo style suggestion
+func (c *OpenAIClient) getCreativeStyleFromOpenAI(ctx context.Context, subject string) string {
+	fmt.Printf("  Asking OpenAI for creative style suggestion for '%s'...\n", subject)
+	
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role: openai.ChatMessageRoleSystem,
+				Content: "You are a creative art director. Suggest unique, interesting photo/art styles for educational flashcard images. Be creative and varied. Respond with ONLY the style description, nothing else. Keep it concise (max 15 words).",
+			},
+			{
+				Role: openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf("Suggest a creative visual style for an educational image of: %s", subject),
+			},
+		},
+		Temperature: 0.9, // Higher temperature for more creativity
+		MaxTokens:   30,
+	}
+	
+	resp, err := c.client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		fmt.Printf("  Failed to get creative style: %v\n", err)
+		return ""
+	}
+	
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
+		return ""
+	}
+	
+	style := strings.TrimSpace(resp.Choices[0].Message.Content)
+	// Remove any trailing punctuation
+	style = strings.TrimSuffix(style, ".")
+	style = strings.TrimSuffix(style, "!")
+	
+	return style
 }
