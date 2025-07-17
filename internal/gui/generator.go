@@ -48,6 +48,39 @@ func (a *Application) translateWord(word string) (string, error) {
 	return translation, nil
 }
 
+// translateEnglishToBulgarian translates an English word to Bulgarian
+func (a *Application) translateEnglishToBulgarian(word string) (string, error) {
+	if a.config.OpenAIKey == "" {
+		return "", fmt.Errorf("OpenAI API key not configured")
+	}
+	
+	client := openai.NewClient(a.config.OpenAIKey)
+	
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf("Translate the English word '%s' to Bulgarian. Respond with only the Bulgarian translation in Cyrillic script, nothing else.", word),
+			},
+		},
+		MaxTokens:   50,
+		Temperature: 0.3,
+	}
+	
+	resp, err := client.CreateChatCompletion(a.ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("OpenAI API error: %w", err)
+	}
+	
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no translation returned")
+	}
+	
+	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
+	return translation, nil
+}
+
 // generateAudio generates audio for a word
 func (a *Application) generateAudio(word string) (string, error) {
 	// Get available voices

@@ -179,7 +179,7 @@ func (a *Application) loadWordByIndex(index int) {
 			
 			fyne.Do(func() {
 				if job.Translation != "" {
-					a.translationText.SetText(fmt.Sprintf("%s = %s", word, job.Translation))
+					a.translationEntry.SetText(job.Translation)
 				}
 				if job.AudioFile != "" {
 					a.audioPlayer.SetAudioFile(job.AudioFile)
@@ -220,7 +220,7 @@ func (a *Application) loadExistingFiles(word string) {
 		if len(parts) >= 2 {
 			a.currentTranslation = strings.TrimSpace(parts[1])
 			fyne.Do(func() {
-				a.translationText.SetText(fmt.Sprintf("%s = %s", word, a.currentTranslation))
+				a.translationEntry.SetText(a.currentTranslation)
 			})
 		}
 	}

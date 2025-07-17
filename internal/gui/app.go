@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -31,7 +32,7 @@ type Application struct {
 	submitButton    *widget.Button
 	imageDisplay    *ImageDisplay
 	audioPlayer     *AudioPlayer
-	translationText *widget.Label
+	translationEntry *widget.Entry
 	progressBar     *widget.ProgressBar
 	statusLabel     *widget.Label
 	queueStatusLabel *widget.Label
@@ -150,25 +151,39 @@ func (a *Application) setupUI() {
 	
 	// Create input section with navigation
 	a.wordInput = widget.NewEntry()
-	a.wordInput.SetPlaceHolder("Enter Bulgarian word...")
+	a.wordInput.SetPlaceHolder("Bulgarian word...")
 	a.wordInput.OnSubmitted = func(string) { a.onSubmit() }
+	
+	// Create translation entry
+	a.translationEntry = widget.NewEntry()
+	a.translationEntry.SetPlaceHolder("English translation...")
+	a.translationEntry.OnChanged = func(text string) {
+		a.currentTranslation = text
+		// Save the updated translation immediately
+		a.saveTranslation()
+	}
+	a.translationEntry.OnSubmitted = func(string) { a.onSubmit() }
 	
 	a.submitButton = widget.NewButton("Generate (g)", a.onSubmit)
 	a.prevWordBtn = widget.NewButton("◀ Prev (←)", a.onPrevWord)
 	a.nextWordBtn = widget.NewButton("Next (→) ▶", a.onNextWord)
 	
+	// Create a grid layout for inputs
+	inputGrid := container.New(layout.NewGridLayout(2),
+		a.wordInput,
+		a.translationEntry,
+	)
+	
 	inputSection := container.NewBorder(
 		nil, nil, 
 		a.prevWordBtn,
 		container.NewHBox(a.submitButton, a.nextWordBtn),
-		a.wordInput,
+		inputGrid,
 	)
 	
 	// Create display section
 	a.imageDisplay = NewImageDisplay()
 	a.audioPlayer = NewAudioPlayer()
-	a.translationText = widget.NewLabel("")
-	a.translationText.Alignment = fyne.TextAlignCenter
 	
 	// Create image prompt entry
 	a.imagePromptEntry = widget.NewMultiLineEntry()
@@ -192,7 +207,7 @@ func (a *Application) setupUI() {
 	imageSection.SetOffset(0.5) // Equal 50/50 split
 	
 	displaySection := container.NewBorder(
-		a.translationText,
+		nil,
 		a.audioPlayer,
 		nil, nil,
 		imageSection,
@@ -279,13 +294,66 @@ func (a *Application) Run() {
 
 // onSubmit handles word submission
 func (a *Application) onSubmit() {
-	word := a.wordInput.Text
-	if word == "" {
+	bulgarianText := strings.TrimSpace(a.wordInput.Text)
+	englishText := strings.TrimSpace(a.translationEntry.Text)
+	
+	// Determine which word to process and if translation is needed
+	var wordToProcess string
+	var needsTranslation bool
+	var translationDirection string
+	
+	if bulgarianText != "" && englishText != "" {
+		// Both provided - use Bulgarian as primary, no translation needed
+		wordToProcess = bulgarianText
+		needsTranslation = false
+		a.currentTranslation = englishText
+	} else if bulgarianText != "" && englishText == "" {
+		// Only Bulgarian provided - translate to English
+		wordToProcess = bulgarianText
+		needsTranslation = true
+		translationDirection = "bg-to-en"
+	} else if bulgarianText == "" && englishText != "" {
+		// Only English provided - translate to Bulgarian
+		needsTranslation = true
+		translationDirection = "en-to-bg"
+		// We'll get the Bulgarian word after translation
+	} else {
+		// Both empty
 		return
 	}
 	
+	// Handle English to Bulgarian translation first if needed
+	if translationDirection == "en-to-bg" {
+		a.updateStatus(fmt.Sprintf("Translating '%s' to Bulgarian...", englishText))
+		bulgarian, err := a.translateEnglishToBulgarian(englishText)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Translation failed: %w", err), a.window)
+			return
+		}
+		wordToProcess = bulgarian
+		a.wordInput.SetText(bulgarian)
+		a.currentTranslation = englishText
+		// Update current word for saving
+		a.currentWord = bulgarian
+		// Save the translation immediately
+		a.saveTranslation()
+	} else if translationDirection == "bg-to-en" {
+		// Handle Bulgarian to English translation immediately
+		a.updateStatus(fmt.Sprintf("Translating '%s' to English...", bulgarianText))
+		english, err := a.translateWord(bulgarianText)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Translation failed: %w", err), a.window)
+			return
+		}
+		a.currentTranslation = english
+		a.translationEntry.SetText(english)
+		needsTranslation = false // We've already done the translation
+		// Save the translation immediately
+		a.saveTranslation()
+	}
+	
 	// Validate Bulgarian text
-	if err := audio.ValidateBulgarianText(word); err != nil {
+	if err := audio.ValidateBulgarianText(wordToProcess); err != nil {
 		dialog.ShowError(err, a.window)
 		return
 	}
@@ -294,13 +362,19 @@ func (a *Application) onSubmit() {
 	customPrompt := a.imagePromptEntry.Text
 	
 	// Add word to processing queue with custom prompt
-	job := a.queue.AddWordWithPrompt(word, customPrompt)
+	job := a.queue.AddWordWithPrompt(wordToProcess, customPrompt)
 	
-	// Clear the input field for next word
-	a.wordInput.SetText("")
+	// Store whether translation is needed and the translation if already provided
+	job.NeedsTranslation = needsTranslation
+	if a.currentTranslation != "" {
+		job.Translation = a.currentTranslation
+	}
+	
+	// Don't clear the input fields yet - they should stay populated
+	// until the user is ready to enter a new word
 	
 	// Update status to show word was queued
-	a.updateStatus(fmt.Sprintf("Added '%s' to queue (Job #%d)", word, job.ID))
+	a.updateStatus(fmt.Sprintf("Added '%s' to queue (Job #%d)", wordToProcess, job.ID))
 	
 	// Update queue status immediately
 	a.updateQueueStatus()
@@ -311,22 +385,25 @@ func (a *Application) onSubmit() {
 
 // generateMaterials generates all materials for a word (used by regenerate functions)
 func (a *Application) generateMaterials(word string) {
-	// Translate word
-	fyne.Do(func() {
-		a.updateStatus("Translating...")
-	})
-	translation, err := a.translateWord(word)
-	if err != nil {
+	// Check if we already have a translation
+	if a.currentTranslation == "" {
+		// Translate word
 		fyne.Do(func() {
-			a.showError(fmt.Errorf("Translation failed: %w", err))
-			a.setUIEnabled(true)
+			a.updateStatus("Translating...")
 		})
-		return
+		translation, err := a.translateWord(word)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Translation failed: %w", err))
+				a.setUIEnabled(true)
+			})
+			return
+		}
+		a.currentTranslation = translation
+		fyne.Do(func() {
+			a.translationEntry.SetText(translation)
+		})
 	}
-	a.currentTranslation = translation
-	fyne.Do(func() {
-		a.translationText.SetText(fmt.Sprintf("%s = %s", word, translation))
-	})
 	
 	// Generate audio
 	fyne.Do(func() {
@@ -401,12 +478,7 @@ func (a *Application) onKeepAndContinue() {
 		a.mu.Unlock()
 		
 		// Save translation file for future navigation
-		if a.currentTranslation != "" {
-			filename := sanitizeFilename(a.currentWord)
-			translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
-			content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
-			os.WriteFile(translationFile, []byte(content), 0644)
-		}
+		a.saveTranslation()
 		
 		// Rescan existing words to include the new one
 		a.scanExistingWords()
@@ -425,9 +497,10 @@ func (a *Application) onKeepAndContinue() {
 		a.updateStatus("Previous word continues processing in background")
 	}
 	
-	// Clear UI for next word
+	// Clear UI and input fields for next word
 	a.clearUI()
 	a.wordInput.SetText("")
+	a.translationEntry.SetText("")
 	a.wordInput.FocusGained() // Focus input for next word
 	
 	// Hide progress bar if it was showing
@@ -635,7 +708,7 @@ func (a *Application) showError(err error) {
 func (a *Application) clearUI() {
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
-	a.translationText.SetText("")
+	// Don't clear the word input or translation entry - they should stay populated
 	a.imagePromptEntry.SetText("")
 	a.setActionButtonsEnabled(false)
 }
@@ -676,24 +749,33 @@ func (a *Application) processNextInQueue() {
 
 // processWordJob processes a single word job
 func (a *Application) processWordJob(job *WordJob) {
-	// Translate word
-	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Translating '%s'...", job.Word))
-	})
+	// Handle translation
+	var translation string
+	var err error
 	
-	translation, err := a.translateWord(job.Word)
-	if err != nil {
-		a.queue.FailJob(job.ID, fmt.Errorf("translation failed: %w", err))
-		a.finishCurrentJob()
-		return
+	if job.NeedsTranslation {
+		// Translate word
+		fyne.Do(func() {
+			a.updateStatus(fmt.Sprintf("Translating '%s'...", job.Word))
+		})
+		
+		translation, err = a.translateWord(job.Word)
+		if err != nil {
+			a.queue.FailJob(job.ID, fmt.Errorf("translation failed: %w", err))
+			a.finishCurrentJob()
+			return
+		}
+	} else if job.Translation != "" {
+		// Use provided translation
+		translation = job.Translation
 	}
 	
 	// Update UI with translation immediately if this is still the current job
 	a.mu.Lock()
-	if a.currentJobID == job.ID {
+	if a.currentJobID == job.ID && translation != "" {
 		a.currentTranslation = translation
 		fyne.Do(func() {
-			a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, translation))
+			a.translationEntry.SetText(translation)
 		})
 	}
 	a.mu.Unlock()
@@ -761,7 +843,7 @@ func (a *Application) processWordJob(job *WordJob) {
 		}
 		
 		fyne.Do(func() {
-			a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, translation))
+			a.translationEntry.SetText(translation)
 			if imageFile != "" {
 				a.imageDisplay.SetImages([]string{imageFile})
 			}
@@ -828,7 +910,7 @@ func (a *Application) onJobComplete(job *WordJob) {
 					// Update each component individually to show progress
 					if job.Translation != "" && a.currentTranslation == "" {
 						a.currentTranslation = job.Translation
-						a.translationText.SetText(fmt.Sprintf("%s = %s", job.Word, job.Translation))
+						a.translationEntry.SetText(job.Translation)
 					}
 					if job.AudioFile != "" && a.currentAudioFile == "" {
 						a.currentAudioFile = job.AudioFile
@@ -910,8 +992,9 @@ func (a *Application) decrementProcessing() {
 func (a *Application) setupKeyboardShortcuts() {
 	// Create a custom shortcut handler
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		// Don't process shortcuts if the word input is focused
-		if a.window.Canvas().Focused() == a.wordInput || a.window.Canvas().Focused() == a.imagePromptEntry {
+		// Don't process shortcuts if any input field is focused
+		focused := a.window.Canvas().Focused()
+		if focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry {
 			return
 		}
 		
@@ -978,5 +1061,16 @@ func (a *Application) setupKeyboardShortcuts() {
 			a.deleteConfirming = false
 		}
 	})
+}
+
+
+// saveTranslation saves the current translation to a file
+func (a *Application) saveTranslation() {
+	if a.currentWord != "" && a.currentTranslation != "" {
+		filename := sanitizeFilename(a.currentWord)
+		translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+		content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
+		os.WriteFile(translationFile, []byte(content), 0644)
+	}
 }
 

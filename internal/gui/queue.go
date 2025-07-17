@@ -9,16 +9,17 @@ import (
 
 // WordJob represents a single word processing job
 type WordJob struct {
-	ID           int
-	Word         string
-	Translation  string
-	AudioFile    string
-	ImageFile    string // Changed from ImageFiles []string to single image
-	Status       JobStatus
-	Error        error
-	StartedAt    time.Time
-	CompletedAt  time.Time
-	CustomPrompt string // Custom prompt for image generation
+	ID               int
+	Word             string
+	Translation      string
+	AudioFile        string
+	ImageFile        string // Changed from ImageFiles []string to single image
+	Status           JobStatus
+	Error            error
+	StartedAt        time.Time
+	CompletedAt      time.Time
+	CustomPrompt     string // Custom prompt for image generation
+	NeedsTranslation bool   // Whether translation is needed
 }
 
 // JobStatus represents the current state of a job

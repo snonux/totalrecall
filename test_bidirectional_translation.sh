@@ -1,0 +1,31 @@
+#!/bin/bash
+# Test script to verify the bidirectional translation functionality
+
+echo "Starting totalrecall GUI with bidirectional translation feature..."
+echo ""
+echo "Test scenarios:"
+echo ""
+echo "1. Bulgarian -> English translation:"
+echo "   - Enter 'ябълка' in Bulgarian field, leave English empty"
+echo "   - Click 'Generate' or press 'g'"
+echo "   - English translation 'apple' appears IMMEDIATELY in English field"
+echo "   - Then audio and images are generated"
+echo ""
+echo "2. English -> Bulgarian translation:"
+echo "   - Enter 'apple' in English field, leave Bulgarian empty"
+echo "   - Click 'Generate' or press 'g'"
+echo "   - Bulgarian translation 'ябълка' appears IMMEDIATELY in Bulgarian field"
+echo "   - Then audio and images are generated"
+echo ""
+echo "3. Both fields provided (no translation):"
+echo "   - Enter 'котка' in Bulgarian and 'cat' in English"
+echo "   - Click 'Generate' - no translation should occur"
+echo ""
+echo "4. Edit translations:"
+echo "   - You can manually edit the English translation at any time"
+echo "   - Changes are saved automatically"
+echo ""
+echo "Press Ctrl+C to exit when testing is complete."
+echo ""
+
+./totalrecall gui
