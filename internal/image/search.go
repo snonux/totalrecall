@@ -20,6 +20,7 @@ type SearchResult struct {
 // SearchOptions configures the image search
 type SearchOptions struct {
 	Query       string   // Search query (Bulgarian word)
+	Translation string   // English translation (if already available)
 	Language    string   // Language code (default: "bg")
 	SafeSearch  bool     // Enable safe search filtering
 	PerPage     int      // Number of results per page

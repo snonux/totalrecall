@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -15,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
+	"github.com/sashabaranov/go-openai"
 	
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
@@ -33,10 +35,10 @@ type Application struct {
 	imageDisplay    *ImageDisplay
 	audioPlayer     *AudioPlayer
 	translationEntry *widget.Entry
-	progressBar     *widget.ProgressBar
 	statusLabel     *widget.Label
 	queueStatusLabel *widget.Label
 	imagePromptEntry *widget.Entry
+	phoneticDisplay  *widget.Label
 	
 	// Navigation buttons
 	prevWordBtn     *widget.Button
@@ -189,6 +191,10 @@ func (a *Application) setupUI() {
 	a.imagePromptEntry = widget.NewMultiLineEntry()
 	a.imagePromptEntry.SetPlaceHolder("Custom image prompt (optional)...")
 	a.imagePromptEntry.Wrapping = fyne.TextWrapWord // Enable word wrapping
+	a.imagePromptEntry.OnChanged = func(text string) {
+		// Save the image prompt immediately when changed
+		a.saveImagePrompt()
+	}
 	
 	// Create container for image and prompt with proper sizing
 	promptContainer := container.NewBorder(
@@ -206,9 +212,33 @@ func (a *Application) setupUI() {
 	)
 	imageSection.SetOffset(0.5) // Equal 50/50 split
 	
+	// Create phonetic display section
+	a.phoneticDisplay = widget.NewLabel("Phonetic information will appear here...")
+	a.phoneticDisplay.Wrapping = fyne.TextWrapWord
+	
+	// Set minimum size for phonetic display (reduced to ~5 lines of text)
+	// Assuming ~20 pixels per line with standard font
+	phoneticScroll := container.NewScroll(a.phoneticDisplay)
+	phoneticScroll.SetMinSize(fyne.NewSize(0, 100))
+	
+	phoneticContainer := container.NewBorder(
+		widget.NewLabel("Phonetic Information:"),
+		nil,
+		nil,
+		nil,
+		phoneticScroll,
+	)
+	
+	// Create a container for audio player and phonetic info
+	audioPhoneticSection := container.NewVSplit(
+		phoneticContainer,
+		a.audioPlayer,
+	)
+	audioPhoneticSection.SetOffset(0.5) // Equal split between phonetic and audio
+	
 	displaySection := container.NewBorder(
 		nil,
-		a.audioPlayer,
+		audioPhoneticSection,
 		nil, nil,
 		imageSection,
 	)
@@ -235,8 +265,6 @@ func (a *Application) setupUI() {
 	)
 	
 	// Create status section
-	a.progressBar = widget.NewProgressBar()
-	a.progressBar.Hide()
 	a.statusLabel = widget.NewLabel("Ready")
 	a.queueStatusLabel = widget.NewLabel("Queue: Empty")
 	a.queueStatusLabel.TextStyle = fyne.TextStyle{Italic: true}
@@ -244,7 +272,6 @@ func (a *Application) setupUI() {
 	statusSection := container.NewBorder(
 		nil, nil, nil, nil,
 		container.NewVBox(
-			a.progressBar,
 			a.statusLabel,
 			widget.NewSeparator(),
 			a.queueStatusLabel,
@@ -434,7 +461,13 @@ func (a *Application) generateMaterials(word string) {
 	// Get custom prompt from UI
 	customPrompt := a.imagePromptEntry.Text
 	
-	imageFile, err := a.generateImagesWithPrompt(word, customPrompt)
+	// Pass the current translation to avoid re-translating
+	translation := a.currentTranslation
+	if translation == "" {
+		// Use the text from translationEntry if currentTranslation is not set
+		translation = strings.TrimSpace(a.translationEntry.Text)
+	}
+	imageFile, err := a.generateImagesWithPrompt(word, customPrompt, translation)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -477,8 +510,10 @@ func (a *Application) onKeepAndContinue() {
 		count := len(a.savedCards)
 		a.mu.Unlock()
 		
-		// Save translation file for future navigation
+		// Save translation, prompt, and phonetic files for future navigation
 		a.saveTranslation()
+		a.saveImagePrompt()
+		a.savePhoneticInfo()
 		
 		// Rescan existing words to include the new one
 		a.scanExistingWords()
@@ -528,7 +563,13 @@ func (a *Application) onRegenerateImage() {
 		defer a.wg.Done()
 		defer a.decrementProcessing() // Image processing ends
 		
-		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt)
+		// Use the current translation to avoid re-translating
+		translation := a.currentTranslation
+		if translation == "" {
+			// Use the text from translationEntry if currentTranslation is not set
+			translation = strings.TrimSpace(a.translationEntry.Text)
+		}
+		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
@@ -687,13 +728,11 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 }
 
 func (a *Application) showProgress(message string) {
-	a.progressBar.Show()
-	a.progressBar.SetValue(0.1) // Start at 10%
 	a.statusLabel.SetText(message)
 }
 
 func (a *Application) hideProgress() {
-	a.progressBar.Hide()
+	// Progress bar removed - nothing to hide
 }
 
 func (a *Application) updateStatus(message string) {
@@ -710,6 +749,7 @@ func (a *Application) clearUI() {
 	a.audioPlayer.Clear()
 	// Don't clear the word input or translation entry - they should stay populated
 	a.imagePromptEntry.SetText("")
+	a.phoneticDisplay.SetText("Phonetic information will appear here...")
 	a.setActionButtonsEnabled(false)
 }
 
@@ -780,10 +820,39 @@ func (a *Application) processWordJob(job *WordJob) {
 	}
 	a.mu.Unlock()
 	
+	// Start fetching phonetic information concurrently
+	phoneticDone := make(chan struct{})
+	go func() {
+		defer close(phoneticDone)
+		
+		fyne.Do(func() {
+			a.incrementProcessing() // Phonetic processing starts
+		})
+		
+		phoneticInfo, err := a.getPhoneticInfo(job.Word)
+		if err != nil {
+			// Log error but don't fail the job - phonetic info is optional
+			fmt.Printf("Warning: Failed to get phonetic info: %v\n", err)
+			phoneticInfo = "Failed to fetch phonetic information"
+		}
+		
+		// Update UI with phonetic info if this is still the current job
+		a.mu.Lock()
+		if a.currentJobID == job.ID {
+			fyne.Do(func() {
+				a.phoneticDisplay.SetText(phoneticInfo)
+				// Save phonetic info to file
+				a.savePhoneticInfo()
+			})
+		}
+		a.mu.Unlock()
+		
+		a.decrementProcessing() // Phonetic processing ends
+	}()
+	
 	// Generate audio
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Generating audio for '%s'...", job.Word))
-		a.progressBar.SetValue(0.4)
 		a.incrementProcessing() // Audio processing starts
 	})
 	
@@ -811,12 +880,12 @@ func (a *Application) processWordJob(job *WordJob) {
 	// Generate images
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Downloading images for '%s'...", job.Word))
-		a.progressBar.SetValue(0.7)
 		a.incrementProcessing() // Image processing starts
 	})
 	
 	// Use the custom prompt from the job
-	imageFile, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt)
+	// The translation variable already contains the correct translation (either from job or translated)
+	imageFile, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt, translation)
 	a.decrementProcessing() // Image processing ends
 	
 	if err != nil {
@@ -825,9 +894,11 @@ func (a *Application) processWordJob(job *WordJob) {
 		return
 	}
 	
+	// Wait for phonetic fetching to complete before finalizing
+	<-phoneticDone
+	
 	// Mark job as completed
 	fyne.Do(func() {
-		a.progressBar.SetValue(0.95)
 		a.updateStatus(fmt.Sprintf("Finalizing '%s'...", job.Word))
 	})
 	
@@ -1072,5 +1143,88 @@ func (a *Application) saveTranslation() {
 		content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
 		os.WriteFile(translationFile, []byte(content), 0644)
 	}
+}
+
+// saveImagePrompt saves the current image prompt to a file
+func (a *Application) saveImagePrompt() {
+	if a.currentWord != "" && a.imagePromptEntry.Text != "" {
+		filename := sanitizeFilename(a.currentWord)
+		promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", filename))
+		os.WriteFile(promptFile, []byte(a.imagePromptEntry.Text), 0644)
+	}
+}
+
+// savePhoneticInfo saves the phonetic information to a file
+func (a *Application) savePhoneticInfo() {
+	phoneticText := a.phoneticDisplay.Text
+	if a.currentWord != "" && phoneticText != "" && 
+		phoneticText != "Failed to fetch phonetic information" &&
+		phoneticText != "Phonetic information will appear here..." {
+		filename := sanitizeFilename(a.currentWord)
+		phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
+	}
+}
+
+// loadPhoneticInfo loads phonetic information from a file if it exists
+func (a *Application) loadPhoneticInfo(word string) {
+	filename := sanitizeFilename(word)
+	phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+	
+	if data, err := os.ReadFile(phoneticFile); err == nil {
+		a.phoneticDisplay.SetText(string(data))
+	}
+}
+
+// getPhoneticInfo fetches phonetic information for a Bulgarian word using OpenAI GPT-4o
+func (a *Application) getPhoneticInfo(word string) (string, error) {
+	if a.config.OpenAIKey == "" {
+		return "", fmt.Errorf("OpenAI API key not configured")
+	}
+	
+	client := openai.NewClient(a.config.OpenAIKey)
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4o,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role: openai.ChatMessageRoleSystem,
+				Content: "You are a Bulgarian language expert helping language learners understand pronunciation. Provide detailed phonetic information using the International Phonetic Alphabet (IPA). For each IPA symbol used, give concrete examples of how it sounds using familiar English words or sounds when possible.",
+			},
+			{
+				Role: openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf(`For the Bulgarian word '%s':
+1. Provide the complete IPA transcription
+2. Break down EACH phonetic symbol used in the transcription
+3. For EVERY symbol, explain how it's pronounced with examples:
+   - If similar to an English sound, give English word examples
+   - If not in English, describe tongue/mouth position or compare to similar sounds
+   - Include stress marks and explain which syllable is stressed
+
+Example format:
+Word: [IPA transcription]
+• /p/ - like 'p' in English 'pot'
+• /a/ - like 'a' in 'father'
+• /ˈ/ - stress mark (following syllable is stressed)
+etc.`, word),
+			},
+		},
+		Temperature: 0.3,
+		MaxTokens:   800,
+	}
+	
+	resp, err := client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to get phonetic info: %w", err)
+	}
+	
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no response from OpenAI")
+	}
+	
+	return resp.Choices[0].Message.Content, nil
 }
 

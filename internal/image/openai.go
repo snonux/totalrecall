@@ -115,12 +115,21 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		}
 	}
 
-	// Translate Bulgarian word to English for better results
-	translatedWord, err := c.translateBulgarianToEnglish(ctx, opts.Query)
-	if err != nil {
-		// If translation fails, fall back to using the original word
-		fmt.Printf("Translation failed: %v, using original word\n", err)
-		translatedWord = opts.Query
+	// Use provided translation if available, otherwise translate Bulgarian word to English
+	var translatedWord string
+	if opts.Translation != "" {
+		// Use the translation that was already provided (from UI or user input)
+		translatedWord = opts.Translation
+		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, translatedWord)
+	} else {
+		// Translate Bulgarian word to English for better results
+		var err error
+		translatedWord, err = c.translateBulgarianToEnglish(ctx, opts.Query)
+		if err != nil {
+			// If translation fails, fall back to using the original word
+			fmt.Printf("Translation failed: %v, using original word\n", err)
+			translatedWord = opts.Query
+		}
 	}
 
 	// Create prompt - use custom if provided, otherwise generate educational prompt

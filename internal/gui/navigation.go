@@ -187,6 +187,8 @@ func (a *Application) loadWordByIndex(index int) {
 				if job.ImageFile != "" {
 					a.imageDisplay.SetImages([]string{job.ImageFile})
 				}
+				// Load phonetic info from disk if it exists
+				a.loadPhoneticInfo(word)
 				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
 			})
 			
@@ -225,6 +227,24 @@ func (a *Application) loadExistingFiles(word string) {
 		}
 	}
 	
+	// Load image prompt file
+	promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", sanitized))
+	if data, err := os.ReadFile(promptFile); err == nil {
+		prompt := strings.TrimSpace(string(data))
+		fyne.Do(func() {
+			a.imagePromptEntry.SetText(prompt)
+		})
+	}
+	
+	// Load phonetic information
+	phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", sanitized))
+	if data, err := os.ReadFile(phoneticFile); err == nil {
+		phoneticInfo := string(data)
+		fyne.Do(func() {
+			a.phoneticDisplay.SetText(phoneticInfo)
+		})
+	}
+	
 	// Load audio file
 	audioFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s.%s", sanitized, a.config.AudioFormat))
 	if _, err := os.Stat(audioFile); err == nil {
@@ -240,8 +260,6 @@ func (a *Application) loadExistingFiles(word string) {
 	patterns := []string{
 		fmt.Sprintf("%s.jpg", sanitized),
 		fmt.Sprintf("%s.png", sanitized),
-		fmt.Sprintf("%s_0.jpg", sanitized),
-		fmt.Sprintf("%s_0.png", sanitized),
 		fmt.Sprintf("%s_1.jpg", sanitized),
 		fmt.Sprintf("%s_1.png", sanitized),
 	}
@@ -345,6 +363,7 @@ func (a *Application) deleteCurrentWord() {
 		fmt.Sprintf("%s_*.jpg", sanitized),
 		fmt.Sprintf("%s_*.png", sanitized),
 		fmt.Sprintf("%s_translation.txt", sanitized),
+		fmt.Sprintf("%s_prompt.txt", sanitized),
 		fmt.Sprintf("%s_attribution.txt", sanitized),
 		fmt.Sprintf("%s_*_attribution.txt", sanitized),
 	}

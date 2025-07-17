@@ -120,11 +120,11 @@ func (a *Application) generateAudio(word string) (string, error) {
 
 // generateImages downloads images for a word
 func (a *Application) generateImages(word string) (string, error) {
-	return a.generateImagesWithPrompt(word, "")
+	return a.generateImagesWithPrompt(word, "", "")
 }
 
-// generateImagesWithPrompt downloads a single image for a word with optional custom prompt
-func (a *Application) generateImagesWithPrompt(word string, customPrompt string) (string, error) {
+// generateImagesWithPrompt downloads a single image for a word with optional custom prompt and translation
+func (a *Application) generateImagesWithPrompt(word string, customPrompt string, translation string) (string, error) {
 	// Create image searcher based on provider
 	var searcher image.ImageSearcher
 	var err error
@@ -155,16 +155,19 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string)
 		OutputDir:         a.config.OutputDir,
 		OverwriteExisting: true,
 		CreateDir:         true,
-		FileNamePattern:   "{word}_{index}",
+		FileNamePattern:   "{word}",
 		MaxSizeBytes:      5 * 1024 * 1024, // 5MB
 	}
 	
 	downloader := image.NewDownloader(searcher, downloadOpts)
 	
-	// Create search options with custom prompt if provided
+	// Create search options with custom prompt and translation if provided
 	searchOpts := image.DefaultSearchOptions(word)
 	if customPrompt != "" {
 		searchOpts.CustomPrompt = customPrompt
+	}
+	if translation != "" {
+		searchOpts.Translation = translation
 	}
 	
 	// Download single image
