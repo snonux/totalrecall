@@ -47,6 +47,7 @@ type Application struct {
 	// Action buttons
 	keepButton         *widget.Button
 	regenerateImageBtn *widget.Button
+	regenerateRandomImageBtn *widget.Button
 	regenerateAudioBtn *widget.Button
 	regenerateAllBtn   *widget.Button
 	deleteButton       *widget.Button
@@ -154,7 +155,11 @@ func (a *Application) setupUI() {
 	// Create input section with navigation
 	a.wordInput = widget.NewEntry()
 	a.wordInput.SetPlaceHolder("Bulgarian word...")
-	a.wordInput.OnSubmitted = func(string) { a.onSubmit() }
+	a.wordInput.OnSubmitted = func(string) { 
+		a.onSubmit()
+		// Remove focus from input field after submit
+		a.window.Canvas().Unfocus()
+	}
 	a.wordInput.OnChanged = func(text string) {
 		// When user starts typing a new word, disconnect from any previous job
 		// to prevent mix-ups with background processing
@@ -181,7 +186,11 @@ func (a *Application) setupUI() {
 		// Save the updated translation immediately
 		a.saveTranslation()
 	}
-	a.translationEntry.OnSubmitted = func(string) { a.onSubmit() }
+	a.translationEntry.OnSubmitted = func(string) { 
+		a.onSubmit()
+		// Remove focus from input field after submit
+		a.window.Canvas().Unfocus()
+	}
 	
 	a.submitButton = widget.NewButton("Generate (g)", a.onSubmit)
 	a.prevWordBtn = widget.NewButton("◀ Prev (←)", a.onPrevWord)
@@ -206,7 +215,7 @@ func (a *Application) setupUI() {
 	
 	// Create image prompt entry
 	a.imagePromptEntry = widget.NewMultiLineEntry()
-	a.imagePromptEntry.SetPlaceHolder("Custom image prompt (optional)...")
+	a.imagePromptEntry.SetPlaceHolder("Custom image prompt (optional)... Press Escape to exit field")
 	a.imagePromptEntry.Wrapping = fyne.TextWrapWord // Enable word wrapping
 	a.imagePromptEntry.OnChanged = func(text string) {
 		// Save the image prompt immediately when changed
@@ -263,6 +272,7 @@ func (a *Application) setupUI() {
 	// Create action buttons
 	a.keepButton = widget.NewButton("New Word (n)", a.onKeepAndContinue)
 	a.regenerateImageBtn = widget.NewButton("Regenerate Image (i)", a.onRegenerateImage)
+	a.regenerateRandomImageBtn = widget.NewButton("Random Image (m)", a.onRegenerateRandomImage)
 	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio (a)", a.onRegenerateAudio)
 	a.regenerateAllBtn = widget.NewButton("Regenerate All (r)", a.onRegenerateAll)
 	a.deleteButton = widget.NewButton("Delete (d)", a.onDelete)
@@ -277,6 +287,7 @@ func (a *Application) setupUI() {
 		a.deleteButton,
 		widget.NewSeparator(),
 		a.regenerateImageBtn,
+		a.regenerateRandomImageBtn,
 		a.regenerateAudioBtn,
 		a.regenerateAllBtn,
 	)
@@ -599,7 +610,10 @@ func (a *Application) onKeepAndContinue() {
 
 // onRegenerateImage regenerates only the image
 func (a *Application) onRegenerateImage() {
-	a.setActionButtonsEnabled(false)
+	// Only disable the image-related buttons
+	a.regenerateImageBtn.Disable()
+	a.regenerateRandomImageBtn.Disable()
+	a.regenerateAllBtn.Disable()
 	a.showProgress("Regenerating image...")
 	
 	// Clear the current image immediately
@@ -637,14 +651,70 @@ func (a *Application) onRegenerateImage() {
 		
 		fyne.Do(func() {
 			a.hideProgress()
-			a.setActionButtonsEnabled(true)
+			// Re-enable image-related buttons
+			a.regenerateImageBtn.Enable()
+			a.regenerateRandomImageBtn.Enable()
+			a.regenerateAllBtn.Enable()
+		})
+	}()
+}
+
+// onRegenerateRandomImage generates a new image with a random prompt
+func (a *Application) onRegenerateRandomImage() {
+	// Only disable the image-related buttons
+	a.regenerateImageBtn.Disable()
+	a.regenerateRandomImageBtn.Disable()
+	a.regenerateAllBtn.Disable()
+	a.showProgress("Generating random image...")
+	
+	// Clear the current image immediately
+	a.imageDisplay.Clear()
+	
+	// Clear the custom prompt to let the system generate a new one
+	customPrompt := ""
+	
+	a.incrementProcessing() // Image processing starts
+	
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		defer a.decrementProcessing() // Image processing ends
+		
+		// Use the current translation to avoid re-translating
+		translation := a.currentTranslation
+		if translation == "" {
+			// Use the text from translationEntry if currentTranslation is not set
+			translation = strings.TrimSpace(a.translationEntry.Text)
+		}
+		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt, translation)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Random image generation failed: %w", err))
+			})
+		} else {
+			if imageFile != "" {
+				a.currentImage = imageFile
+				fyne.Do(func() {
+					a.imageDisplay.SetImages([]string{imageFile})
+				})
+			}
+		}
+		
+		fyne.Do(func() {
+			a.hideProgress()
+			// Re-enable image-related buttons
+			a.regenerateImageBtn.Enable()
+			a.regenerateRandomImageBtn.Enable()
+			a.regenerateAllBtn.Enable()
 		})
 	}()
 }
 
 // onRegenerateAudio regenerates audio with a different voice
 func (a *Application) onRegenerateAudio() {
-	a.setActionButtonsEnabled(false)
+	// Only disable the audio-related buttons
+	a.regenerateAudioBtn.Disable()
+	a.regenerateAllBtn.Disable()
 	a.showProgress("Regenerating audio...")
 	
 	a.incrementProcessing() // Audio processing starts
@@ -668,7 +738,9 @@ func (a *Application) onRegenerateAudio() {
 		
 		fyne.Do(func() {
 			a.hideProgress()
-			a.setActionButtonsEnabled(true)
+			// Re-enable audio-related buttons
+			a.regenerateAudioBtn.Enable()
+			a.regenerateAllBtn.Enable()
 		})
 	}()
 }
@@ -766,6 +838,7 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 	if enabled {
 		a.keepButton.Enable()
 		a.regenerateImageBtn.Enable()
+		a.regenerateRandomImageBtn.Enable()
 		a.regenerateAudioBtn.Enable()
 		a.regenerateAllBtn.Enable()
 		a.deleteButton.Enable()
@@ -773,6 +846,7 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 		// Keep "New Word" button enabled to allow starting a new word during processing
 		// a.keepButton.Disable() // Don't disable this
 		a.regenerateImageBtn.Disable()
+		a.regenerateRandomImageBtn.Disable()
 		a.regenerateAudioBtn.Disable()
 		a.regenerateAllBtn.Disable()
 		a.deleteButton.Disable()
@@ -780,11 +854,31 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 }
 
 func (a *Application) showProgress(message string) {
-	a.statusLabel.SetText(message)
+	// Check if we're already processing something
+	a.mu.Lock()
+	processingCount := a.processingCount
+	a.mu.Unlock()
+	
+	if processingCount > 1 {
+		// Show that multiple operations are in progress
+		a.statusLabel.SetText(fmt.Sprintf("%s (Processing: %d tasks)", message, processingCount))
+	} else {
+		a.statusLabel.SetText(message)
+	}
 }
 
 func (a *Application) hideProgress() {
 	// Progress bar removed - nothing to hide
+	// Update status to show if other operations are still running
+	a.mu.Lock()
+	processingCount := a.processingCount
+	a.mu.Unlock()
+	
+	if processingCount > 0 {
+		a.updateStatus(fmt.Sprintf("Processing %d task(s)...", processingCount))
+	} else {
+		a.updateStatus("Ready")
+	}
 }
 
 func (a *Application) updateStatus(message string) {
@@ -1116,11 +1210,21 @@ func (a *Application) decrementProcessing() {
 
 // setupKeyboardShortcuts sets up keyboard shortcuts for the application
 func (a *Application) setupKeyboardShortcuts() {
-	// Create a custom shortcut handler
+	// Create a custom shortcut handler for regular keys (when input fields are not focused)
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		// Don't process shortcuts if any input field is focused
+		// Handle Escape key to unfocus any field
+		if ev.Name == fyne.KeyEscape {
+			a.window.Canvas().Unfocus()
+			a.deleteConfirming = false
+			return
+		}
+		
+		// Check if input field is focused
 		focused := a.window.Canvas().Focused()
-		if focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry {
+		isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
+		
+		// If input is focused, don't process regular shortcuts
+		if isInputFocused {
 			return
 		}
 		
@@ -1129,64 +1233,77 @@ func (a *Application) setupKeyboardShortcuts() {
 			return
 		}
 		
-		switch ev.Name {
-		case fyne.KeyG: // Generate
-			if a.submitButton.Disabled() {
-				return
-			}
-			a.onSubmit()
-			
-		case fyne.KeyN: // New Word
-			if a.keepButton.Disabled() {
-				return
-			}
-			a.onKeepAndContinue()
-			
-		case fyne.KeyI: // Regenerate Image
-			if a.regenerateImageBtn.Disabled() {
-				return
-			}
-			a.onRegenerateImage()
-			
-		case fyne.KeyA: // Regenerate Audio
-			if a.regenerateAudioBtn.Disabled() {
-				return
-			}
-			a.onRegenerateAudio()
-			
-		case fyne.KeyR: // Regenerate All
-			if a.regenerateAllBtn.Disabled() {
-				return
-			}
-			a.onRegenerateAll()
-			
-		case fyne.KeyD: // Delete
-			if a.deleteButton.Disabled() {
-				return
-			}
-			a.onDelete()
-			
-		case fyne.KeyLeft: // Previous word
-			if a.prevWordBtn.Disabled() {
-				return
-			}
-			a.onPrevWord()
-			
-		case fyne.KeyRight: // Next word
-			if a.nextWordBtn.Disabled() {
-				return
-			}
-			a.onNextWord()
-			
-		case fyne.KeyP: // Play audio
-			if a.currentAudioFile != "" {
-				a.audioPlayer.Play()
-			}
-			
-		case fyne.KeyEscape: // Cancel any operation
-			a.deleteConfirming = false
-		}
+		a.handleShortcutKey(ev.Name)
 	})
+}
+
+// handleShortcutKey handles the actual shortcut action
+func (a *Application) handleShortcutKey(key fyne.KeyName) {
+	// Don't process if we're in delete confirmation mode
+	if a.deleteConfirming {
+		return
+	}
+	
+	switch key {
+	case fyne.KeyG: // Generate
+		if a.submitButton.Disabled() {
+			return
+		}
+		a.onSubmit()
+		
+	case fyne.KeyN: // New Word
+		if a.keepButton.Disabled() {
+			return
+		}
+		a.onKeepAndContinue()
+		
+	case fyne.KeyI: // Regenerate Image
+		if a.regenerateImageBtn.Disabled() {
+			return
+		}
+		a.onRegenerateImage()
+		
+	case fyne.KeyM: // Random Image (M for "magic" or "mixed")
+		if a.regenerateRandomImageBtn.Disabled() {
+			return
+		}
+		a.onRegenerateRandomImage()
+		
+	case fyne.KeyA: // Regenerate Audio
+		if a.regenerateAudioBtn.Disabled() {
+			return
+		}
+		a.onRegenerateAudio()
+		
+	case fyne.KeyR: // Regenerate All
+		if a.regenerateAllBtn.Disabled() {
+			return
+		}
+		a.onRegenerateAll()
+		
+	case fyne.KeyD: // Delete
+		if a.deleteButton.Disabled() {
+			return
+		}
+		a.onDelete()
+		
+	case fyne.KeyLeft: // Previous word
+		if a.prevWordBtn.Disabled() {
+			return
+		}
+		a.onPrevWord()
+		
+	case fyne.KeyRight: // Next word
+		if a.nextWordBtn.Disabled() {
+			return
+		}
+		a.onNextWord()
+		
+	case fyne.KeyP: // Play audio
+		if a.currentAudioFile != "" {
+			a.audioPlayer.Play()
+		}
+	}
 }
 
 
