@@ -1,6 +1,6 @@
 # totalrecall - Bulgarian Anki Flashcard Generator
 
-`totalrecall` is a command-line tool that generates Anki flashcard materials from Bulgarian words. It creates audio pronunciation files and generates images using AI.
+`totalrecall` is a versatile tool for generating Anki flashcard materials from Bulgarian words. It offers both a command-line interface (CLI) and a graphical user interface (GUI) for creating audio pronunciation files and AI-generated images.
 
 It has mainly been vibe coded using Claude Code CLI.
 
@@ -8,6 +8,7 @@ It has mainly been vibe coded using Claude Code CLI.
 
 ## Features
 
+### Core Features
 - Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
   - Random voice selection by default for variety
   - Option to generate in all 11 available voices
@@ -15,12 +16,30 @@ It has mainly been vibe coded using Claude Code CLI.
   - Saves translations to separate text files
   - Includes translations in Anki CSV export
 - Image generation:
-  - **OpenAI DALL-E**: AI-generated educational images with random art styles (requires API key)
+  - **OpenAI DALL-E**: AI-generated educational images with contextual scenes and random art styles (requires API key)
+  - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
 - Anki-compatible CSV export with translations
 - Configurable voice variants and speech speed
 - Support for WAV and MP3 audio formats
 - Audio and image caching to save API costs
+
+### GUI Mode Features (--gui flag)
+- **Interactive flashcard management** with visual interface
+- **Real-time preview** of generated images and audio
+- **Keyboard shortcuts** for efficient workflow:
+  - `G` - Generate new word
+  - `N` - New card
+  - `I` - Regenerate image
+  - `A` - Regenerate audio
+  - `R` - Regenerate all
+  - `D` - Delete card
+  - `P` - Play audio
+  - `←/→` - Navigate cards
+- **Custom image prompts** with dedicated text area
+- **Queue system** for processing multiple words concurrently
+- **Built-in audio player** with system integration
+- **Browse existing flashcards** with navigation controls
 
 ## Installation
 
@@ -36,7 +55,7 @@ It has mainly been vibe coded using Claude Code CLI.
 ### Building from Source
 
 ```bash
-git clone https://github.com/yourusername/totalrecall.git
+git clone https://codeberg.org/snonux/totalrecall.git
 cd totalrecall
 go build -o totalrecall ./cmd/totalrecall
 ```
@@ -54,6 +73,7 @@ go install codeberg.org/snonux/totalrecall/cmd/totalrecall@latest
 export OPENAI_API_KEY="sk-..."
 ```
 
+### CLI Mode
 1. Generate materials for a single word (uses OpenAI by default):
    ```bash
    totalrecall ябълка
@@ -73,6 +93,14 @@ export OPENAI_API_KEY="sk-..."
    ```bash
    totalrecall ябълка --anki
    ```
+
+### GUI Mode
+Launch the interactive graphical interface:
+```bash
+totalrecall --gui
+```
+
+Then use keyboard shortcuts or buttons to generate and manage flashcards interactively.
 
 ## Configuration
 
@@ -113,17 +141,24 @@ output:
 
 ## Usage
 
+### CLI Mode
 ```bash
 totalrecall [word] [flags]
 ```
 
-### Flags
+### GUI Mode
+```bash
+totalrecall --gui
+```
 
+### Common Flags
+
+- `--gui`: Launch interactive GUI mode
 - `-v, --voice string`: Voice variant (default "bg+f1")
 - `-o, --output string`: Output directory (default "./anki_cards")
 - `-f, --format string`: Audio format - wav or mp3 (default "mp3")
-- `--batch string`: Process words from file (one per line)
-- `--anki`: Generate Anki import CSV file
+- `--batch string`: Process words from file (one per line) [CLI mode only]
+- `--anki`: Generate Anki import CSV file [CLI mode only]
 - `--skip-audio`: Skip audio generation
 - `--skip-images`: Skip image download
 - `--images-per-word int`: Number of images per word (default 1)
@@ -154,7 +189,20 @@ totalrecall [word] [flags]
 
 ## Examples
 
-### Basic Usage
+### GUI Mode
+```bash
+# Launch interactive GUI
+totalrecall --gui
+
+# In GUI mode, use these keyboard shortcuts:
+# G - Generate new word
+# I - Regenerate image with new style
+# A - Regenerate audio with different voice
+# P - Play audio
+# ←/→ - Navigate between cards
+```
+
+### CLI Mode - Basic Usage
 ```bash
 # Single word (uses OpenAI by default)
 totalrecall котка
@@ -214,6 +262,19 @@ With `--all-voices` flag:
 3. Select the generated `anki_import.csv`
 4. Copy all media files to your Anki media folder
 5. Map fields appropriately during import
+
+## GUI Mode Keyboard Shortcuts
+
+When using the GUI mode, these keyboard shortcuts are available:
+- `G` - Generate: Submit new word for processing
+- `N` - New Word: Save current card and start fresh
+- `I` - Regenerate Image: Generate new image with different style
+- `A` - Regenerate Audio: Generate new audio with different voice
+- `R` - Regenerate All: Regenerate both audio and image
+- `D` - Delete: Delete current flashcard materials
+- `P` - Play: Play the generated audio file
+- `←/→` - Navigate: Browse through existing flashcards
+- `Escape` - Cancel current operations
 
 ## Voice Variants
 
