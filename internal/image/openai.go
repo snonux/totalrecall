@@ -256,10 +256,29 @@ func (c *OpenAIClient) GetLastPrompt() string {
 
 // createEducationalPrompt generates a prompt optimized for language learning
 func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation string) string {
+	// Generate a scene description for the word
+	scene, err := c.generateSceneDescription(context.Background(), bulgarianWord, englishTranslation)
+	if err != nil {
+		fmt.Printf("  Failed to generate scene: %v, using basic prompt\n", err)
+		scene = ""
+	}
+
 	// 25% chance to ask OpenAI for a creative style
 	if rand.Float32() < 0.25 {
 		if creativeStyle := c.getCreativeStyleFromOpenAI(context.Background(), englishTranslation); creativeStyle != "" {
 			fmt.Printf("  Using OpenAI-suggested style: %s\n", creativeStyle)
+			
+			// If we have a scene, incorporate it
+			if scene != "" {
+				return fmt.Sprintf(
+					"Generate %s depicting: %s. "+
+						"The image should be educational and suitable for language learning flashcards. "+
+						"Requirements: clear and recognizable, focus on the main subject. "+
+						"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+					creativeStyle, scene,
+				)
+			}
+			
 			return fmt.Sprintf(
 				"Generate %s of %s. "+
 					"The image should be educational and suitable for language learning flashcards. "+
@@ -329,7 +348,18 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 	selectedStyle := styles[rand.Intn(len(styles))]
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
-	// Create a simple, clear prompt for educational images
+	// Create prompt with scene if available
+	if scene != "" {
+		return fmt.Sprintf(
+			"Generate a %s depicting: %s. "+
+				"The image should be educational and suitable for language learning flashcards. "+
+				"Requirements: clear and recognizable, focus on the main subject. "+
+				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+			selectedStyle, scene,
+		)
+	}
+
+	// Fallback to basic prompt if no scene
 	return fmt.Sprintf(
 		"Generate a %s of %s. "+
 			"The image should be educational and suitable for language learning flashcards. "+
@@ -369,6 +399,42 @@ func (c *OpenAIClient) translateBulgarianToEnglish(ctx context.Context, word str
 	fmt.Printf("Translated '%s' to '%s'\n", word, translation)
 
 	return translation, nil
+}
+
+// generateSceneDescription generates a contextual scene description for the word
+func (c *OpenAIClient) generateSceneDescription(ctx context.Context, bulgarianWord, englishTranslation string) (string, error) {
+	// Use OpenAI to generate a scene description
+	fmt.Printf("OpenAI Scene Generation: Creating scene for '%s' (%s)\n", bulgarianWord, englishTranslation)
+
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: "You are helping create educational flashcards for language learning. Generate a brief, vivid scene description that incorporates the given English word in a memorable, contextual way. The scene should be visually interesting and help with memory retention. Keep it to 1-2 sentences, focusing on visual elements that can be illustrated. IMPORTANT: Use the English word in your scene description, NOT the Bulgarian word.",
+			},
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf("Create a scene description for the English word '%s' (Bulgarian: %s) that would make a memorable flashcard image. Use the English word '%s' in the scene, not the Bulgarian word.", englishTranslation, bulgarianWord, englishTranslation),
+			},
+		},
+		Temperature: 0.7, // Balanced temperature for creativity with consistency
+		MaxTokens:   100,
+	}
+
+	resp, err := c.client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("scene generation failed: %w", err)
+	}
+
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
+		return "", fmt.Errorf("no scene description received")
+	}
+
+	scene := strings.TrimSpace(resp.Choices[0].Message.Content)
+	fmt.Printf("Generated scene: %s\n", scene)
+
+	return scene, nil
 }
 
 // getCacheFilePath generates a cache file path for the given word
