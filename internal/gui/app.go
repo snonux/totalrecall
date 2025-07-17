@@ -155,11 +155,28 @@ func (a *Application) setupUI() {
 	a.wordInput = widget.NewEntry()
 	a.wordInput.SetPlaceHolder("Bulgarian word...")
 	a.wordInput.OnSubmitted = func(string) { a.onSubmit() }
+	a.wordInput.OnChanged = func(text string) {
+		// When user starts typing a new word, disconnect from any previous job
+		// to prevent mix-ups with background processing
+		a.mu.Lock()
+		if a.currentJobID != 0 && text != a.currentWord {
+			a.currentJobID = 0
+		}
+		a.mu.Unlock()
+	}
 	
 	// Create translation entry
 	a.translationEntry = widget.NewEntry()
 	a.translationEntry.SetPlaceHolder("English translation...")
 	a.translationEntry.OnChanged = func(text string) {
+		// When user starts typing in translation field, disconnect from any previous job
+		// to prevent mix-ups with background processing
+		a.mu.Lock()
+		if a.currentJobID != 0 && a.currentTranslation != text {
+			a.currentJobID = 0
+		}
+		a.mu.Unlock()
+		
 		a.currentTranslation = text
 		// Save the updated translation immediately
 		a.saveTranslation()
@@ -364,6 +381,7 @@ func (a *Application) onSubmit() {
 		a.currentWord = bulgarian
 		// Save the translation immediately
 		a.saveTranslation()
+		needsTranslation = false // We've already done the translation, don't translate back
 	} else if translationDirection == "bg-to-en" {
 		// Handle Bulgarian to English translation immediately
 		a.updateStatus(fmt.Sprintf("Translating '%s' to English...", bulgarianText))
@@ -426,10 +444,23 @@ func (a *Application) generateMaterials(word string) {
 			})
 			return
 		}
-		a.currentTranslation = translation
-		fyne.Do(func() {
-			a.translationEntry.SetText(translation)
-		})
+		// Only update if this word is still the current word
+		a.mu.Lock()
+		if a.currentWord == word {
+			a.currentTranslation = translation
+			fyne.Do(func() {
+				a.translationEntry.SetText(translation)
+			})
+		}
+		a.mu.Unlock()
+		
+		// Save translation to disk regardless
+		if translation != "" {
+			filename := sanitizeFilename(word)
+			translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+			content := fmt.Sprintf("%s = %s\n", word, translation)
+			os.WriteFile(translationFile, []byte(content), 0644)
+		}
 	}
 	
 	// Generate audio
@@ -447,10 +478,16 @@ func (a *Application) generateMaterials(word string) {
 		})
 		return
 	}
-	a.currentAudioFile = audioFile
-	fyne.Do(func() {
-		a.audioPlayer.SetAudioFile(audioFile)
-	})
+	
+	// Only update UI if this word is still the current word
+	a.mu.Lock()
+	if a.currentWord == word {
+		a.currentAudioFile = audioFile
+		fyne.Do(func() {
+			a.audioPlayer.SetAudioFile(audioFile)
+		})
+	}
+	a.mu.Unlock()
 	
 	// Generate images with custom prompt if provided
 	fyne.Do(func() {
@@ -477,11 +514,17 @@ func (a *Application) generateMaterials(word string) {
 		})
 		return
 	}
+	
+	// Only update UI if this word is still the current word
 	if imageFile != "" {
-		a.currentImage = imageFile
-		fyne.Do(func() {
-			a.imageDisplay.SetImages([]string{imageFile})
-		})
+		a.mu.Lock()
+		if a.currentWord == word {
+			a.currentImage = imageFile
+			fyne.Do(func() {
+				a.imageDisplay.SetImages([]string{imageFile})
+			})
+		}
+		a.mu.Unlock()
 	}
 	
 	// Enable action buttons
@@ -536,6 +579,15 @@ func (a *Application) onKeepAndContinue() {
 	a.clearUI()
 	a.wordInput.SetText("")
 	a.translationEntry.SetText("")
+	
+	// Clear current state to prevent mix-ups with background jobs
+	a.mu.Lock()
+	a.currentWord = ""
+	a.currentTranslation = ""
+	a.currentAudioFile = ""
+	a.currentImage = ""
+	a.mu.Unlock()
+	
 	a.wordInput.FocusGained() // Focus input for next word
 	
 	// Hide progress bar if it was showing
@@ -748,6 +800,7 @@ func (a *Application) clearUI() {
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
 	// Don't clear the word input or translation entry - they should stay populated
+	// Clear the image prompt entry - it will be loaded from disk if available
 	a.imagePromptEntry.SetText("")
 	a.phoneticDisplay.SetText("Phonetic information will appear here...")
 	a.setActionButtonsEnabled(false)
@@ -766,10 +819,14 @@ func (a *Application) processNextInQueue() {
 		return
 	}
 	
-	// Set current job
+	// Set current job and clear any previous state
 	a.mu.Lock()
 	a.currentJobID = job.ID
 	a.currentWord = job.Word
+	// Clear previous file associations to prevent mix-ups
+	a.currentTranslation = ""
+	a.currentAudioFile = ""
+	a.currentImage = ""
 	a.mu.Unlock()
 	
 	// Clear UI for new word
@@ -810,6 +867,14 @@ func (a *Application) processWordJob(job *WordJob) {
 		translation = job.Translation
 	}
 	
+	// Save translation to disk immediately for this specific word
+	if translation != "" {
+		filename := sanitizeFilename(job.Word)
+		translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+		content := fmt.Sprintf("%s = %s\n", job.Word, translation)
+		os.WriteFile(translationFile, []byte(content), 0644)
+	}
+	
 	// Update UI with translation immediately if this is still the current job
 	a.mu.Lock()
 	if a.currentJobID == job.ID && translation != "" {
@@ -836,13 +901,18 @@ func (a *Application) processWordJob(job *WordJob) {
 			phoneticInfo = "Failed to fetch phonetic information"
 		}
 		
+		// Save phonetic info to disk immediately for this specific word
+		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
+			filename := sanitizeFilename(job.Word)
+			phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
+		}
+		
 		// Update UI with phonetic info if this is still the current job
 		a.mu.Lock()
 		if a.currentJobID == job.ID {
 			fyne.Do(func() {
 				a.phoneticDisplay.SetText(phoneticInfo)
-				// Save phonetic info to file
-				a.savePhoneticInfo()
 			})
 		}
 		a.mu.Unlock()
@@ -867,15 +937,19 @@ func (a *Application) processWordJob(job *WordJob) {
 	
 	// Update UI with audio immediately if this is still the current job
 	a.mu.Lock()
-	if a.currentJobID == job.ID {
+	isCurrentJob := a.currentJobID == job.ID
+	if isCurrentJob {
 		a.currentAudioFile = audioFile
+	}
+	a.mu.Unlock()
+	
+	if isCurrentJob {
 		fyne.Do(func() {
 			a.audioPlayer.SetAudioFile(audioFile)
 			// Enable audio-related actions
 			a.regenerateAudioBtn.Enable()
 		})
 	}
-	a.mu.Unlock()
 	
 	// Generate images
 	fyne.Do(func() {
@@ -906,13 +980,17 @@ func (a *Application) processWordJob(job *WordJob) {
 	
 	// Update UI with results if this is still the current job
 	a.mu.Lock()
-	if a.currentJobID == job.ID {
+	isCurrentJob = a.currentJobID == job.ID
+	if isCurrentJob {
 		a.currentTranslation = translation
 		a.currentAudioFile = audioFile
 		if imageFile != "" {
 			a.currentImage = imageFile
 		}
-		
+	}
+	a.mu.Unlock()
+	
+	if isCurrentJob {
 		fyne.Do(func() {
 			a.translationEntry.SetText(translation)
 			if imageFile != "" {
@@ -924,7 +1002,6 @@ func (a *Application) processWordJob(job *WordJob) {
 			a.updateStatus(fmt.Sprintf("Completed: %s", job.Word))
 		})
 	}
-	a.mu.Unlock()
 	
 	// Finish this job
 	a.finishCurrentJob()
@@ -970,39 +1047,17 @@ func (a *Application) onJobComplete(job *WordJob) {
 		if job.Status == StatusCompleted {
 			a.updateNavigation()
 			
-			// Check if the completed job is for the currently displayed word
-			// Only update UI if the current word is still empty (waiting for this job)
-			if job.Word == a.currentWord && job.ID != a.currentJobID {
-				// Check if the UI is still empty/waiting for content
-				hasContent := a.currentAudioFile != "" || a.currentImage != ""
-				
-				if !hasContent {
-					// Update the UI with the completed results since it's still waiting
-					// Update each component individually to show progress
-					if job.Translation != "" && a.currentTranslation == "" {
-						a.currentTranslation = job.Translation
-						a.translationEntry.SetText(job.Translation)
-					}
-					if job.AudioFile != "" && a.currentAudioFile == "" {
-						a.currentAudioFile = job.AudioFile
-						a.audioPlayer.SetAudioFile(job.AudioFile)
-						a.regenerateAudioBtn.Enable()
-					}
-					if job.ImageFile != "" && a.currentImage == "" {
-						a.currentImage = job.ImageFile
-						a.imageDisplay.SetImages([]string{job.ImageFile})
-						a.regenerateImageBtn.Enable()
-					}
-					
-					// Enable all action buttons since we now have complete content
-					a.setActionButtonsEnabled(true)
-					a.updateStatus(fmt.Sprintf("Processing completed: %s", job.Word))
-				} else {
-					// Word already has content, just show notification
-					a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
-				}
-			} else if job.ID != a.currentJobID {
-				// Show a subtle notification for other background completions
+			// Only show status updates, don't update UI for background jobs
+			// This prevents mix-ups when user has moved on to a new word
+			a.mu.Lock()
+			isCurrentJob := job.ID == a.currentJobID
+			a.mu.Unlock()
+			
+			if isCurrentJob {
+				// This is still the current job, UI update is already handled in processWordJob
+				a.updateStatus(fmt.Sprintf("Processing completed: %s", job.Word))
+			} else {
+				// This is a background job that completed
 				a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
 			}
 		}
@@ -1161,6 +1216,17 @@ func (a *Application) savePhoneticInfo() {
 		phoneticText != "Failed to fetch phonetic information" &&
 		phoneticText != "Phonetic information will appear here..." {
 		filename := sanitizeFilename(a.currentWord)
+		phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
+	}
+}
+
+// savePhoneticInfoForWord saves the phonetic information for a specific word
+func (a *Application) savePhoneticInfoForWord(word, phoneticText string) {
+	if word != "" && phoneticText != "" && 
+		phoneticText != "Failed to fetch phonetic information" &&
+		phoneticText != "Phonetic information will appear here..." {
+		filename := sanitizeFilename(word)
 		phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
 		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
 	}

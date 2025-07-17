@@ -189,6 +189,15 @@ func (a *Application) loadWordByIndex(index int) {
 				}
 				// Load phonetic info from disk if it exists
 				a.loadPhoneticInfo(word)
+				
+				// Load image prompt from disk if it exists
+				sanitized := sanitizeFilename(word)
+				promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", sanitized))
+				if data, err := os.ReadFile(promptFile); err == nil {
+					prompt := strings.TrimSpace(string(data))
+					a.imagePromptEntry.SetText(prompt)
+				}
+				
 				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
 			})
 			

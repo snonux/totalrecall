@@ -176,14 +176,26 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 		return "", err
 	}
 	
-	// If using OpenAI, get the last used prompt and update the UI
+	// If using OpenAI, get the last used prompt
 	if a.config.ImageProvider == "openai" {
 		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
 			usedPrompt := openaiClient.GetLastPrompt()
 			if usedPrompt != "" {
-				fyne.Do(func() {
-					a.imagePromptEntry.SetText(usedPrompt)
-				})
+				// Save the prompt to disk immediately for this word
+				filename := sanitizeFilename(word)
+				promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", filename))
+				os.WriteFile(promptFile, []byte(usedPrompt), 0644)
+				
+				// Only update UI if this word is still the current word
+				a.mu.Lock()
+				isCurrentWord := a.currentWord == word
+				a.mu.Unlock()
+				
+				if isCurrentWord {
+					fyne.Do(func() {
+						a.imagePromptEntry.SetText(usedPrompt)
+					})
+				}
 			}
 		}
 	}

@@ -1,0 +1,33 @@
+#!/bin/bash
+# Test script to verify all UI elements are preserved during rapid navigation
+
+echo "Starting totalrecall GUI to test all UI element preservation..."
+echo ""
+echo "Test procedure:"
+echo "1. Enter multiple words rapidly in different ways:"
+echo "   - Word 1: Enter 'apple' in English field only"
+echo "   - Word 2: Enter 'котка' in Bulgarian field only"
+echo "   - Word 3: Enter 'куче' in Bulgarian with custom prompt 'brown dog running'"
+echo "   - Word 4: Enter 'car' in English with custom prompt 'red sports car'"
+echo ""
+echo "2. While processing is happening, rapidly navigate using arrow keys"
+echo "3. Verify that for each word:"
+echo "   - Bulgarian text stays correct"
+echo "   - English translation stays correct"
+echo "   - Custom image prompts are preserved"
+echo "   - Phonetic information is displayed correctly"
+echo "   - Audio files play the correct word"
+echo ""
+echo "4. Check the anki_cards folder for:"
+echo "   - *_translation.txt files with correct translations"
+echo "   - *_prompt.txt files with correct prompts"
+echo "   - *_phonetic.txt files with correct phonetic info"
+echo "   - Audio files that match the word names"
+echo ""
+echo "5. Restart the app and navigate through the words again"
+echo "6. Verify all data is correctly loaded from disk"
+echo ""
+echo "Press Ctrl+C to exit when testing is complete."
+echo ""
+
+./totalrecall gui
