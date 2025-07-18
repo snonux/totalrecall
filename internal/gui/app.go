@@ -806,10 +806,25 @@ func (a *Application) onRegenerateAll() {
 	}()
 }
 
-// onExportToAnki exports saved cards to Anki with format selection
+// onExportToAnki exports all cards from anki_cards folder to Anki with format selection
 func (a *Application) onExportToAnki() {
-	if len(a.savedCards) == 0 {
-		dialog.ShowInformation("No Cards", "No cards to export. Generate some cards first!", a.window)
+	// Check if anki_cards directory exists and has content
+	entries, err := os.ReadDir(a.config.OutputDir)
+	if err != nil || len(entries) == 0 {
+		dialog.ShowInformation("No Cards", "No cards found in anki_cards folder. Generate some cards first!", a.window)
+		return
+	}
+	
+	// Count subdirectories (excluding hidden ones)
+	cardCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			cardCount++
+		}
+	}
+	
+	if cardCount == 0 {
+		dialog.ShowInformation("No Cards", "No cards found in anki_cards folder. Generate some cards first!", a.window)
 		return
 	}
 	
@@ -850,10 +865,13 @@ func (a *Application) onExportToAnki() {
 			filename = fmt.Sprintf("%s.apkg", sanitizeFilename(deckName))
 			outputPath = filepath.Join(a.config.OutputDir, filename)
 			
-			// Generate APKG
+			// Generate APKG from all cards in directory
 			gen := anki.NewGenerator(nil)
-			for _, card := range a.savedCards {
-				gen.AddCard(card)
+			
+			// Load all cards from the anki_cards directory
+			if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to load cards: %w", err), a.window)
+				return
 			}
 			
 			if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
@@ -861,15 +879,18 @@ func (a *Application) onExportToAnki() {
 				return
 			}
 			
+			// Get actual card count
+			total, withAudio, withImages := gen.Stats()
+			
 			dialog.ShowInformation("Export Complete", 
-				fmt.Sprintf("Exported %d cards to:\n%s\n\nThe APKG file includes all media and can be imported directly into Anki.", 
-					len(a.savedCards), outputPath), 
+				fmt.Sprintf("Exported %d cards to:\n%s\n(%d with audio, %d with images)\n\nThe APKG file includes all media and can be imported directly into Anki.", 
+					total, outputPath, withAudio, withImages), 
 				a.window)
 		} else {
 			filename = "anki_import.csv"
 			outputPath = filepath.Join(a.config.OutputDir, filename)
 			
-			// Generate CSV
+			// Generate CSV from all cards in directory
 			gen := anki.NewGenerator(&anki.GeneratorOptions{
 				OutputPath:     outputPath,
 				MediaFolder:    a.config.OutputDir,
@@ -877,8 +898,10 @@ func (a *Application) onExportToAnki() {
 				AudioFormat:    a.config.AudioFormat,
 			})
 			
-			for _, card := range a.savedCards {
-				gen.AddCard(card)
+			// Load all cards from the anki_cards directory
+			if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to load cards: %w", err), a.window)
+				return
 			}
 			
 			if err := gen.GenerateCSV(); err != nil {
@@ -886,9 +909,12 @@ func (a *Application) onExportToAnki() {
 				return
 			}
 			
+			// Get actual card count
+			total, withAudio, withImages := gen.Stats()
+			
 			dialog.ShowInformation("Export Complete", 
-				fmt.Sprintf("Exported %d cards to:\n%s\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
-					len(a.savedCards), outputPath, a.config.OutputDir), 
+				fmt.Sprintf("Exported %d cards to:\n%s\n(%d with audio, %d with images)\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
+					total, outputPath, withAudio, withImages, a.config.OutputDir), 
 				a.window)
 		}
 	}, a.window)
