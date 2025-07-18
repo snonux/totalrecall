@@ -109,8 +109,12 @@ func (g *Generator) formatAudioField(audioFile string) string {
 		return ""
 	}
 	
-	// Get just the filename
-	filename := filepath.Base(audioFile)
+	// Get card ID from the source path (parent directory name)
+	cardID := filepath.Base(filepath.Dir(audioFile))
+	originalFilename := filepath.Base(audioFile)
+	
+	// Create filename with card ID prefix for uniqueness in Anki
+	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
 	
 	// Anki audio format: [sound:filename.mp3]
 	return fmt.Sprintf("[sound:%s]", filename)
@@ -122,8 +126,13 @@ func (g *Generator) formatImageField(imageFile string) string {
 		return ""
 	}
 	
-	// Get just the filename
-	filename := filepath.Base(imageFile)
+	// Get card ID from the source path (parent directory name)
+	cardID := filepath.Base(filepath.Dir(imageFile))
+	originalFilename := filepath.Base(imageFile)
+	
+	// Create filename with card ID prefix for uniqueness in Anki
+	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+	
 	return fmt.Sprintf(`<img src="%s">`, filename)
 }
 
@@ -279,8 +288,12 @@ func (g *Generator) copyMediaFile(src, destDir string) (string, error) {
 		return "", err
 	}
 	
-	// Create destination path
-	filename := filepath.Base(src)
+	// Get the card ID from the source path (parent directory name)
+	cardID := filepath.Base(filepath.Dir(src))
+	
+	// Create destination filename with card ID prefix
+	originalFilename := filepath.Base(src)
+	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
 	destPath := filepath.Join(destDir, filename)
 	
 	// Check if file already exists

@@ -504,19 +504,29 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 		
 		imageField := ""
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
-			basename := filepath.Base(card.ImageFile)
-			if _, ok := g.mediaFiles[basename]; ok {
-				// Use the original filename in the card content
-				imageField = fmt.Sprintf(`<img src="%s">`, basename)
+			// Get card ID from the source path (parent directory name)
+			cardID := filepath.Base(filepath.Dir(card.ImageFile))
+			originalFilename := filepath.Base(card.ImageFile)
+			// Create unique filename with card ID prefix
+			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			
+			if _, ok := g.mediaFiles[uniqueFilename]; ok {
+				// Use the unique filename in the card content
+				imageField = fmt.Sprintf(`<img src="%s">`, uniqueFilename)
 			}
 		}
 		
 		audioField := ""
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
-			basename := filepath.Base(card.AudioFile)
-			if _, ok := g.mediaFiles[basename]; ok {
-				// Use the original filename in the card content
-				audioField = fmt.Sprintf("[sound:%s]", basename)
+			// Get card ID from the source path (parent directory name)
+			cardID := filepath.Base(filepath.Dir(card.AudioFile))
+			originalFilename := filepath.Base(card.AudioFile)
+			// Create unique filename with card ID prefix
+			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			
+			if _, ok := g.mediaFiles[uniqueFilename]; ok {
+				// Use the unique filename in the card content
+				audioField = fmt.Sprintf("[sound:%s]", uniqueFilename)
 			}
 		}
 		
@@ -588,26 +598,36 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 	for _, card := range g.cards {
 		// Copy audio file
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
-			filename := filepath.Base(card.AudioFile)
-			if _, exists := g.mediaFiles[filename]; !exists {
+			// Get card ID from the source path (parent directory name)
+			cardID := filepath.Base(filepath.Dir(card.AudioFile))
+			originalFilename := filepath.Base(card.AudioFile)
+			// Create unique filename with card ID prefix
+			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			
+			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.AudioFile, targetPath); err != nil {
 					return fmt.Errorf("failed to copy audio file %s: %w", card.AudioFile, err)
 				}
-				g.mediaFiles[filename] = g.mediaCounter
+				g.mediaFiles[uniqueFilename] = g.mediaCounter
 				g.mediaCounter++
 			}
 		}
 		
 		// Copy image file
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
-			filename := filepath.Base(card.ImageFile)
-			if _, exists := g.mediaFiles[filename]; !exists {
+			// Get card ID from the source path (parent directory name)
+			cardID := filepath.Base(filepath.Dir(card.ImageFile))
+			originalFilename := filepath.Base(card.ImageFile)
+			// Create unique filename with card ID prefix
+			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			
+			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.ImageFile, targetPath); err != nil {
 					return fmt.Errorf("failed to copy image file %s: %w", card.ImageFile, err)
 				}
-				g.mediaFiles[filename] = g.mediaCounter
+				g.mediaFiles[uniqueFilename] = g.mediaCounter
 				g.mediaCounter++
 			}
 		}
