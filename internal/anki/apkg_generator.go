@@ -235,6 +235,11 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 		"curDeck": 1,
 		"newSpread": 0,
 		"dueCounts": true,
+		"collapseTime": 1200,
+		"timeLim": 0,
+		"schedVer": 1,
+		"curModel": fmt.Sprintf("%d", g.modelID),
+		"dayLearnFirst": false,
 	}
 	confJSON, _ := json.Marshal(conf)
 
@@ -243,12 +248,15 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 		"1": map[string]interface{}{
 			"id": 1,
 			"name": "Default",
+			"dyn": 0,
 			"new": map[string]interface{}{
 				"delays": []int{1, 10},
 				"ints": []int{1, 4, 7},
 				"initialFactor": 2500,
 				"perDay": 20,
 				"order": 1,
+				"bury": true,
+				"separate": true,
 			},
 			"lapse": map[string]interface{}{
 				"delays": []int{10},
@@ -262,11 +270,16 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 				"ease4": 1.3,
 				"fuzz": 0.05,
 				"maxIvl": 36500,
+				"ivlFct": 1,
+				"bury": true,
+				"minSpace": 1,
 			},
 			"timer": 0,
 			"maxTaken": 60,
 			"usn": 0,
 			"mod": now,
+			"autoplay": true,
+			"replayq": true,
 		},
 	}
 	dconfJSON, _ := json.Marshal(dconf)
@@ -302,6 +315,15 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 		"did":   g.deckID,
 		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}},
 		"vers":  []int{},
+		"tags":  []string{},
+		"latexPre": `\documentclass[12pt]{article}
+\special{papersize=3in,5in}
+\usepackage[utf8]{inputenc}
+\usepackage{amssymb,amsmath}
+\pagestyle{empty}
+\setlength{\parindent}{0in}
+\begin{document}`,
+		"latexPost": `\end{document}`,
 		"flds": []map[string]interface{}{
 			{
 				"name":   "English",
@@ -310,6 +332,7 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"rtl":    false,
 				"font":   "Arial",
 				"size":   20,
+				"media":  []string{},
 			},
 			{
 				"name":   "Bulgarian",
@@ -318,6 +341,7 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"rtl":    false,
 				"font":   "Arial",
 				"size":   20,
+				"media":  []string{},
 			},
 			{
 				"name":   "Image",
@@ -326,6 +350,7 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"rtl":    false,
 				"font":   "Arial",
 				"size":   20,
+				"media":  []string{},
 			},
 			{
 				"name":   "Audio",
@@ -334,6 +359,7 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"rtl":    false,
 				"font":   "Arial",
 				"size":   20,
+				"media":  []string{},
 			},
 			{
 				"name":   "Notes",
@@ -342,6 +368,7 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"rtl":    false,
 				"font":   "Arial",
 				"size":   16,
+				"media":  []string{},
 			},
 		},
 		"tmpls": []map[string]interface{}{
@@ -350,6 +377,9 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 				"ord":  0,
 				"qfmt": g.getFrontTemplate(),
 				"afmt": g.getBackTemplate(),
+				"did":  nil,
+				"bqfmt": "",
+				"bafmt": "",
 			},
 		},
 		"css": g.getCSS(),
