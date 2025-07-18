@@ -334,7 +334,7 @@ func (a *Application) setupUI() {
 	
 	// Create menu
 	fileMenu := fyne.NewMenu("File",
-		fyne.NewMenuItem("Export to Anki...", a.onExportToAnki),
+		fyne.NewMenuItem("Export to Anki... (E)", a.onExportToAnki),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Preferences...", a.onPreferences),
 		fyne.NewMenuItemSeparator(),
@@ -1439,6 +1439,9 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 		if a.currentAudioFile != "" {
 			a.audioPlayer.Play()
 		}
+		
+	case fyne.KeyE: // Export to APKG
+		a.onExportToAnki()
 	}
 }
 

@@ -192,6 +192,14 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 			}
 		}
 		
+		// Load phonetic information as notes
+		phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", sanitizedWord))
+		if data, err := os.ReadFile(phoneticFile); err == nil {
+			// Preserve line breaks by converting \n to <br> for HTML display
+			notes := strings.TrimSpace(string(data))
+			card.Notes = strings.ReplaceAll(notes, "\n", "<br>")
+		}
+		
 		// Only add card if it has at least some content
 		if card.AudioFile != "" || card.ImageFile != "" || card.Translation != "" {
 			g.AddCard(card)

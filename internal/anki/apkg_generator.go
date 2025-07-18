@@ -52,21 +52,20 @@ func (g *APKGGenerator) GenerateAPKG(outputPath string) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create SQLite database
-	dbPath := filepath.Join(tempDir, "collection.anki2")
-	if err := g.createDatabase(dbPath); err != nil {
-		return fmt.Errorf("failed to create database: %w", err)
-	}
-
-	// Copy media files
-	mediaDir := filepath.Join(tempDir, "media")
-	if err := g.copyMediaFiles(mediaDir); err != nil {
+	// Copy media files FIRST (this populates g.mediaFiles map)
+	if err := g.copyMediaFiles(tempDir); err != nil {
 		return fmt.Errorf("failed to copy media files: %w", err)
 	}
 
 	// Create media mapping file
 	if err := g.createMediaMapping(tempDir); err != nil {
 		return fmt.Errorf("failed to create media mapping: %w", err)
+	}
+
+	// Create SQLite database (this uses g.mediaFiles map)
+	dbPath := filepath.Join(tempDir, "collection.anki2")
+	if err := g.createDatabase(dbPath); err != nil {
+		return fmt.Errorf("failed to create database: %w", err)
 	}
 
 	// Create the .apkg zip file
@@ -194,26 +193,41 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 	now := time.Now().Unix()
 	
 	// Create deck configuration
+	// The arrays are [learningCount, reviewCount] for today's stats
 	decks := map[string]interface{}{
 		"1": map[string]interface{}{
-			"id":       1,
-			"name":     "Default",
-			"mod":      now,
-			"desc":     "",
-			"collapsed": false,
-			"dyn":      0,
-			"conf":     1,
-			"usn":      0,
+			"id":         1,
+			"name":       "Default",
+			"mod":        now,
+			"desc":       "",
+			"collapsed":  false,
+			"dyn":        0,
+			"conf":       1,
+			"usn":        0,
+			"newToday":   []int{0, 0},
+			"revToday":   []int{0, 0},
+			"lrnToday":   []int{0, 0},
+			"timeToday":  []int{0, 0},
+			"browserCollapsed": false,
+			"extendNew": 10,
+			"extendRev": 50,
 		},
 		fmt.Sprintf("%d", g.deckID): map[string]interface{}{
-			"id":       g.deckID,
-			"name":     g.deckName,
-			"mod":      now,
-			"desc":     "Bulgarian vocabulary cards created by TotalRecall",
-			"collapsed": false,
-			"dyn":      0,
-			"conf":     1,
-			"usn":      0,
+			"id":         g.deckID,
+			"name":       g.deckName,
+			"mod":        now,
+			"desc":       "Bulgarian vocabulary cards created by TotalRecall",
+			"collapsed":  false,
+			"dyn":        0,
+			"conf":       1,
+			"usn":        0,
+			"newToday":   []int{0, 0},
+			"revToday":   []int{0, 0},
+			"lrnToday":   []int{0, 0},
+			"timeToday":  []int{0, 0},
+			"browserCollapsed": false,
+			"extendNew": 10,
+			"extendRev": 50,
 		},
 	}
 	decksJSON, _ := json.Marshal(decks)
@@ -489,16 +503,20 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 		}
 		
 		imageField := ""
-		if card.ImageFile != "" {
-			if num, ok := g.mediaFiles[filepath.Base(card.ImageFile)]; ok {
-				imageField = fmt.Sprintf(`<img src="%d">`, num)
+		if card.ImageFile != "" && fileExists(card.ImageFile) {
+			basename := filepath.Base(card.ImageFile)
+			if _, ok := g.mediaFiles[basename]; ok {
+				// Use the original filename in the card content
+				imageField = fmt.Sprintf(`<img src="%s">`, basename)
 			}
 		}
 		
 		audioField := ""
-		if card.AudioFile != "" {
-			if num, ok := g.mediaFiles[filepath.Base(card.AudioFile)]; ok {
-				audioField = fmt.Sprintf("[sound:%d]", num)
+		if card.AudioFile != "" && fileExists(card.AudioFile) {
+			basename := filepath.Base(card.AudioFile)
+			if _, ok := g.mediaFiles[basename]; ok {
+				// Use the original filename in the card content
+				audioField = fmt.Sprintf("[sound:%s]", basename)
 			}
 		}
 		
@@ -564,16 +582,15 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 }
 
 // copyMediaFiles copies media files and assigns them numbers
-func (g *APKGGenerator) copyMediaFiles(mediaDir string) error {
-	// Media files don't go in a subdirectory for .apkg
-	// They go directly in the temp directory with numeric names
+func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
+	// Media files go directly in the temp directory with numeric names
 	
 	for _, card := range g.cards {
 		// Copy audio file
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
 			filename := filepath.Base(card.AudioFile)
 			if _, exists := g.mediaFiles[filename]; !exists {
-				targetPath := filepath.Join(filepath.Dir(mediaDir), fmt.Sprintf("%d", g.mediaCounter))
+				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.AudioFile, targetPath); err != nil {
 					return fmt.Errorf("failed to copy audio file %s: %w", card.AudioFile, err)
 				}
@@ -586,7 +603,7 @@ func (g *APKGGenerator) copyMediaFiles(mediaDir string) error {
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
 			filename := filepath.Base(card.ImageFile)
 			if _, exists := g.mediaFiles[filename]; !exists {
-				targetPath := filepath.Join(filepath.Dir(mediaDir), fmt.Sprintf("%d", g.mediaCounter))
+				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.ImageFile, targetPath); err != nil {
 					return fmt.Errorf("failed to copy image file %s: %w", card.ImageFile, err)
 				}
