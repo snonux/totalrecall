@@ -201,6 +201,9 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 			"mod":      now,
 			"desc":     "",
 			"collapsed": false,
+			"dyn":      0,
+			"conf":     1,
+			"usn":      0,
 		},
 		fmt.Sprintf("%d", g.deckID): map[string]interface{}{
 			"id":       g.deckID,
@@ -208,6 +211,9 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 			"mod":      now,
 			"desc":     "Bulgarian vocabulary cards created by TotalRecall",
 			"collapsed": false,
+			"dyn":      0,
+			"conf":     1,
+			"usn":      0,
 		},
 	}
 	decksJSON, _ := json.Marshal(decks)
@@ -235,20 +241,32 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 	// Deck options
 	dconf := map[string]interface{}{
 		"1": map[string]interface{}{
+			"id": 1,
 			"name": "Default",
 			"new": map[string]interface{}{
 				"delays": []int{1, 10},
 				"ints": []int{1, 4, 7},
 				"initialFactor": 2500,
+				"perDay": 20,
+				"order": 1,
 			},
 			"lapse": map[string]interface{}{
 				"delays": []int{10},
 				"mult": 0,
 				"minInt": 1,
+				"leechFails": 8,
+				"leechAction": 0,
 			},
 			"rev": map[string]interface{}{
+				"perDay": 100,
+				"ease4": 1.3,
+				"fuzz": 0.05,
 				"maxIvl": 36500,
 			},
+			"timer": 0,
+			"maxTaken": 60,
+			"usn": 0,
+			"mod": now,
 		},
 	}
 	dconfJSON, _ := json.Marshal(dconf)
@@ -280,6 +298,10 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 		"type": 0,
 		"mod":  time.Now().Unix(),
 		"usn":  -1,
+		"sortf": 0,
+		"did":   g.deckID,
+		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}},
+		"vers":  []int{},
 		"flds": []map[string]interface{}{
 			{
 				"name":   "English",
@@ -331,7 +353,6 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 			},
 		},
 		"css": g.getCSS(),
-		"did": g.deckID,
 	}
 }
 
