@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
 
 // AudioPlayer is a custom widget for playing audio files
@@ -18,8 +19,8 @@ type AudioPlayer struct {
 	widget.BaseWidget
 	
 	container     *fyne.Container
-	playButton    *widget.Button
-	stopButton    *widget.Button
+	playButton    *ttwidget.Button
+	stopButton    *ttwidget.Button
 	statusLabel   *widget.Label
 	
 	audioFile     string
@@ -31,30 +32,25 @@ type AudioPlayer struct {
 func NewAudioPlayer() *AudioPlayer {
 	p := &AudioPlayer{}
 	
-	// Create controls
-	p.playButton = widget.NewButton("▶ Play (p)", p.onPlay)
-	p.stopButton = widget.NewButton("■ Stop", p.onStop)
+	// Create controls with tooltips
+	p.playButton = ttwidget.NewButton("", p.onPlay)
+	p.playButton.Icon = theme.MediaPlayIcon()
+	p.playButton.SetToolTip("Play audio (P)")
+	
+	p.stopButton = ttwidget.NewButton("", p.onStop)
+	p.stopButton.Icon = theme.MediaStopIcon()
+	p.stopButton.SetToolTip("Stop audio")
+	
 	p.statusLabel = widget.NewLabel("No audio loaded")
 	
 	// Initially disable controls
 	p.playButton.Disable()
 	p.stopButton.Disable()
 	
-	// Create containers with tooltips
-	playContainer := container.NewVBox(
-		p.playButton,
-		widget.NewLabelWithStyle("Play (p)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}),
-	)
-	
-	stopContainer := container.NewVBox(
-		p.stopButton,
-		widget.NewLabelWithStyle("Stop", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}),
-	)
-	
 	// Create main container
 	p.container = container.NewHBox(
-		playContainer,
-		stopContainer,
+		p.playButton,
+		p.stopButton,
 		layout.NewSpacer(),
 		p.statusLabel,
 	)

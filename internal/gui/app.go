@@ -17,6 +17,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/sashabaranov/go-openai"
+	fynetooltip "github.com/dweymouth/fyne-tooltip"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 	
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
@@ -31,7 +33,7 @@ type Application struct {
 	
 	// UI elements
 	wordInput       *widget.Entry
-	submitButton    *widget.Button
+	submitButton    *ttwidget.Button
 	imageDisplay    *ImageDisplay
 	audioPlayer     *AudioPlayer
 	translationEntry *widget.Entry
@@ -41,16 +43,16 @@ type Application struct {
 	phoneticDisplay  *widget.Label
 	
 	// Navigation buttons
-	prevWordBtn     *widget.Button
-	nextWordBtn     *widget.Button
+	prevWordBtn     *ttwidget.Button
+	nextWordBtn     *ttwidget.Button
 	
 	// Action buttons
-	keepButton         *widget.Button
-	regenerateImageBtn *widget.Button
-	regenerateRandomImageBtn *widget.Button
-	regenerateAudioBtn *widget.Button
-	regenerateAllBtn   *widget.Button
-	deleteButton       *widget.Button
+	keepButton         *ttwidget.Button
+	regenerateImageBtn *ttwidget.Button
+	regenerateRandomImageBtn *ttwidget.Button
+	regenerateAudioBtn *ttwidget.Button
+	regenerateAllBtn   *ttwidget.Button
+	deleteButton       *ttwidget.Button
 	
 	// State management
 	currentWord      string
@@ -193,17 +195,17 @@ func (a *Application) setupUI() {
 	}
 	
 	// Create navigation buttons with tooltips
-	a.submitButton = widget.NewButtonWithIcon("", theme.ConfirmIcon(), a.onSubmit)
-	submitLabel := widget.NewLabelWithStyle("Generate (g)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	submitBtn := container.NewVBox(a.submitButton, submitLabel)
+	a.submitButton = ttwidget.NewButton("", a.onSubmit)
+	a.submitButton.Icon = theme.ConfirmIcon()
+	a.submitButton.SetToolTip("Generate word (G)")
 	
-	a.prevWordBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), a.onPrevWord)
-	prevLabel := widget.NewLabelWithStyle("Previous (←)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	prevBtn := container.NewVBox(a.prevWordBtn, prevLabel)
+	a.prevWordBtn = ttwidget.NewButton("", a.onPrevWord)
+	a.prevWordBtn.Icon = theme.NavigateBackIcon()
+	a.prevWordBtn.SetToolTip("Previous word (←)")
 	
-	a.nextWordBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), a.onNextWord)
-	nextLabel := widget.NewLabelWithStyle("Next (→)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	nextBtn := container.NewVBox(a.nextWordBtn, nextLabel)
+	a.nextWordBtn = ttwidget.NewButton("", a.onNextWord)
+	a.nextWordBtn.Icon = theme.NavigateNextIcon()
+	a.nextWordBtn.SetToolTip("Next word (→)")
 	
 	// Create a grid layout for inputs
 	inputGrid := container.New(layout.NewGridLayout(2),
@@ -213,8 +215,8 @@ func (a *Application) setupUI() {
 	
 	inputSection := container.NewBorder(
 		nil, nil, 
-		prevBtn,
-		container.NewHBox(submitBtn, nextBtn),
+		a.prevWordBtn,
+		container.NewHBox(a.submitButton, a.nextWordBtn),
 		inputGrid,
 	)
 	
@@ -278,44 +280,38 @@ func (a *Application) setupUI() {
 		imageSection,
 	)
 	
-	// Create action buttons with icons and tooltips
-	a.keepButton = widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
-	keepLabel := widget.NewLabelWithStyle("New Word (n)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	keepBtn := container.NewVBox(a.keepButton, keepLabel)
+	// Create action buttons with tooltips
+	a.keepButton = ttwidget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
+	a.keepButton.SetToolTip("Keep card and new word (N)")
 	
-	a.regenerateImageBtn = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateImage)
-	imageLabel := widget.NewLabelWithStyle("Regenerate Image (i)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	regenerateImageBtn := container.NewVBox(a.regenerateImageBtn, imageLabel)
+	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateImage)
+	a.regenerateImageBtn.SetToolTip("Regenerate image (I)")
 	
-	a.regenerateRandomImageBtn = widget.NewButtonWithIcon("", theme.MediaPhotoIcon(), a.onRegenerateRandomImage)
-	randomLabel := widget.NewLabelWithStyle("Random Image (m)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	regenerateRandomBtn := container.NewVBox(a.regenerateRandomImageBtn, randomLabel)
+	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.MediaPhotoIcon(), a.onRegenerateRandomImage)
+	a.regenerateRandomImageBtn.SetToolTip("Random image (M)")
 	
-	a.regenerateAudioBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), a.onRegenerateAudio)
-	audioLabel := widget.NewLabelWithStyle("Regenerate Audio (a)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	regenerateAudioBtn := container.NewVBox(a.regenerateAudioBtn, audioLabel)
+	a.regenerateAudioBtn = ttwidget.NewButtonWithIcon("", theme.MediaRecordIcon(), a.onRegenerateAudio)
+	a.regenerateAudioBtn.SetToolTip("Regenerate audio (A)")
 	
-	a.regenerateAllBtn = widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), a.onRegenerateAll)
-	allLabel := widget.NewLabelWithStyle("Regenerate All (r)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	regenerateAllBtn := container.NewVBox(a.regenerateAllBtn, allLabel)
+	a.regenerateAllBtn = ttwidget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), a.onRegenerateAll)
+	a.regenerateAllBtn.SetToolTip("Regenerate all (R)")
 	
-	a.deleteButton = widget.NewButtonWithIcon("", theme.DeleteIcon(), a.onDelete)
+	a.deleteButton = ttwidget.NewButtonWithIcon("", theme.DeleteIcon(), a.onDelete)
 	a.deleteButton.Importance = widget.DangerImportance
-	deleteLabel := widget.NewLabelWithStyle("Delete (d)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	deleteBtn := container.NewVBox(a.deleteButton, deleteLabel)
+	a.deleteButton.SetToolTip("Delete word (D)")
 	
 	// Initially disable action buttons
 	a.setActionButtonsEnabled(false)
 	
-	actionSection := container.NewHBox(
-		keepBtn,
-		layout.NewSpacer(),
-		deleteBtn,
+	// Create toolbar with all action buttons aligned to the left
+	toolbar := container.NewHBox(
+		a.keepButton,
+		a.deleteButton,
 		widget.NewSeparator(),
-		regenerateImageBtn,
-		regenerateRandomBtn,
-		regenerateAudioBtn,
-		regenerateAllBtn,
+		a.regenerateImageBtn,
+		a.regenerateRandomImageBtn,
+		a.regenerateAudioBtn,
+		a.regenerateAllBtn,
 	)
 	
 	// Create status section
@@ -336,26 +332,28 @@ func (a *Application) setupUI() {
 	fileMenu := fyne.NewMenu("File",
 		fyne.NewMenuItem("Export to Anki... (E)", a.onExportToAnki),
 		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Hotkeys... (H)", a.onShowHotkeys),
+		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", a.app.Quit),
 	)
 	
 	mainMenu := fyne.NewMainMenu(fileMenu)
 	a.window.SetMainMenu(mainMenu)
 	
-	// Combine all sections
+	// Combine all sections with toolbar at the top
 	content := container.NewBorder(
-		inputSection,
 		container.NewVBox(
+			toolbar,
 			widget.NewSeparator(),
-			actionSection,
-			widget.NewSeparator(),
-			statusSection,
+			inputSection,
 		),
+		statusSection,
 		nil, nil,
 		displaySection,
 	)
 	
-	a.window.SetContent(content)
+	// Add the tooltip layer to enable tooltips
+	a.window.SetContent(fynetooltip.AddWindowToolTipLayer(content, a.window.Canvas()))
 	a.window.SetOnClosed(func() {
 		a.cancel()
 		a.queue.Stop()
@@ -919,6 +917,45 @@ func (a *Application) onExportToAnki() {
 	customDialog.Show()
 }
 
+// onShowHotkeys displays a dialog with all available keyboard shortcuts
+func (a *Application) onShowHotkeys() {
+	hotkeys := `## Navigation
+**←** Previous word  
+**→** Next word  
+**Tab** Navigate fields  
+**Esc** Unfocus field  
+
+## Word Processing
+**G** Generate word  
+**N** New word  
+**D** Delete word  
+
+## Regeneration
+**I** Regenerate image  
+**M** Random image  
+**A** Regenerate audio  
+**R** Regenerate all  
+**P** Play audio  
+
+## Export
+**E** Export to Anki  
+
+## Help
+**H** Show hotkeys`
+
+	content := widget.NewRichTextFromMarkdown(hotkeys)
+	content.Wrapping = fyne.TextWrapWord
+	
+	// Create a container with padding to prevent text cutoff
+	paddedContent := container.NewPadded(content)
+	
+	// Create a scrollable container for the content
+	scroll := container.NewScroll(paddedContent)
+	scroll.SetMinSize(fyne.NewSize(350, 450))
+	
+	dialog.NewCustom("Keyboard Shortcuts", "Close", scroll, a.window).Show()
+}
+
 // Helper methods
 func (a *Application) setUIEnabled(enabled bool) {
 	if enabled {
@@ -1432,6 +1469,9 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 		
 	case fyne.KeyE: // Export to APKG
 		a.onExportToAnki()
+		
+	case fyne.KeyH: // Show hotkeys
+		a.onShowHotkeys()
 	}
 }
 
