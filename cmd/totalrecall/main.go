@@ -32,6 +32,8 @@ var (
 	skipAudio    bool
 	skipImages   bool
 	generateAnki bool
+	ankiCSV      bool
+	deckName     string
 	listModels   bool
 	allVoices    bool
 	guiMode      bool
@@ -81,7 +83,9 @@ func init() {
 	rootCmd.Flags().StringVar(&batchFile, "batch", "", "Process words from file (one per line)")
 	rootCmd.Flags().BoolVar(&skipAudio, "skip-audio", false, "Skip audio generation")
 	rootCmd.Flags().BoolVar(&skipImages, "skip-images", false, "Skip image download")
-	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import CSV file")
+	rootCmd.Flags().BoolVar(&generateAnki, "anki", false, "Generate Anki import file (APKG format by default, use --anki-csv for legacy CSV)")
+	rootCmd.Flags().BoolVar(&ankiCSV, "anki-csv", false, "Generate legacy CSV format instead of APKG when using --anki")
+	rootCmd.Flags().StringVar(&deckName, "deck-name", "Bulgarian Vocabulary", "Deck name for APKG export")
 	rootCmd.Flags().BoolVar(&listModels, "list-models", false, "List available OpenAI models for the current API key")
 	rootCmd.Flags().BoolVar(&allVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
 	rootCmd.Flags().BoolVar(&guiMode, "gui", false, "Launch interactive GUI mode")
@@ -203,13 +207,17 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	// Generate Anki CSV if requested
+	// Generate Anki file if requested
 	if generateAnki {
 		fmt.Printf("\nGenerating Anki import file...\n")
-		if err := generateAnkiCSV(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to generate Anki CSV: %v\n", err)
+		if err := generateAnkiFile(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to generate Anki file: %v\n", err)
 		} else {
-			fmt.Println("Anki import file created: anki_import.csv")
+			if ankiCSV {
+				fmt.Println("Anki import file created: anki_import.csv")
+			} else {
+				fmt.Printf("Anki package created: %s.apkg\n", deckName)
+			}
 		}
 	}
 	
@@ -332,12 +340,18 @@ func generateAudioWithVoice(word, voice string) error {
 	ctx := context.Background()
 	filename := sanitizeFilename(word)
 	
+	// Create subdirectory for this word
+	wordDir := filepath.Join(outputDir, filename)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
 	// Add voice name to filename if generating multiple voices
 	var outputFile string
 	if allVoices {
-		outputFile = filepath.Join(outputDir, fmt.Sprintf("%s_%s.%s", filename, voice, audioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filename, voice, audioFormat))
 	} else {
-		outputFile = filepath.Join(outputDir, fmt.Sprintf("%s.%s", filename, audioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s.%s", filename, audioFormat))
 	}
 	
 	// Generate the audio
@@ -403,9 +417,16 @@ func downloadImages(word string) error {
 		return fmt.Errorf("unknown image provider: %s", imageAPI)
 	}
 	
+	// Create subdirectory for this word
+	filename := sanitizeFilename(word)
+	wordDir := filepath.Join(outputDir, filename)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
 	// Create downloader
 	downloadOpts := &image.DownloadOptions{
-		OutputDir:         outputDir,
+		OutputDir:         wordDir,
 		OverwriteExisting: true,  // Allow overwriting existing files
 		CreateDir:         true,
 		FileNamePattern:   "{word}_{index}",
@@ -484,7 +505,7 @@ func isSpace(r rune) bool {
 	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 }
 
-func generateAnkiCSV() error {
+func generateAnkiFile() error {
 	// Create Anki generator
 	gen := anki.NewGenerator(&anki.GeneratorOptions{
 		OutputPath:     filepath.Join(outputDir, "anki_import.csv"),
@@ -505,9 +526,17 @@ func generateAnkiCSV() error {
 		}
 	}
 	
-	// Generate CSV
-	if err := gen.GenerateCSV(); err != nil {
-		return fmt.Errorf("failed to generate CSV: %w", err)
+	if ankiCSV {
+		// Generate CSV
+		if err := gen.GenerateCSV(); err != nil {
+			return fmt.Errorf("failed to generate CSV: %w", err)
+		}
+	} else {
+		// Generate APKG
+		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.apkg", sanitizeFilename(deckName)))
+		if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
+			return fmt.Errorf("failed to generate APKG: %w", err)
+		}
 	}
 	
 	// Print stats
@@ -646,7 +675,14 @@ func translateWord(word string) (string, error) {
 func saveTranslation(word, translation string) error {
 	// Save translation to a text file
 	filename := sanitizeFilename(word)
-	outputFile := filepath.Join(outputDir, fmt.Sprintf("%s_translation.txt", filename))
+	wordDir := filepath.Join(outputDir, filename)
+	
+	// Ensure directory exists
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
+	outputFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", filename))
 	
 	content := fmt.Sprintf("%s = %s\n", word, translation)
 	

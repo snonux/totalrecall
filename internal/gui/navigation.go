@@ -25,33 +25,71 @@ func (a *Application) scanExistingWords() {
 		return
 	}
 	
-	// Collect unique words
-	wordMap := make(map[string]bool)
-	
+	// Each subdirectory represents a word
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if !entry.IsDir() {
 			continue
 		}
 		
-		name := entry.Name()
-		// Skip attribution and translation files
-		if strings.Contains(name, "_attribution") || strings.Contains(name, "_translation") {
-			continue
+		// Directory name is the sanitized word
+		sanitizedWord := entry.Name()
+		
+		// Check if this directory contains valid word files
+		wordDir := filepath.Join(a.config.OutputDir, sanitizedWord)
+		
+		// Look for at least one of: audio, image, or translation file
+		hasContent := false
+		
+		// Check for audio file
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitizedWord, a.config.AudioFormat))
+		if _, err := os.Stat(audioFile); err == nil {
+			hasContent = true
 		}
 		
-		// Extract word from filename (before first underscore or dot)
-		base := strings.TrimSuffix(name, filepath.Ext(name))
-		parts := strings.Split(base, "_")
-		if len(parts) > 0 {
-			word := parts[0]
-			wordMap[word] = true
+		// Check for image files
+		if !hasContent {
+			patterns := []string{
+				fmt.Sprintf("%s.jpg", sanitizedWord),
+				fmt.Sprintf("%s.png", sanitizedWord),
+				fmt.Sprintf("%s_1.jpg", sanitizedWord),
+				fmt.Sprintf("%s_1.png", sanitizedWord),
+			}
+			for _, pattern := range patterns {
+				if _, err := os.Stat(filepath.Join(wordDir, pattern)); err == nil {
+					hasContent = true
+					break
+				}
+			}
+		}
+		
+		// Check for translation file
+		if !hasContent {
+			translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
+			if _, err := os.Stat(translationFile); err == nil {
+				hasContent = true
+			}
+		}
+		
+		// If directory has content, add it to the list
+		if hasContent {
+			// Try to get the original word from translation file
+			translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
+			if data, err := os.ReadFile(translationFile); err == nil {
+				content := string(data)
+				parts := strings.Split(content, "=")
+				if len(parts) >= 1 {
+					originalWord := strings.TrimSpace(parts[0])
+					a.existingWords = append(a.existingWords, originalWord)
+					continue
+				}
+			}
+			
+			// Fallback: use the directory name
+			a.existingWords = append(a.existingWords, sanitizedWord)
 		}
 	}
 	
-	// Convert map to sorted slice
-	for word := range wordMap {
-		a.existingWords = append(a.existingWords, word)
-	}
+	// Sort the words
 	sort.Strings(a.existingWords)
 	
 	// Update navigation buttons
@@ -193,7 +231,8 @@ func (a *Application) loadWordByIndex(index int) {
 				
 				// Load image prompt from disk if it exists
 				sanitized := sanitizeFilename(word)
-				promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", sanitized))
+				wordDir := filepath.Join(a.config.OutputDir, sanitized)
+				promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", sanitized))
 				if data, err := os.ReadFile(promptFile); err == nil {
 					prompt := strings.TrimSpace(string(data))
 					a.imagePromptEntry.SetText(prompt)
@@ -222,9 +261,10 @@ func (a *Application) loadWordByIndex(index int) {
 // loadExistingFiles loads existing files for a word
 func (a *Application) loadExistingFiles(word string) {
 	sanitized := sanitizeFilename(word)
+	wordDir := filepath.Join(a.config.OutputDir, sanitized)
 	
 	// Load translation
-	translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", sanitized))
+	translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitized))
 	if data, err := os.ReadFile(translationFile); err == nil {
 		// Parse translation from "word = translation" format
 		content := string(data)
@@ -238,7 +278,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load image prompt file
-	promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", sanitized))
+	promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", sanitized))
 	if data, err := os.ReadFile(promptFile); err == nil {
 		prompt := strings.TrimSpace(string(data))
 		fyne.Do(func() {
@@ -247,7 +287,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load phonetic information
-	phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", sanitized))
+	phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", sanitized))
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		phoneticInfo := string(data)
 		fyne.Do(func() {
@@ -256,7 +296,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load audio file
-	audioFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s.%s", sanitized, a.config.AudioFormat))
+	audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitized, a.config.AudioFormat))
 	if _, err := os.Stat(audioFile); err == nil {
 		a.currentAudioFile = audioFile
 		fyne.Do(func() {
@@ -275,7 +315,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	for _, pattern := range patterns {
-		imagePath := filepath.Join(a.config.OutputDir, pattern)
+		imagePath := filepath.Join(wordDir, pattern)
 		if _, err := os.Stat(imagePath); err == nil {
 			a.currentImage = imagePath
 			break // Just load the first image found
@@ -358,10 +398,10 @@ func (a *Application) onDelete() {
 	confirmDialog.Show()
 }
 
-// deleteCurrentWord moves all files for the current word to trash
+// deleteCurrentWord moves the word's subdirectory to trash
 func (a *Application) deleteCurrentWord() {
 	sanitized := sanitizeFilename(a.currentWord)
-	deletedCount := 0
+	wordDir := filepath.Join(a.config.OutputDir, sanitized)
 	
 	// Create trash directory if it doesn't exist
 	trashDir := filepath.Join(a.config.OutputDir, ".trashbin")
@@ -372,46 +412,24 @@ func (a *Application) deleteCurrentWord() {
 		return
 	}
 	
-	// List of possible files to move to trash
-	patterns := []string{
-		fmt.Sprintf("%s.mp3", sanitized),
-		fmt.Sprintf("%s.wav", sanitized),
-		fmt.Sprintf("%s.jpg", sanitized),
-		fmt.Sprintf("%s.png", sanitized),
-		fmt.Sprintf("%s.gif", sanitized),
-		fmt.Sprintf("%s_*.jpg", sanitized),
-		fmt.Sprintf("%s_*.png", sanitized),
-		fmt.Sprintf("%s_translation.txt", sanitized),
-		fmt.Sprintf("%s_prompt.txt", sanitized),
-		fmt.Sprintf("%s_phonetic.txt", sanitized),
-		fmt.Sprintf("%s_attribution.txt", sanitized),
-		fmt.Sprintf("%s_*_attribution.txt", sanitized),
+	// Check if word directory exists
+	if _, err := os.Stat(wordDir); os.IsNotExist(err) {
+		fyne.Do(func() {
+			a.updateStatus("No files found for this word")
+		})
+		return
 	}
 	
-	// Move files matching patterns to trash
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(filepath.Join(a.config.OutputDir, pattern))
-		if err != nil {
-			continue
-		}
-		for _, match := range matches {
-			filename := filepath.Base(match)
-			destPath := filepath.Join(trashDir, filename)
-			
-			// If file already exists in trash, add timestamp to filename
-			if _, err := os.Stat(destPath); err == nil {
-				base := strings.TrimSuffix(filename, filepath.Ext(filename))
-				ext := filepath.Ext(filename)
-				timestamp := time.Now().Format("20060102_150405")
-				filename = fmt.Sprintf("%s_%s%s", base, timestamp, ext)
-				destPath = filepath.Join(trashDir, filename)
-			}
-			
-			// Move file to trash
-			if err := os.Rename(match, destPath); err == nil {
-				deletedCount++
-			}
-		}
+	// Create destination path in trash
+	timestamp := time.Now().Format("20060102_150405")
+	trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s", sanitized, timestamp))
+	
+	// Move entire directory to trash
+	if err := os.Rename(wordDir, trashWordDir); err != nil {
+		fyne.Do(func() {
+			a.updateStatus(fmt.Sprintf("Failed to move files to trash: %v", err))
+		})
+		return
 	}
 	
 	// Remove from existingWords
@@ -442,7 +460,7 @@ func (a *Application) deleteCurrentWord() {
 	
 	// Update status
 	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Moved %d files for '%s' to trash", deletedCount, a.currentWord))
+		a.updateStatus(fmt.Sprintf("Moved '%s' to trash", a.currentWord))
 		// Update queue status to reflect the reduced card count
 		a.updateQueueStatus()
 	})

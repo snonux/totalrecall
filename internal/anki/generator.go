@@ -129,75 +129,80 @@ func (g *Generator) formatImageField(imageFile string) string {
 
 // GenerateFromDirectory creates cards from a directory of materials
 func (g *Generator) GenerateFromDirectory(dir string) error {
-	// Map to group files by word
-	wordFiles := make(map[string]*Card)
-	
-	// Walk the directory
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-		
-		// Get filename without extension
-		filename := info.Name()
-		ext := filepath.Ext(filename)
-		base := strings.TrimSuffix(filename, ext)
-		
-		// Skip attribution files
-		if strings.HasSuffix(base, "_attribution") {
-			return nil
-		}
-		
-		// Extract word from filename (assumes format: word_type.ext or word_index.ext)
-		parts := strings.Split(base, "_")
-		if len(parts) == 0 {
-			return nil
-		}
-		
-		word := parts[0]
-		
-		// Get or create card for this word
-		card, exists := wordFiles[word]
-		if !exists {
-			card = &Card{
-				Bulgarian: word,
-			}
-			wordFiles[word] = card
-		}
-		
-		// Add file to appropriate field
-		switch strings.ToLower(ext) {
-		case ".mp3", ".wav":
-			if card.AudioFile == "" { // Use first audio file found
-				card.AudioFile = path
-			}
-		case ".jpg", ".jpeg", ".png", ".gif":
-			if card.ImageFile == "" { // Use first image file found
-				card.ImageFile = path
-			}
-		}
-		
-		return nil
-	})
-	
+	// Read all subdirectories
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("failed to walk directory: %w", err)
+		return fmt.Errorf("failed to read directory: %w", err)
 	}
 	
-	// Add all cards to generator
-	for _, card := range wordFiles {
-		g.AddCard(*card)
+	// Process each subdirectory as a word
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		
+		// Skip hidden directories like .trashbin
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		
+		wordDir := filepath.Join(dir, entry.Name())
+		sanitizedWord := entry.Name()
+		
+		// Create card for this word
+		card := Card{}
+		
+		// Try to load translation and get original word
+		translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
+		if data, err := os.ReadFile(translationFile); err == nil {
+			content := string(data)
+			if parts := strings.Split(content, "="); len(parts) >= 2 {
+				card.Bulgarian = strings.TrimSpace(parts[0])
+				card.Translation = strings.TrimSpace(parts[1])
+			}
+		}
+		
+		// If no Bulgarian word found from translation, use directory name
+		if card.Bulgarian == "" {
+			card.Bulgarian = sanitizedWord
+		}
+		
+		// Look for audio file
+		audioFormats := []string{"mp3", "wav"}
+		for _, format := range audioFormats {
+			audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitizedWord, format))
+			if _, err := os.Stat(audioFile); err == nil {
+				card.AudioFile = audioFile
+				break
+			}
+		}
+		
+		// Look for image files
+		imagePatterns := []string{
+			fmt.Sprintf("%s.jpg", sanitizedWord),
+			fmt.Sprintf("%s.png", sanitizedWord),
+			fmt.Sprintf("%s_1.jpg", sanitizedWord),
+			fmt.Sprintf("%s_1.png", sanitizedWord),
+		}
+		for _, pattern := range imagePatterns {
+			imageFile := filepath.Join(wordDir, pattern)
+			if _, err := os.Stat(imageFile); err == nil {
+				card.ImageFile = imageFile
+				break
+			}
+		}
+		
+		// Only add card if it has at least some content
+		if card.AudioFile != "" || card.ImageFile != "" || card.Translation != "" {
+			g.AddCard(card)
+		}
 	}
 	
 	return nil
 }
 
 // GeneratePackage creates a complete Anki package with media files
+// Deprecated: Use GenerateAPKG for proper .apkg format
 func (g *Generator) GeneratePackage(outputDir string) error {
 	// Create output directory
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -236,6 +241,20 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 	
 	// Generate CSV
 	return g.GenerateCSV()
+}
+
+// GenerateAPKG creates a proper .apkg file for Anki import
+func (g *Generator) GenerateAPKG(outputPath, deckName string) error {
+	// Create APKG generator
+	apkgGen := NewAPKGGenerator(deckName)
+	
+	// Add all cards
+	for _, card := range g.cards {
+		apkgGen.AddCard(card)
+	}
+	
+	// Generate the .apkg file
+	return apkgGen.GenerateAPKG(outputPath)
 }
 
 // copyMediaFile copies a media file to the destination directory

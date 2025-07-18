@@ -14,7 +14,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/sashabaranov/go-openai"
@@ -807,61 +806,95 @@ func (a *Application) onRegenerateAll() {
 	}()
 }
 
-// onExportToAnki exports saved cards to Anki CSV
+// onExportToAnki exports saved cards to Anki with format selection
 func (a *Application) onExportToAnki() {
 	if len(a.savedCards) == 0 {
 		dialog.ShowInformation("No Cards", "No cards to export. Generate some cards first!", a.window)
 		return
 	}
 	
-	// Create save dialog
-	saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-		if err != nil {
-			dialog.ShowError(err, a.window)
-			return
-		}
-		if writer == nil {
-			return
-		}
-		defer writer.Close()
-		
-		// Generate Anki CSV
-		outputPath := writer.URI().Path()
-		gen := anki.NewGenerator(&anki.GeneratorOptions{
-			OutputPath:     outputPath,
-			MediaFolder:    a.config.OutputDir,
-			IncludeHeaders: true,
-			AudioFormat:    a.config.AudioFormat,
-		})
-		
-		// Add all saved cards
-		for _, card := range a.savedCards {
-			gen.AddCard(card)
-		}
-		
-		// Generate CSV
-		if err := gen.GenerateCSV(); err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to generate CSV: %w", err), a.window)
+	// Create format selection dialog
+	formatOptions := []string{"APKG (Recommended)", "CSV (Legacy)"}
+	formatSelect := widget.NewSelect(formatOptions, nil)
+	formatSelect.SetSelected(formatOptions[0])
+	
+	deckNameEntry := widget.NewEntry()
+	deckNameEntry.SetPlaceHolder("Bulgarian Vocabulary")
+	
+	content := container.NewVBox(
+		widget.NewLabel("Export Format:"),
+		formatSelect,
+		widget.NewSeparator(),
+		widget.NewLabel("Deck Name:"),
+		deckNameEntry,
+		widget.NewLabel(""),
+		widget.NewRichTextFromMarkdown("**APKG**: Complete package with media files included\n**CSV**: Text only, requires manual media copy"),
+	)
+	
+	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export", "Cancel", content, func(export bool) {
+		if !export {
 			return
 		}
 		
-		dialog.ShowInformation("Export Complete", 
-			fmt.Sprintf("Exported %d cards to:\n%s\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
-				len(a.savedCards), outputPath, a.config.OutputDir), 
-			a.window)
+		isAPKG := formatSelect.Selected == formatOptions[0]
+		deckName := deckNameEntry.Text
+		if deckName == "" {
+			deckName = "Bulgarian Vocabulary"
+		}
+		
+		// Generate export directly to anki_cards folder
+		var outputPath string
+		var filename string
+		
+		if isAPKG {
+			filename = fmt.Sprintf("%s.apkg", sanitizeFilename(deckName))
+			outputPath = filepath.Join(a.config.OutputDir, filename)
+			
+			// Generate APKG
+			gen := anki.NewGenerator(nil)
+			for _, card := range a.savedCards {
+				gen.AddCard(card)
+			}
+			
+			if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to generate APKG: %w", err), a.window)
+				return
+			}
+			
+			dialog.ShowInformation("Export Complete", 
+				fmt.Sprintf("Exported %d cards to:\n%s\n\nThe APKG file includes all media and can be imported directly into Anki.", 
+					len(a.savedCards), outputPath), 
+				a.window)
+		} else {
+			filename = "anki_import.csv"
+			outputPath = filepath.Join(a.config.OutputDir, filename)
+			
+			// Generate CSV
+			gen := anki.NewGenerator(&anki.GeneratorOptions{
+				OutputPath:     outputPath,
+				MediaFolder:    a.config.OutputDir,
+				IncludeHeaders: true,
+				AudioFormat:    a.config.AudioFormat,
+			})
+			
+			for _, card := range a.savedCards {
+				gen.AddCard(card)
+			}
+			
+			if err := gen.GenerateCSV(); err != nil {
+				dialog.ShowError(fmt.Errorf("Failed to generate CSV: %w", err), a.window)
+				return
+			}
+			
+			dialog.ShowInformation("Export Complete", 
+				fmt.Sprintf("Exported %d cards to:\n%s\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
+					len(a.savedCards), outputPath, a.config.OutputDir), 
+				a.window)
+		}
 	}, a.window)
 	
-	saveDialog.SetFileName("anki_import.csv")
-	saveDialog.SetFilter(storage.NewExtensionFileFilter([]string{".csv"}))
-	
-	// Try to set the default location to the anki_cards directory
-	if uri, err := storage.ParseURI("file://" + a.config.OutputDir); err == nil {
-		if listableURI, ok := uri.(fyne.ListableURI); ok {
-			saveDialog.SetLocation(listableURI)
-		}
-	}
-	
-	saveDialog.Show()
+	customDialog.Resize(fyne.NewSize(400, 300))
+	customDialog.Show()
 }
 
 // onPreferences shows the preferences dialog
@@ -1011,7 +1044,9 @@ func (a *Application) processWordJob(job *WordJob) {
 	// Save translation to disk immediately for this specific word
 	if translation != "" {
 		filename := sanitizeFilename(job.Word)
-		translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+		wordDir := filepath.Join(a.config.OutputDir, filename)
+		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", filename))
 		content := fmt.Sprintf("%s = %s\n", job.Word, translation)
 		os.WriteFile(translationFile, []byte(content), 0644)
 	}
@@ -1045,7 +1080,9 @@ func (a *Application) processWordJob(job *WordJob) {
 		// Save phonetic info to disk immediately for this specific word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
 			filename := sanitizeFilename(job.Word)
-			phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+			wordDir := filepath.Join(a.config.OutputDir, filename)
+			os.MkdirAll(wordDir, 0755) // Ensure directory exists
+			phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", filename))
 			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
 		}
 		
@@ -1384,7 +1421,9 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 func (a *Application) saveTranslation() {
 	if a.currentWord != "" && a.currentTranslation != "" {
 		filename := sanitizeFilename(a.currentWord)
-		translationFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_translation.txt", filename))
+		wordDir := filepath.Join(a.config.OutputDir, filename)
+		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", filename))
 		content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
 		os.WriteFile(translationFile, []byte(content), 0644)
 	}
@@ -1394,7 +1433,9 @@ func (a *Application) saveTranslation() {
 func (a *Application) saveImagePrompt() {
 	if a.currentWord != "" && a.imagePromptEntry.Text != "" {
 		filename := sanitizeFilename(a.currentWord)
-		promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", filename))
+		wordDir := filepath.Join(a.config.OutputDir, filename)
+		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", filename))
 		os.WriteFile(promptFile, []byte(a.imagePromptEntry.Text), 0644)
 	}
 }
@@ -1406,7 +1447,9 @@ func (a *Application) savePhoneticInfo() {
 		phoneticText != "Failed to fetch phonetic information" &&
 		phoneticText != "Phonetic information will appear here..." {
 		filename := sanitizeFilename(a.currentWord)
-		phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+		wordDir := filepath.Join(a.config.OutputDir, filename)
+		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", filename))
 		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
 	}
 }
@@ -1417,7 +1460,9 @@ func (a *Application) savePhoneticInfoForWord(word, phoneticText string) {
 		phoneticText != "Failed to fetch phonetic information" &&
 		phoneticText != "Phonetic information will appear here..." {
 		filename := sanitizeFilename(word)
-		phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+		wordDir := filepath.Join(a.config.OutputDir, filename)
+		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", filename))
 		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
 	}
 }
@@ -1425,7 +1470,8 @@ func (a *Application) savePhoneticInfoForWord(word, phoneticText string) {
 // loadPhoneticInfo loads phonetic information from a file if it exists
 func (a *Application) loadPhoneticInfo(word string) {
 	filename := sanitizeFilename(word)
-	phoneticFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_phonetic.txt", filename))
+	wordDir := filepath.Join(a.config.OutputDir, filename)
+	phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", filename))
 	
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		a.phoneticDisplay.SetText(string(data))

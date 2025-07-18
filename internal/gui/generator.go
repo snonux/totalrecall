@@ -99,9 +99,15 @@ func (a *Application) generateAudio(word string) (string, error) {
 		return "", err
 	}
 	
-	// Generate filename
+	// Create subdirectory for this word
 	filename := sanitizeFilename(word)
-	outputFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s.%s", filename, a.config.AudioFormat))
+	wordDir := filepath.Join(a.config.OutputDir, filename)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
+	// Generate filename in subdirectory
+	outputFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", filename, a.config.AudioFormat))
 	
 	// Generate audio
 	err = provider.GenerateAudio(a.ctx, word, outputFile)
@@ -150,9 +156,16 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
 	
+	// Create subdirectory for this word
+	filename := sanitizeFilename(word)
+	wordDir := filepath.Join(a.config.OutputDir, filename)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
 	// Create downloader
 	downloadOpts := &image.DownloadOptions{
-		OutputDir:         a.config.OutputDir,
+		OutputDir:         wordDir,
 		OverwriteExisting: true,
 		CreateDir:         true,
 		FileNamePattern:   "{word}",
@@ -182,8 +195,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 			usedPrompt := openaiClient.GetLastPrompt()
 			if usedPrompt != "" {
 				// Save the prompt to disk immediately for this word
-				filename := sanitizeFilename(word)
-				promptFile := filepath.Join(a.config.OutputDir, fmt.Sprintf("%s_prompt.txt", filename))
+				promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", filename))
 				os.WriteFile(promptFile, []byte(usedPrompt), 0644)
 				
 				// Only update UI if this word is still the current word

@@ -71,9 +71,11 @@ export OPENAI_API_KEY="sk-..."
    totalrecall --batch words.txt
    ```
 
-4. Generate with Anki CSV:
+4. Generate with Anki package:
    ```bash
-   totalrecall ябълка --anki
+   totalrecall ябълка --anki                    # Creates APKG file (recommended)
+   totalrecall ябълка --anki --anki-csv        # Creates CSV file (legacy)
+   totalrecall ябълка --anki --deck-name "My Bulgarian Words"  # Custom deck name
    ```
 
 ### GUI Mode
@@ -150,15 +152,30 @@ For each word, the tool generates:
 - `word.mp3` - Audio pronunciation (random voice)
 - `word_translation.txt` - English translation
 - `word_1.jpg`, `word_2.jpg`, etc. - Generated images
-- `anki_import.csv` - Anki import file (when using --anki flag)
+- `bulgarian_vocabulary.apkg` - Anki package file (when using --anki flag)
+- `anki_import.csv` - Anki import file (when using --anki --anki-csv flags)
 
 With `--all-voices` flag:
 - `word_alloy.mp3`, `word_nova.mp3`, etc. - Audio in all 11 voices
 
 ## Anki Import
 
+### Method 1: APKG Format (Recommended)
 1. Generate materials with the `--anki` flag
+2. In Anki, go to File → Import
+3. Select the generated `.apkg` file
+4. All media files are included automatically
+5. Cards are ready to use with custom styling
+
+### Method 2: CSV Format (Legacy)
+1. Generate materials with `--anki --anki-csv` flags
 2. In Anki, go to File → Import
 3. Select the generated `anki_import.csv`
 4. Copy all media files to your Anki media folder
 5. Map fields appropriately during import
+
+### GUI Export
+The GUI mode offers an export dialog where you can:
+- Choose between APKG and CSV formats
+- Set a custom deck name
+- Export all generated cards at once
