@@ -336,8 +336,6 @@ func (a *Application) setupUI() {
 	fileMenu := fyne.NewMenu("File",
 		fyne.NewMenuItem("Export to Anki... (E)", a.onExportToAnki),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Preferences...", a.onPreferences),
-		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", a.app.Quit),
 	)
 	
@@ -882,10 +880,9 @@ func (a *Application) onExportToAnki() {
 			// Get actual card count
 			total, withAudio, withImages := gen.Stats()
 			
-			dialog.ShowInformation("Export Complete", 
-				fmt.Sprintf("Exported %d cards to:\n%s\n(%d with audio, %d with images)\n\nThe APKG file includes all media and can be imported directly into Anki.", 
-					total, outputPath, withAudio, withImages), 
-				a.window)
+			// Update status bar instead of showing dialog
+			a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)", 
+				total, outputPath, withAudio, withImages))
 		} else {
 			filename = "anki_import.csv"
 			outputPath = filepath.Join(a.config.OutputDir, filename)
@@ -912,21 +909,14 @@ func (a *Application) onExportToAnki() {
 			// Get actual card count
 			total, withAudio, withImages := gen.Stats()
 			
-			dialog.ShowInformation("Export Complete", 
-				fmt.Sprintf("Exported %d cards to:\n%s\n(%d with audio, %d with images)\n\nNote: The CSV file should be in the same directory as your media files (%s) for Anki import to work correctly.", 
-					total, outputPath, withAudio, withImages, a.config.OutputDir), 
-				a.window)
+			// Update status bar instead of showing dialog
+			a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)", 
+				total, outputPath, withAudio, withImages))
 		}
 	}, a.window)
 	
 	customDialog.Resize(fyne.NewSize(400, 300))
 	customDialog.Show()
-}
-
-// onPreferences shows the preferences dialog
-func (a *Application) onPreferences() {
-	// This will be implemented in preferences.go
-	dialog.ShowInformation("Preferences", "Preferences dialog coming soon!", a.window)
 }
 
 // Helper methods
