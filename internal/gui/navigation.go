@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
@@ -314,15 +315,15 @@ func (a *Application) loadExistingFiles(word string) {
 	})
 }
 
-// onDelete deletes the current word's files
+// onDelete moves the current word's files to trash bin
 func (a *Application) onDelete() {
 	if a.currentWord == "" {
 		return
 	}
 	
 	// Create custom confirmation dialog with keyboard support
-	message := fmt.Sprintf("Delete all files for '%s'?\n\nPress y to confirm or n to cancel", a.currentWord)
-	confirmDialog := dialog.NewConfirm("Delete Word", message, func(confirm bool) {
+	message := fmt.Sprintf("Move all files for '%s' to trash?\n\nPress y to confirm or n to cancel", a.currentWord)
+	confirmDialog := dialog.NewConfirm("Move to Trash", message, func(confirm bool) {
 		a.deleteConfirming = false
 		if confirm {
 			a.deleteCurrentWord()
@@ -357,12 +358,21 @@ func (a *Application) onDelete() {
 	confirmDialog.Show()
 }
 
-// deleteCurrentWord deletes all files for the current word
+// deleteCurrentWord moves all files for the current word to trash
 func (a *Application) deleteCurrentWord() {
 	sanitized := sanitizeFilename(a.currentWord)
 	deletedCount := 0
 	
-	// List of possible files to delete
+	// Create trash directory if it doesn't exist
+	trashDir := filepath.Join(a.config.OutputDir, ".trashbin")
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		fyne.Do(func() {
+			a.updateStatus(fmt.Sprintf("Failed to create trash directory: %v", err))
+		})
+		return
+	}
+	
+	// List of possible files to move to trash
 	patterns := []string{
 		fmt.Sprintf("%s.mp3", sanitized),
 		fmt.Sprintf("%s.wav", sanitized),
@@ -373,18 +383,32 @@ func (a *Application) deleteCurrentWord() {
 		fmt.Sprintf("%s_*.png", sanitized),
 		fmt.Sprintf("%s_translation.txt", sanitized),
 		fmt.Sprintf("%s_prompt.txt", sanitized),
+		fmt.Sprintf("%s_phonetic.txt", sanitized),
 		fmt.Sprintf("%s_attribution.txt", sanitized),
 		fmt.Sprintf("%s_*_attribution.txt", sanitized),
 	}
 	
-	// Delete files matching patterns
+	// Move files matching patterns to trash
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(filepath.Join(a.config.OutputDir, pattern))
 		if err != nil {
 			continue
 		}
 		for _, match := range matches {
-			if err := os.Remove(match); err == nil {
+			filename := filepath.Base(match)
+			destPath := filepath.Join(trashDir, filename)
+			
+			// If file already exists in trash, add timestamp to filename
+			if _, err := os.Stat(destPath); err == nil {
+				base := strings.TrimSuffix(filename, filepath.Ext(filename))
+				ext := filepath.Ext(filename)
+				timestamp := time.Now().Format("20060102_150405")
+				filename = fmt.Sprintf("%s_%s%s", base, timestamp, ext)
+				destPath = filepath.Join(trashDir, filename)
+			}
+			
+			// Move file to trash
+			if err := os.Rename(match, destPath); err == nil {
 				deletedCount++
 			}
 		}
@@ -418,7 +442,7 @@ func (a *Application) deleteCurrentWord() {
 	
 	// Update status
 	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Deleted %d files for '%s'", deletedCount, a.currentWord))
+		a.updateStatus(fmt.Sprintf("Moved %d files for '%s' to trash", deletedCount, a.currentWord))
 		// Update queue status to reflect the reduced card count
 		a.updateQueueStatus()
 	})
