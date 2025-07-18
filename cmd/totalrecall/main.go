@@ -161,8 +161,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return runGUIMode()
 	}
 	
+	// Structure to hold word and optional translation
+	type wordEntry struct {
+		bulgarian   string
+		translation string
+	}
+	
 	// Determine words to process
-	var words []string
+	var entries []wordEntry
 	
 	if batchFile != "" {
 		// Read words from file
@@ -174,21 +180,40 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		lines := string(content)
 		for _, line := range splitLines(lines) {
 			if line = trimSpace(line); line != "" {
-				words = append(words, line)
+				// Check if line contains '=' for bulgarian = english format
+				if strings.Contains(line, "=") {
+					parts := strings.SplitN(line, "=", 2)
+					if len(parts) == 2 {
+						bulgarian := strings.TrimSpace(parts[0])
+						english := strings.TrimSpace(parts[1])
+						if bulgarian != "" {
+							entries = append(entries, wordEntry{
+								bulgarian:   bulgarian,
+								translation: english,
+							})
+						}
+					}
+				} else {
+					// Just a bulgarian word
+					entries = append(entries, wordEntry{
+						bulgarian:   line,
+						translation: "",
+					})
+				}
 			}
 		}
 	} else if len(args) > 0 {
 		// Single word from command line
-		words = []string{args[0]}
+		entries = []wordEntry{{bulgarian: args[0], translation: ""}}
 	} else {
 		// No input provided
 		return fmt.Errorf("please provide a Bulgarian word or use --batch flag")
 	}
 	
 	// Validate words
-	for _, word := range words {
-		if err := audio.ValidateBulgarianText(word); err != nil {
-			return fmt.Errorf("invalid word '%s': %w", word, err)
+	for _, entry := range entries {
+		if err := audio.ValidateBulgarianText(entry.bulgarian); err != nil {
+			return fmt.Errorf("invalid word '%s': %w", entry.bulgarian, err)
 		}
 	}
 	
@@ -197,12 +222,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 	
-	// Process each word
-	for i, word := range words {
-		fmt.Printf("\nProcessing %d/%d: %s\n", i+1, len(words), word)
+	// Process each entry
+	for i, entry := range entries {
+		fmt.Printf("\nProcessing %d/%d: %s\n", i+1, len(entries), entry.bulgarian)
 		
-		if err := processWord(word); err != nil {
-			fmt.Fprintf(os.Stderr, "Error processing '%s': %v\n", word, err)
+		if err := processWordWithTranslation(entry.bulgarian, entry.translation); err != nil {
+			fmt.Fprintf(os.Stderr, "Error processing '%s': %v\n", entry.bulgarian, err)
 			// Continue with next word
 		}
 	}
@@ -226,15 +251,31 @@ func runCommand(cmd *cobra.Command, args []string) error {
 }
 
 func processWord(word string) error {
-	// Translate the word first
-	fmt.Printf("  Translating to English...\n")
-	translation, err := translateWord(word)
-	if err != nil {
-		fmt.Printf("  Warning: Translation failed: %v\n", err)
-		translation = "" // Continue without translation
+	return processWordWithTranslation(word, "")
+}
+
+func processWordWithTranslation(word, providedTranslation string) error {
+	var translation string
+	
+	// Use provided translation if available, otherwise translate
+	if providedTranslation != "" {
+		translation = providedTranslation
+		fmt.Printf("  Using provided translation: %s\n", translation)
 	} else {
-		fmt.Printf("  Translation: %s\n", translation)
-		// Store translation for Anki export
+		// Translate the word first
+		fmt.Printf("  Translating to English...\n")
+		var err error
+		translation, err = translateWord(word)
+		if err != nil {
+			fmt.Printf("  Warning: Translation failed: %v\n", err)
+			translation = "" // Continue without translation
+		} else {
+			fmt.Printf("  Translation: %s\n", translation)
+		}
+	}
+	
+	// Store translation for Anki export
+	if translation != "" {
 		wordTranslations[word] = translation
 		// Save translation to file
 		if err := saveTranslation(word, translation); err != nil {
@@ -250,10 +291,10 @@ func processWord(word string) error {
 		}
 	}
 	
-	// Download images
+	// Download images - pass the translation for better image generation
 	if !skipImages {
 		fmt.Printf("  Downloading images...\n")
-		if err := downloadImages(word); err != nil {
+		if err := downloadImagesWithTranslation(word, translation); err != nil {
 			return fmt.Errorf("image download failed: %w", err)
 		}
 	}
@@ -379,6 +420,10 @@ func generateAudioWithVoice(word, voice string) error {
 }
 
 func downloadImages(word string) error {
+	return downloadImagesWithTranslation(word, "")
+}
+
+func downloadImagesWithTranslation(word, translation string) error {
 	// Create image searcher based on provider
 	var searcher image.ImageSearcher
 	var err error
@@ -455,9 +500,15 @@ func downloadImages(word string) error {
 	
 	downloader := image.NewDownloader(searcher, downloadOpts)
 	
+	// Create search options with translation if provided
+	searchOpts := image.DefaultSearchOptions(word)
+	if translation != "" {
+		searchOpts.Translation = translation
+	}
+	
 	// Download single image
 	ctx := context.Background()
-	_, path, err := downloader.DownloadBestMatch(ctx, word)
+	_, path, err := downloader.DownloadBestMatchWithOptions(ctx, searchOpts)
 	if err != nil {
 		return err
 	}
