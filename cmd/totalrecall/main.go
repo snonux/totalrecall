@@ -338,18 +338,22 @@ func generateAudioWithVoice(word, voice string) error {
 	
 	// Generate audio file
 	ctx := context.Background()
-	cardID := internal.GenerateCardID(word)
 	
-	// Create subdirectory for this word
-	wordDir := filepath.Join(outputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return fmt.Errorf("failed to create word directory: %w", err)
-	}
-	
-	// Save word metadata if not already present
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
-		os.WriteFile(metadataFile, []byte(word), 0644)
+	// Find existing card directory or create new one
+	wordDir := findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory, create new one with card ID
+		cardID := internal.GenerateCardID(word)
+		wordDir = filepath.Join(outputDir, cardID)
+		if err := os.MkdirAll(wordDir, 0755); err != nil {
+			return fmt.Errorf("failed to create word directory: %w", err)
+		}
+		
+		// Save word metadata
+		metadataFile := filepath.Join(wordDir, "word.txt")
+		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+			return fmt.Errorf("failed to save word metadata: %w", err)
+		}
 	}
 	
 	// Add voice name to filename if generating multiple voices
@@ -423,17 +427,21 @@ func downloadImages(word string) error {
 		return fmt.Errorf("unknown image provider: %s", imageAPI)
 	}
 	
-	// Create subdirectory for this word
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(outputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return fmt.Errorf("failed to create word directory: %w", err)
-	}
-	
-	// Save word metadata if not already present
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
-		os.WriteFile(metadataFile, []byte(word), 0644)
+	// Find existing card directory or create new one
+	wordDir := findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory, create new one with card ID
+		cardID := internal.GenerateCardID(word)
+		wordDir = filepath.Join(outputDir, cardID)
+		if err := os.MkdirAll(wordDir, 0755); err != nil {
+			return fmt.Errorf("failed to create word directory: %w", err)
+		}
+		
+		// Save word metadata
+		metadataFile := filepath.Join(wordDir, "word.txt")
+		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+			return fmt.Errorf("failed to save word metadata: %w", err)
+		}
 	}
 	
 	// Create downloader
@@ -667,19 +675,23 @@ func translateWord(word string) (string, error) {
 }
 
 func saveTranslation(word, translation string) error {
-	// Save translation to a text file
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(outputDir, cardID)
-	
-	// Ensure directory exists
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return fmt.Errorf("failed to create word directory: %w", err)
-	}
-	
-	// Save word metadata if not already present
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
-		os.WriteFile(metadataFile, []byte(word), 0644)
+	// Find existing card directory or create new one
+	wordDir := findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory, create new one with card ID
+		cardID := internal.GenerateCardID(word)
+		wordDir = filepath.Join(outputDir, cardID)
+		
+		// Ensure directory exists
+		if err := os.MkdirAll(wordDir, 0755); err != nil {
+			return fmt.Errorf("failed to create word directory: %w", err)
+		}
+		
+		// Save word metadata
+		metadataFile := filepath.Join(wordDir, "word.txt")
+		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+			return fmt.Errorf("failed to save word metadata: %w", err)
+		}
 	}
 	
 	outputFile := filepath.Join(wordDir, "translation.txt")
@@ -695,6 +707,43 @@ func saveTranslation(word, translation string) error {
 
 // Global map to store translations for Anki export
 var wordTranslations = make(map[string]string)
+
+// findCardDirectory finds the directory for a given Bulgarian word
+func findCardDirectory(word string) string {
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return ""
+	}
+	
+	// Look through all directories to find one with matching word.txt
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		
+		dirPath := filepath.Join(outputDir, entry.Name())
+		wordFile := filepath.Join(dirPath, "word.txt")
+		
+		// Read the word file to check if it matches
+		if data, err := os.ReadFile(wordFile); err == nil {
+			storedWord := strings.TrimSpace(string(data))
+			if storedWord == word {
+				return dirPath
+			}
+		} else {
+			// Try old format with underscore for backward compatibility
+			wordFile = filepath.Join(dirPath, "_word.txt")
+			if data, err := os.ReadFile(wordFile); err == nil {
+				storedWord := strings.TrimSpace(string(data))
+				if storedWord == word {
+					return dirPath
+				}
+			}
+		}
+	}
+	
+	return ""
+}
 
 func saveAudioAttribution(word, audioFile string, config *audio.Config) error {
 	// Create attribution text

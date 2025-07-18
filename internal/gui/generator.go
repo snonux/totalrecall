@@ -100,17 +100,21 @@ func (a *Application) generateAudio(word string) (string, error) {
 		return "", err
 	}
 	
-	// Create subdirectory for this word using card ID
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(a.config.OutputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create word directory: %w", err)
-	}
-	
-	// Save the original Bulgarian word in a metadata file
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-		return "", fmt.Errorf("failed to save word metadata: %w", err)
+	// Find existing card directory or create new one
+	wordDir := a.findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory, create new one with card ID
+		cardID := internal.GenerateCardID(word)
+		wordDir = filepath.Join(a.config.OutputDir, cardID)
+		if err := os.MkdirAll(wordDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create word directory: %w", err)
+		}
+		
+		// Save the original Bulgarian word in a metadata file
+		metadataFile := filepath.Join(wordDir, "word.txt")
+		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+			return "", fmt.Errorf("failed to save word metadata: %w", err)
+		}
 	}
 	
 	// Generate filename in subdirectory
@@ -163,16 +167,18 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
 	
-	// Create subdirectory for this word using card ID
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(a.config.OutputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create word directory: %w", err)
-	}
-	
-	// Save the original Bulgarian word in a metadata file if not already present
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+	// Find existing card directory or create new one
+	wordDir := a.findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory, create new one with card ID
+		cardID := internal.GenerateCardID(word)
+		wordDir = filepath.Join(a.config.OutputDir, cardID)
+		if err := os.MkdirAll(wordDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create word directory: %w", err)
+		}
+		
+		// Save the original Bulgarian word in a metadata file
+		metadataFile := filepath.Join(wordDir, "word.txt")
 		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
 			return "", fmt.Errorf("failed to save word metadata: %w", err)
 		}

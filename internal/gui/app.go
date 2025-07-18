@@ -507,9 +507,17 @@ func (a *Application) generateMaterials(word string) {
 
 		// Save translation to disk regardless
 		if translation != "" {
-			cardID := internal.GenerateCardID(word)
-			wordDir := filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
+			// Find existing card directory first
+			wordDir := a.findCardDirectory(word)
+			if wordDir == "" {
+				// No existing directory, create new one with card ID
+				cardID := internal.GenerateCardID(word)
+				wordDir = filepath.Join(a.config.OutputDir, cardID)
+				os.MkdirAll(wordDir, 0755) // Ensure directory exists
+				// Save word metadata
+				metadataFile := filepath.Join(wordDir, "word.txt")
+				os.WriteFile(metadataFile, []byte(word), 0644)
+			}
 			translationFile := filepath.Join(wordDir, "translation.txt")
 			content := fmt.Sprintf("%s = %s\n", word, translation)
 			os.WriteFile(translationFile, []byte(content), 0644)
@@ -579,6 +587,36 @@ func (a *Application) generateMaterials(word string) {
 		}
 		a.mu.Unlock()
 	}
+
+	// Fetch phonetic information in a separate goroutine
+	go func() {
+		fyne.Do(func() {
+			a.incrementProcessing() // Phonetic processing starts
+		})
+
+		phoneticInfo, err := a.getPhoneticInfo(word)
+		if err != nil {
+			// Log error but don't fail - phonetic info is optional
+			fmt.Printf("Warning: Failed to get phonetic info: %v\n", err)
+			phoneticInfo = "Failed to fetch phonetic information"
+		}
+
+		// Update UI with phonetic info if this is still the current word
+		a.mu.Lock()
+		if a.currentWord == word {
+			fyne.Do(func() {
+				a.phoneticDisplay.SetText(phoneticInfo)
+			})
+		}
+		a.mu.Unlock()
+
+		// Save phonetic info to disk
+		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
+			a.savePhoneticInfoForWord(word, phoneticInfo)
+		}
+
+		a.decrementProcessing() // Phonetic processing ends
+	}()
 
 	// Enable action buttons
 	fyne.Do(func() {
@@ -1114,12 +1152,15 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// Save translation to disk immediately for this specific word
 	if translation != "" {
-		cardID := internal.GenerateCardID(job.Word)
-		wordDir := filepath.Join(a.config.OutputDir, cardID)
-		os.MkdirAll(wordDir, 0755) // Ensure directory exists
-		// Save word metadata if not already present
-		metadataFile := filepath.Join(wordDir, "word.txt")
-		if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+		// Find existing card directory first
+		wordDir := a.findCardDirectory(job.Word)
+		if wordDir == "" {
+			// No existing directory, create new one with card ID
+			cardID := internal.GenerateCardID(job.Word)
+			wordDir = filepath.Join(a.config.OutputDir, cardID)
+			os.MkdirAll(wordDir, 0755) // Ensure directory exists
+			// Save word metadata
+			metadataFile := filepath.Join(wordDir, "word.txt")
 			os.WriteFile(metadataFile, []byte(job.Word), 0644)
 		}
 		translationFile := filepath.Join(wordDir, "translation.txt")
@@ -1155,12 +1196,15 @@ func (a *Application) processWordJob(job *WordJob) {
 
 		// Save phonetic info to disk immediately for this specific word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
-			cardID := internal.GenerateCardID(job.Word)
-			wordDir := filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
-			// Save word metadata if not already present
-			metadataFile := filepath.Join(wordDir, "word.txt")
-			if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+			// Find existing card directory first
+			wordDir := a.findCardDirectory(job.Word)
+			if wordDir == "" {
+				// No existing directory, create new one with card ID
+				cardID := internal.GenerateCardID(job.Word)
+				wordDir = filepath.Join(a.config.OutputDir, cardID)
+				os.MkdirAll(wordDir, 0755) // Ensure directory exists
+				// Save word metadata
+				metadataFile := filepath.Join(wordDir, "word.txt")
 				os.WriteFile(metadataFile, []byte(job.Word), 0644)
 			}
 			phoneticFile := filepath.Join(wordDir, "phonetic.txt")
@@ -1585,9 +1629,17 @@ func (a *Application) savePhoneticInfoForWord(word, phoneticText string) {
 	if word != "" && phoneticText != "" &&
 		phoneticText != "Failed to fetch phonetic information" &&
 		phoneticText != "Phonetic information will appear here..." {
-		cardID := internal.GenerateCardID(word)
-		wordDir := filepath.Join(a.config.OutputDir, cardID)
-		os.MkdirAll(wordDir, 0755) // Ensure directory exists
+		// Find existing card directory first
+		wordDir := a.findCardDirectory(word)
+		if wordDir == "" {
+			// No existing directory, create new one with card ID
+			cardID := internal.GenerateCardID(word)
+			wordDir = filepath.Join(a.config.OutputDir, cardID)
+			os.MkdirAll(wordDir, 0755) // Ensure directory exists
+			// Save word metadata
+			metadataFile := filepath.Join(wordDir, "word.txt")
+			os.WriteFile(metadataFile, []byte(word), 0644)
+		}
 		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
 	}
