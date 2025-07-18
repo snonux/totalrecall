@@ -17,36 +17,36 @@ import (
 // AudioPlayer is a custom widget for playing audio files
 type AudioPlayer struct {
 	widget.BaseWidget
-	
-	container     *fyne.Container
-	playButton    *ttwidget.Button
-	stopButton    *ttwidget.Button
-	statusLabel   *widget.Label
-	
-	audioFile     string
-	isPlaying     bool
-	playCmd       *exec.Cmd
+
+	container   *fyne.Container
+	playButton  *ttwidget.Button
+	stopButton  *ttwidget.Button
+	statusLabel *widget.Label
+
+	audioFile string
+	isPlaying bool
+	playCmd   *exec.Cmd
 }
 
 // NewAudioPlayer creates a new audio player widget
 func NewAudioPlayer() *AudioPlayer {
 	p := &AudioPlayer{}
-	
+
 	// Create controls with tooltips
 	p.playButton = ttwidget.NewButton("", p.onPlay)
 	p.playButton.Icon = theme.MediaPlayIcon()
 	p.playButton.SetToolTip("Play audio (P)")
-	
+
 	p.stopButton = ttwidget.NewButton("", p.onStop)
 	p.stopButton.Icon = theme.MediaStopIcon()
 	p.stopButton.SetToolTip("Stop audio")
-	
+
 	p.statusLabel = widget.NewLabel("No audio loaded")
-	
+
 	// Initially disable controls
 	p.playButton.Disable()
 	p.stopButton.Disable()
-	
+
 	// Create main container
 	p.container = container.NewHBox(
 		p.playButton,
@@ -54,7 +54,7 @@ func NewAudioPlayer() *AudioPlayer {
 		layout.NewSpacer(),
 		p.statusLabel,
 	)
-	
+
 	p.ExtendBaseWidget(p)
 	return p
 }
@@ -68,7 +68,7 @@ func (p *AudioPlayer) CreateRenderer() fyne.WidgetRenderer {
 func (p *AudioPlayer) SetAudioFile(audioFile string) {
 	p.audioFile = audioFile
 	p.isPlaying = false
-	
+
 	if audioFile != "" {
 		p.playButton.Enable()
 		p.statusLabel.SetText(fmt.Sprintf("Audio: %s", filepath.Base(audioFile)))
@@ -92,21 +92,21 @@ func (p *AudioPlayer) onPlay() {
 	if p.audioFile == "" {
 		return
 	}
-	
+
 	if p.isPlaying {
 		// Pause functionality - just stop for now
 		p.onStop()
 		return
 	}
-	
+
 	// Start playing
 	if err := p.startPlayback(); err != nil {
 		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
 		return
 	}
-	
+
 	p.isPlaying = true
-	p.playButton.SetText("⏸ Pause (p)")
+	p.playButton.SetIcon(theme.MediaPauseIcon())
 	p.stopButton.Enable()
 	p.statusLabel.SetText("Playing: " + filepath.Base(p.audioFile))
 }
@@ -117,9 +117,9 @@ func (p *AudioPlayer) onStop() {
 		p.playCmd.Process.Kill()
 		p.playCmd = nil
 	}
-	
+
 	p.isPlaying = false
-	p.playButton.SetText("▶ Play (p)")
+	p.playButton.SetIcon(theme.MediaPlayIcon())
 	p.stopButton.Disable()
 	p.statusLabel.SetText("Stopped: " + filepath.Base(p.audioFile))
 }
@@ -134,7 +134,7 @@ func (p *AudioPlayer) Play() {
 // startPlayback starts audio playback using platform-specific commands
 func (p *AudioPlayer) startPlayback() error {
 	var cmd *exec.Cmd
-	
+
 	switch runtime.GOOS {
 	case "darwin": // macOS
 		cmd = exec.Command("afplay", p.audioFile)
@@ -161,10 +161,10 @@ func (p *AudioPlayer) startPlayback() error {
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
-	
+
 	// Store the command so we can stop it later
 	p.playCmd = cmd
-	
+
 	// Start playback in background
 	go func() {
 		err := cmd.Run()
@@ -178,6 +178,6 @@ func (p *AudioPlayer) startPlayback() error {
 			})
 		}
 	}()
-	
+
 	return nil
 }

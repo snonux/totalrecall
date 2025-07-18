@@ -14,6 +14,43 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
+// findCardDirectory finds the directory for a given Bulgarian word
+func (a *Application) findCardDirectory(word string) string {
+	entries, err := os.ReadDir(a.config.OutputDir)
+	if err != nil {
+		return ""
+	}
+	
+	// Look through all directories to find one with matching _word.txt
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		
+		dirPath := filepath.Join(a.config.OutputDir, entry.Name())
+		wordFile := filepath.Join(dirPath, "word.txt")
+		
+		// Read the word file to check if it matches
+		if data, err := os.ReadFile(wordFile); err == nil {
+			storedWord := strings.TrimSpace(string(data))
+			if storedWord == word {
+				return dirPath
+			}
+		} else {
+			// Try old format with underscore for backward compatibility
+			wordFile = filepath.Join(dirPath, "_word.txt")
+			if data, err := os.ReadFile(wordFile); err == nil {
+				storedWord := strings.TrimSpace(string(data))
+				if storedWord == word {
+					return dirPath
+				}
+			}
+		}
+	}
+	
+	return ""
+}
+
 // scanExistingWords scans the output directory for existing words
 func (a *Application) scanExistingWords() {
 	a.existingWords = []string{}
@@ -31,17 +68,33 @@ func (a *Application) scanExistingWords() {
 			continue
 		}
 		
-		// Directory name is the sanitized word
-		sanitizedWord := entry.Name()
+		// Directory name is now a card ID
+		cardID := entry.Name()
+		wordDir := filepath.Join(a.config.OutputDir, cardID)
 		
-		// Check if this directory contains valid word files
-		wordDir := filepath.Join(a.config.OutputDir, sanitizedWord)
+		// Read the original Bulgarian word from word.txt
+		wordFile := filepath.Join(wordDir, "word.txt")
+		wordData, err := os.ReadFile(wordFile)
+		if err != nil {
+			// Try old format with underscore for backward compatibility
+			wordFile = filepath.Join(wordDir, "_word.txt")
+			wordData, err = os.ReadFile(wordFile)
+			if err != nil {
+				// No word file, skip this directory
+				continue
+			}
+		}
+		
+		word := string(wordData)
+		if word == "" {
+			continue
+		}
 		
 		// Look for at least one of: audio, image, or translation file
 		hasContent := false
 		
 		// Check for audio file
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitizedWord, a.config.AudioFormat))
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			hasContent = true
 		}
@@ -49,10 +102,8 @@ func (a *Application) scanExistingWords() {
 		// Check for image files
 		if !hasContent {
 			patterns := []string{
-				fmt.Sprintf("%s.jpg", sanitizedWord),
-				fmt.Sprintf("%s.png", sanitizedWord),
-				fmt.Sprintf("%s_1.jpg", sanitizedWord),
-				fmt.Sprintf("%s_1.png", sanitizedWord),
+				"image.jpg",
+				"image.png",
 			}
 			for _, pattern := range patterns {
 				if _, err := os.Stat(filepath.Join(wordDir, pattern)); err == nil {
@@ -64,28 +115,15 @@ func (a *Application) scanExistingWords() {
 		
 		// Check for translation file
 		if !hasContent {
-			translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
+			translationFile := filepath.Join(wordDir, "translation.txt")
 			if _, err := os.Stat(translationFile); err == nil {
 				hasContent = true
 			}
 		}
 		
-		// If directory has content, add it to the list
+		// If directory has content, add the word to the list
 		if hasContent {
-			// Try to get the original word from translation file
-			translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
-			if data, err := os.ReadFile(translationFile); err == nil {
-				content := string(data)
-				parts := strings.Split(content, "=")
-				if len(parts) >= 1 {
-					originalWord := strings.TrimSpace(parts[0])
-					a.existingWords = append(a.existingWords, originalWord)
-					continue
-				}
-			}
-			
-			// Fallback: use the directory name
-			a.existingWords = append(a.existingWords, sanitizedWord)
+			a.existingWords = append(a.existingWords, word)
 		}
 	}
 	
@@ -230,12 +268,12 @@ func (a *Application) loadWordByIndex(index int) {
 				a.loadPhoneticInfo(word)
 				
 				// Load image prompt from disk if it exists
-				sanitized := sanitizeFilename(word)
-				wordDir := filepath.Join(a.config.OutputDir, sanitized)
-				promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", sanitized))
-				if data, err := os.ReadFile(promptFile); err == nil {
-					prompt := strings.TrimSpace(string(data))
-					a.imagePromptEntry.SetText(prompt)
+				if wordDir := a.findCardDirectory(word); wordDir != "" {
+					promptFile := filepath.Join(wordDir, "prompt.txt")
+					if data, err := os.ReadFile(promptFile); err == nil {
+						prompt := strings.TrimSpace(string(data))
+						a.imagePromptEntry.SetText(prompt)
+					}
 				}
 				
 				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
@@ -254,17 +292,27 @@ func (a *Application) loadWordByIndex(index int) {
 	// Update navigation
 	a.updateNavigation()
 	
-	// Enable action buttons since we have loaded content
-	a.setActionButtonsEnabled(true)
+	// Enable action buttons if we have content
+	hasContent := a.currentAudioFile != "" || a.currentImage != "" || a.currentTranslation != ""
+	if hasContent {
+		a.setActionButtonsEnabled(true)
+	}
 }
 
 // loadExistingFiles loads existing files for a word
 func (a *Application) loadExistingFiles(word string) {
-	sanitized := sanitizeFilename(word)
-	wordDir := filepath.Join(a.config.OutputDir, sanitized)
+	// Find the card directory for this word
+	wordDir := a.findCardDirectory(word)
+	if wordDir == "" {
+		// No existing directory found
+		fmt.Printf("No card directory found for word: %s\n", word)
+		return
+	}
+	
+	fmt.Printf("Loading files from directory: %s\n", wordDir)
 	
 	// Load translation
-	translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitized))
+	translationFile := filepath.Join(wordDir, "translation.txt")
 	if data, err := os.ReadFile(translationFile); err == nil {
 		// Parse translation from "word = translation" format
 		content := string(data)
@@ -278,16 +326,19 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load image prompt file
-	promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", sanitized))
+	promptFile := filepath.Join(wordDir, "prompt.txt")
 	if data, err := os.ReadFile(promptFile); err == nil {
 		prompt := strings.TrimSpace(string(data))
+		fmt.Printf("Loaded prompt from file: %s\n", promptFile)
 		fyne.Do(func() {
 			a.imagePromptEntry.SetText(prompt)
 		})
+	} else {
+		fmt.Printf("No prompt file found at: %s\n", promptFile)
 	}
 	
 	// Load phonetic information
-	phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", sanitized))
+	phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		phoneticInfo := string(data)
 		fyne.Do(func() {
@@ -296,7 +347,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load audio file
-	audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitized, a.config.AudioFormat))
+	audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 	if _, err := os.Stat(audioFile); err == nil {
 		a.currentAudioFile = audioFile
 		fyne.Do(func() {
@@ -308,10 +359,8 @@ func (a *Application) loadExistingFiles(word string) {
 	a.currentImage = ""
 	// Try to find images with different patterns
 	patterns := []string{
-		fmt.Sprintf("%s.jpg", sanitized),
-		fmt.Sprintf("%s.png", sanitized),
-		fmt.Sprintf("%s_1.jpg", sanitized),
-		fmt.Sprintf("%s_1.png", sanitized),
+		"image.jpg",
+		"image.png",
 	}
 	
 	for _, pattern := range patterns {
@@ -400,8 +449,14 @@ func (a *Application) onDelete() {
 
 // deleteCurrentWord moves the word's subdirectory to trash
 func (a *Application) deleteCurrentWord() {
-	sanitized := sanitizeFilename(a.currentWord)
-	wordDir := filepath.Join(a.config.OutputDir, sanitized)
+	// Find the card directory for this word
+	wordDir := a.findCardDirectory(a.currentWord)
+	if wordDir == "" {
+		fyne.Do(func() {
+			a.updateStatus("No files found for this word")
+		})
+		return
+	}
 	
 	// Create trash directory if it doesn't exist
 	trashDir := filepath.Join(a.config.OutputDir, ".trashbin")
@@ -412,17 +467,11 @@ func (a *Application) deleteCurrentWord() {
 		return
 	}
 	
-	// Check if word directory exists
-	if _, err := os.Stat(wordDir); os.IsNotExist(err) {
-		fyne.Do(func() {
-			a.updateStatus("No files found for this word")
-		})
-		return
-	}
-	
-	// Create destination path in trash
+	// Create destination path in trash  
+	// Use the directory name from the card directory
+	dirName := filepath.Base(wordDir)
 	timestamp := time.Now().Format("20060102_150405")
-	trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s", sanitized, timestamp))
+	trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s", dirName, timestamp))
 	
 	// Move entire directory to trash
 	if err := os.Rename(wordDir, trashWordDir); err != nil {

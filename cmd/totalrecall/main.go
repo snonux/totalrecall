@@ -338,20 +338,26 @@ func generateAudioWithVoice(word, voice string) error {
 	
 	// Generate audio file
 	ctx := context.Background()
-	filename := sanitizeFilename(word)
+	cardID := internal.GenerateCardID(word)
 	
 	// Create subdirectory for this word
-	wordDir := filepath.Join(outputDir, filename)
+	wordDir := filepath.Join(outputDir, cardID)
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		return fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
+	// Save word metadata if not already present
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+		os.WriteFile(metadataFile, []byte(word), 0644)
 	}
 	
 	// Add voice name to filename if generating multiple voices
 	var outputFile string
 	if allVoices {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filename, voice, audioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("audio_%s.%s", voice, audioFormat))
 	} else {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s.%s", filename, audioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("audio.%s", audioFormat))
 	}
 	
 	// Generate the audio
@@ -418,10 +424,16 @@ func downloadImages(word string) error {
 	}
 	
 	// Create subdirectory for this word
-	filename := sanitizeFilename(word)
-	wordDir := filepath.Join(outputDir, filename)
+	cardID := internal.GenerateCardID(word)
+	wordDir := filepath.Join(outputDir, cardID)
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		return fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
+	// Save word metadata if not already present
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+		os.WriteFile(metadataFile, []byte(word), 0644)
 	}
 	
 	// Create downloader
@@ -429,7 +441,7 @@ func downloadImages(word string) error {
 		OutputDir:         wordDir,
 		OverwriteExisting: true,  // Allow overwriting existing files
 		CreateDir:         true,
-		FileNamePattern:   "{word}_{index}",
+		FileNamePattern:   "image",
 		MaxSizeBytes:      5 * 1024 * 1024, // 5MB
 	}
 	
@@ -446,24 +458,6 @@ func downloadImages(word string) error {
 	return nil
 }
 
-func sanitizeFilename(s string) string {
-	// Simple filename sanitization
-	result := ""
-	for _, r := range s {
-		if isAlphaNumeric(r) || r == '-' || r == '_' {
-			result += string(r)
-		} else {
-			result += "_"
-		}
-	}
-	return result
-}
-
-func isAlphaNumeric(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
-	       (r >= '0' && r <= '9') || (r >= 'а' && r <= 'я') || 
-	       (r >= 'А' && r <= 'Я')
-}
 
 func splitLines(s string) []string {
 	// Simple line splitter
@@ -533,7 +527,7 @@ func generateAnkiFile() error {
 		}
 	} else {
 		// Generate APKG
-		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.apkg", sanitizeFilename(deckName)))
+		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.apkg", internal.SanitizeFilename(deckName)))
 		if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
 			return fmt.Errorf("failed to generate APKG: %w", err)
 		}
@@ -674,15 +668,21 @@ func translateWord(word string) (string, error) {
 
 func saveTranslation(word, translation string) error {
 	// Save translation to a text file
-	filename := sanitizeFilename(word)
-	wordDir := filepath.Join(outputDir, filename)
+	cardID := internal.GenerateCardID(word)
+	wordDir := filepath.Join(outputDir, cardID)
 	
 	// Ensure directory exists
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		return fmt.Errorf("failed to create word directory: %w", err)
 	}
 	
-	outputFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", filename))
+	// Save word metadata if not already present
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+		os.WriteFile(metadataFile, []byte(word), 0644)
+	}
+	
+	outputFile := filepath.Join(wordDir, "translation.txt")
 	
 	content := fmt.Sprintf("%s = %s\n", word, translation)
 	

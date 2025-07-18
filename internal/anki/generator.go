@@ -147,30 +147,38 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 		}
 		
 		wordDir := filepath.Join(dir, entry.Name())
-		sanitizedWord := entry.Name()
 		
 		// Create card for this word
 		card := Card{}
 		
-		// Try to load translation and get original word
-		translationFile := filepath.Join(wordDir, fmt.Sprintf("%s_translation.txt", sanitizedWord))
-		if data, err := os.ReadFile(translationFile); err == nil {
-			content := string(data)
-			if parts := strings.Split(content, "="); len(parts) >= 2 {
-				card.Bulgarian = strings.TrimSpace(parts[0])
-				card.Translation = strings.TrimSpace(parts[1])
+		// Read the original Bulgarian word from word.txt
+		wordFile := filepath.Join(wordDir, "word.txt")
+		if data, err := os.ReadFile(wordFile); err == nil {
+			card.Bulgarian = strings.TrimSpace(string(data))
+		} else {
+			// Try old format with underscore for backward compatibility
+			wordFile = filepath.Join(wordDir, "_word.txt")
+			if data, err := os.ReadFile(wordFile); err == nil {
+				card.Bulgarian = strings.TrimSpace(string(data))
+			} else {
+				// Skip directories without word.txt
+				continue
 			}
 		}
 		
-		// If no Bulgarian word found from translation, use directory name
-		if card.Bulgarian == "" {
-			card.Bulgarian = sanitizedWord
+		// Try to load translation
+		translationFile := filepath.Join(wordDir, "translation.txt")
+		if data, err := os.ReadFile(translationFile); err == nil {
+			content := string(data)
+			if parts := strings.Split(content, "="); len(parts) >= 2 {
+				card.Translation = strings.TrimSpace(parts[1])
+			}
 		}
 		
 		// Look for audio file
 		audioFormats := []string{"mp3", "wav"}
 		for _, format := range audioFormats {
-			audioFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", sanitizedWord, format))
+			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", format))
 			if _, err := os.Stat(audioFile); err == nil {
 				card.AudioFile = audioFile
 				break
@@ -179,10 +187,8 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 		
 		// Look for image files
 		imagePatterns := []string{
-			fmt.Sprintf("%s.jpg", sanitizedWord),
-			fmt.Sprintf("%s.png", sanitizedWord),
-			fmt.Sprintf("%s_1.jpg", sanitizedWord),
-			fmt.Sprintf("%s_1.png", sanitizedWord),
+			"image.jpg",
+			"image.png",
 		}
 		for _, pattern := range imagePatterns {
 			imageFile := filepath.Join(wordDir, pattern)
@@ -193,7 +199,7 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 		}
 		
 		// Load phonetic information as notes
-		phoneticFile := filepath.Join(wordDir, fmt.Sprintf("%s_phonetic.txt", sanitizedWord))
+		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 		if data, err := os.ReadFile(phoneticFile); err == nil {
 			// Preserve line breaks by converting \n to <br> for HTML display
 			notes := strings.TrimSpace(string(data))

@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/sashabaranov/go-openai"
 	
+	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
@@ -99,15 +100,21 @@ func (a *Application) generateAudio(word string) (string, error) {
 		return "", err
 	}
 	
-	// Create subdirectory for this word
-	filename := sanitizeFilename(word)
-	wordDir := filepath.Join(a.config.OutputDir, filename)
+	// Create subdirectory for this word using card ID
+	cardID := internal.GenerateCardID(word)
+	wordDir := filepath.Join(a.config.OutputDir, cardID)
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create word directory: %w", err)
 	}
 	
+	// Save the original Bulgarian word in a metadata file
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+		return "", fmt.Errorf("failed to save word metadata: %w", err)
+	}
+	
 	// Generate filename in subdirectory
-	outputFile := filepath.Join(wordDir, fmt.Sprintf("%s.%s", filename, a.config.AudioFormat))
+	outputFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 	
 	// Generate audio
 	err = provider.GenerateAudio(a.ctx, word, outputFile)
@@ -156,11 +163,19 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
 	
-	// Create subdirectory for this word
-	filename := sanitizeFilename(word)
-	wordDir := filepath.Join(a.config.OutputDir, filename)
+	// Create subdirectory for this word using card ID
+	cardID := internal.GenerateCardID(word)
+	wordDir := filepath.Join(a.config.OutputDir, cardID)
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create word directory: %w", err)
+	}
+	
+	// Save the original Bulgarian word in a metadata file if not already present
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if _, err := os.Stat(metadataFile); os.IsNotExist(err) {
+		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+			return "", fmt.Errorf("failed to save word metadata: %w", err)
+		}
 	}
 	
 	// Create downloader
@@ -168,7 +183,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 		OutputDir:         wordDir,
 		OverwriteExisting: true,
 		CreateDir:         true,
-		FileNamePattern:   "{word}",
+		FileNamePattern:   "image",
 		MaxSizeBytes:      5 * 1024 * 1024, // 5MB
 	}
 	
@@ -195,7 +210,7 @@ func (a *Application) generateImagesWithPrompt(word string, customPrompt string,
 			usedPrompt := openaiClient.GetLastPrompt()
 			if usedPrompt != "" {
 				// Save the prompt to disk immediately for this word
-				promptFile := filepath.Join(wordDir, fmt.Sprintf("%s_prompt.txt", filename))
+				promptFile := filepath.Join(wordDir, "prompt.txt")
 				os.WriteFile(promptFile, []byte(usedPrompt), 0644)
 				
 				// Only update UI if this word is still the current word
@@ -238,22 +253,3 @@ func (a *Application) saveAudioAttribution(word, audioFile, voice string) error 
 	return nil
 }
 
-// sanitizeFilename creates a safe filename from a string
-func sanitizeFilename(s string) string {
-	result := ""
-	for _, r := range s {
-		if isAlphaNumeric(r) || r == '-' || r == '_' {
-			result += string(r)
-		} else {
-			result += "_"
-		}
-	}
-	return result
-}
-
-// isAlphaNumeric checks if a rune is alphanumeric
-func isAlphaNumeric(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
-	       (r >= '0' && r <= '9') || (r >= 'а' && r <= 'я') || 
-	       (r >= 'А' && r <= 'Я')
-}
