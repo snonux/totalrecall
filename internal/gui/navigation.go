@@ -390,9 +390,12 @@ func (a *Application) loadExistingFiles(word string) {
 	phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		phoneticInfo := string(data)
+		fmt.Printf("Loaded phonetic info from file: %s\n", phoneticFile)
 		fyne.Do(func() {
 			a.phoneticDisplay.SetText(phoneticInfo)
 		})
+	} else {
+		fmt.Printf("No phonetic file found at: %s (error: %v)\n", phoneticFile, err)
 	}
 	
 	// Load audio file
@@ -539,7 +542,7 @@ func (a *Application) checkForMissingFiles(word string) {
 	
 	// Check for missing phonetic info
 	currentPhonetic := a.phoneticDisplay.Text
-	if currentPhonetic == "" {
+	if currentPhonetic == "" || currentPhonetic == "Phonetic information will appear here..." {
 		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 		if data, err := os.ReadFile(phoneticFile); err == nil {
 			phoneticInfo := string(data)

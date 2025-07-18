@@ -209,18 +209,15 @@ func (a *Application) setupUI() {
 		a.window.Canvas().Unfocus()
 	}
 
-	// Create navigation buttons with tooltips
+	// Create navigation buttons (tooltips will be set after tooltip layer is created)
 	a.submitButton = ttwidget.NewButton("", a.onSubmit)
 	a.submitButton.Icon = theme.ConfirmIcon()
-	a.submitButton.SetToolTip("Generate word (G)")
 
 	a.prevWordBtn = ttwidget.NewButton("", a.onPrevWord)
 	a.prevWordBtn.Icon = theme.NavigateBackIcon()
-	a.prevWordBtn.SetToolTip("Previous word (←)")
 
 	a.nextWordBtn = ttwidget.NewButton("", a.onNextWord)
 	a.nextWordBtn.Icon = theme.NavigateNextIcon()
-	a.nextWordBtn.SetToolTip("Next word (→)")
 
 	// Create a grid layout for inputs
 	inputGrid := container.New(layout.NewGridLayout(2),
@@ -295,25 +292,19 @@ func (a *Application) setupUI() {
 		imageSection,
 	)
 
-	// Create action buttons with tooltips
+	// Create action buttons (tooltips will be set after tooltip layer is created)
 	a.keepButton = ttwidget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
-	a.keepButton.SetToolTip("Keep card and new word (N)")
 
 	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateImage)
-	a.regenerateImageBtn.SetToolTip("Regenerate image (I)")
 
 	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.MediaPhotoIcon(), a.onRegenerateRandomImage)
-	a.regenerateRandomImageBtn.SetToolTip("Random image (M)")
 
 	a.regenerateAudioBtn = ttwidget.NewButtonWithIcon("", theme.MediaRecordIcon(), a.onRegenerateAudio)
-	a.regenerateAudioBtn.SetToolTip("Regenerate audio (A)")
 
 	a.regenerateAllBtn = ttwidget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), a.onRegenerateAll)
-	a.regenerateAllBtn.SetToolTip("Regenerate all (R)")
 
 	a.deleteButton = ttwidget.NewButtonWithIcon("", theme.DeleteIcon(), a.onDelete)
 	a.deleteButton.Importance = widget.DangerImportance
-	a.deleteButton.SetToolTip("Delete word (D)")
 
 	// Initially disable action buttons
 	a.setActionButtonsEnabled(false)
@@ -369,6 +360,10 @@ func (a *Application) setupUI() {
 
 	// Add the tooltip layer to enable tooltips
 	a.window.SetContent(fynetooltip.AddWindowToolTipLayer(content, a.window.Canvas()))
+	
+	// Now that tooltip layer is created, set all tooltips
+	a.setupTooltips()
+	
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
 		if a.fileCheckTicker != nil {
@@ -1096,6 +1091,22 @@ func (a *Application) clearUI() {
 	a.imagePromptEntry.SetText("")
 	a.phoneticDisplay.SetText("Phonetic information will appear here...")
 	a.setActionButtonsEnabled(false)
+}
+
+// setupTooltips sets up all tooltips after the tooltip layer has been created
+func (a *Application) setupTooltips() {
+	// Navigation button tooltips
+	a.submitButton.SetToolTip("Generate word (G)")
+	a.prevWordBtn.SetToolTip("Previous word (←)")
+	a.nextWordBtn.SetToolTip("Next word (→)")
+	
+	// Action button tooltips
+	a.keepButton.SetToolTip("Keep card and new word (N)")
+	a.regenerateImageBtn.SetToolTip("Regenerate image (I)")
+	a.regenerateRandomImageBtn.SetToolTip("Random image (M)")
+	a.regenerateAudioBtn.SetToolTip("Regenerate audio (A)")
+	a.regenerateAllBtn.SetToolTip("Regenerate all (R)")
+	a.deleteButton.SetToolTip("Delete word (D)")
 }
 
 // processNextInQueue processes the next word in the queue
