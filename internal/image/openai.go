@@ -136,6 +136,11 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 	var prompt string
 	if opts.CustomPrompt != "" && strings.TrimSpace(opts.CustomPrompt) != "" {
 		prompt = strings.TrimSpace(opts.CustomPrompt)
+		// Ensure custom prompt doesn't exceed 1000 characters
+		if len(prompt) > 1000 {
+			prompt = prompt[:997] + "..."
+			fmt.Printf("Custom prompt truncated to 1000 chars\n")
+		}
 		fmt.Printf("Using custom prompt: %s\n", prompt)
 	} else {
 		prompt = c.createEducationalPrompt(opts.Query, translatedWord)
@@ -152,7 +157,7 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 	c.lastPrompt = prompt
 
 	// Log the prompt to stdout for debugging
-	fmt.Printf("OpenAI Image Generation Prompt: %s\n", prompt)
+	fmt.Printf("OpenAI Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
 	fmt.Printf("OpenAI Image Generation: Using model '%s' with size '%s'\n", c.model, c.size)
 
 	// Create the image generation request
@@ -296,25 +301,67 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 	selectedStyle := styles[0]
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
-	// Create prompt with scene if available
+	// Define prompt components in order of importance
+	var prompt string
+	
 	if scene != "" {
-		return fmt.Sprintf(
+		// Full prompt with scene
+		fullPrompt := fmt.Sprintf(
 			"Generate a %s depicting: %s. "+
 				"The image should be educational and suitable for language learning flashcards. "+
 				"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the subject is shown from an angle that makes it immediately identifiable. "+
 				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
 			selectedStyle, scene,
 		)
+		
+		// Check if full prompt exceeds 1000 characters
+		if len(fullPrompt) > 1000 {
+			// Try without the IMPORTANT notice
+			prompt = fmt.Sprintf(
+				"Generate a %s depicting: %s. "+
+					"The image should be educational and suitable for language learning flashcards. "+
+					"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting.",
+				selectedStyle, scene,
+			)
+			
+			// If still too long, truncate the scene
+			if len(prompt) > 1000 {
+				// Truncate scene to fit within limit
+				maxSceneLen := 1000 - len(fmt.Sprintf(
+					"Generate a %s depicting: . "+
+						"The image should be educational and suitable for language learning flashcards. "+
+						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
+					selectedStyle,
+				))
+				if len(scene) > maxSceneLen {
+					scene = scene[:maxSceneLen] + "..."
+				}
+				prompt = fmt.Sprintf(
+					"Generate a %s depicting: %s. "+
+						"The image should be educational and suitable for language learning flashcards. "+
+						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
+					selectedStyle, scene,
+				)
+			}
+		} else {
+			prompt = fullPrompt
+		}
+	} else {
+		// Basic prompt without scene
+		prompt = fmt.Sprintf(
+			"Generate a %s of %s. "+
+				"The image should be educational and suitable for language learning flashcards. "+
+				"Requirements: The %s must be clearly visible and easily recognizable. Show it prominently centered with excellent lighting and sharp focus.",
+			selectedStyle, englishTranslation, englishTranslation,
+		)
 	}
-
-	// Fallback to basic prompt if no scene
-	return fmt.Sprintf(
-		"Generate a %s of %s. "+
-			"The image should be educational and suitable for language learning flashcards. "+
-			"Requirements: The %s must be clearly visible and easily recognizable. Show it prominently centered with excellent lighting and sharp focus. Use an angle or perspective that makes the subject immediately identifiable. Keep the background plain or simple to ensure maximum clarity of the subject. "+
-			"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-		selectedStyle, englishTranslation, englishTranslation,
-	)
+	
+	// Final check to ensure prompt is within 1000 characters
+	if len(prompt) > 1000 {
+		prompt = prompt[:997] + "..."
+	}
+	
+	return prompt
 }
 
 // translateBulgarianToEnglish translates a Bulgarian word to English using OpenAI
