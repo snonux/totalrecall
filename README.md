@@ -70,6 +70,14 @@ export OPENAI_API_KEY="sk-..."
    ```bash
    totalrecall --batch words.txt
    ```
+   
+   Example `words.txt` with translations:
+   ```
+   книга = book
+   стол = table
+   компютър
+   молив = pencil
+   ```
 
 4. Generate with Anki package:
    ```bash
@@ -137,7 +145,9 @@ totalrecall --gui
 
 ### Batch file format
 
-Create a text file with one Bulgarian word per line:
+Create a text file with Bulgarian words, optionally with English translations:
+
+**Format 1: Bulgarian words only**
 ```
 ябълка
 котка
@@ -145,6 +155,26 @@ Create a text file with one Bulgarian word per line:
 хляб
 вода
 ```
+
+**Format 2: Bulgarian words with translations**
+```
+книга = book
+стол = table
+прозорец = window
+компютър = computer
+молив = pencil
+```
+
+**Format 3: Mixed format**
+```
+книга = book
+котка
+стол = table
+куче
+молив = pencil
+```
+
+When translations are provided, they are used directly without calling the translation API, saving time and API quota. Spaces around the words and translations are automatically trimmed.
 
 ### Output Files
 
