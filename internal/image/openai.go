@@ -134,11 +134,18 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 
 	// Create prompt - use custom if provided, otherwise generate educational prompt
 	var prompt string
-	if opts.CustomPrompt != "" {
-		prompt = opts.CustomPrompt
+	if opts.CustomPrompt != "" && strings.TrimSpace(opts.CustomPrompt) != "" {
+		prompt = strings.TrimSpace(opts.CustomPrompt)
 		fmt.Printf("Using custom prompt: %s\n", prompt)
 	} else {
 		prompt = c.createEducationalPrompt(opts.Query, translatedWord)
+		if prompt == "" {
+			return nil, &SearchError{
+				Provider: "openai",
+				Code:     "PROMPT_GENERATION_FAILED",
+				Message:  "Failed to generate image prompt - artistic styles could not be loaded",
+			}
+		}
 	}
 
 	// Store the prompt for attribution
@@ -272,89 +279,21 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 		scene = ""
 	}
 
-	// 25% chance to ask OpenAI for a creative style
-	if rand.Float32() < 0.25 {
-		if creativeStyle := c.getCreativeStyleFromOpenAI(context.Background(), englishTranslation); creativeStyle != "" {
-			fmt.Printf("  Using OpenAI-suggested style: %s\n", creativeStyle)
-			
-			// If we have a scene, incorporate it
-			if scene != "" {
-				return fmt.Sprintf(
-					"Generate %s depicting: %s. "+
-						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: clear and recognizable, focus on the main subject. "+
-						"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-					creativeStyle, scene,
-				)
-			}
-			
-			return fmt.Sprintf(
-				"Generate %s of %s. "+
-					"The image should be educational and suitable for language learning flashcards. "+
-					"Requirements: single main subject, plain background, clear and recognizable. "+
-					"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-				creativeStyle, englishTranslation,
-			)
-		}
+	// Get styles from file or generate them
+	styles, err := c.getArtisticStyles(context.Background())
+	if err != nil {
+		// If we can't get styles, return an error by returning empty prompt
+		fmt.Printf("  ERROR: Failed to load artistic styles: %v\n", err)
+		return ""
 	}
 
-	// Define different art styles for variety (42 styles total)
-	styles := []string{
-		// Original styles (1-10)
-		"photorealistic, high quality photograph",
-		"detailed digital illustration, clean vector art style",
-		"vibrant cartoon style, animated movie quality",
-		"minimalist flat design, modern graphic style",
-		"watercolor painting, soft artistic style",
-		"pencil sketch, detailed drawing style",
-		"3D rendered, pixar-style animation",
-		"oil painting, classical art style",
-		"paper cut art, layered craft style",
-		"isometric illustration, technical drawing style",
+	// Shuffle the styles to avoid bias
+	rand.Shuffle(len(styles), func(i, j int) {
+		styles[i], styles[j] = styles[j], styles[i]
+	})
 
-		// Requested styles (11-13)
-		"superhero comic book style, dynamic action pose, bold colors, Marvel/DC aesthetic",
-		"super-realistic person practicing yoga, serene wellness photography",
-		"cute illustration with cats interacting with the subject, whimsical cat-themed",
-
-		// Additional artistic styles (14-25)
-		"impressionist painting style, Monet-inspired brushstrokes",
-		"art nouveau style, decorative organic forms, Mucha-inspired",
-		"pop art style, Andy Warhol inspired, bold contrasting colors",
-		"Japanese ukiyo-e woodblock print style, traditional aesthetic",
-		"steampunk illustration, Victorian era mechanical elements",
-		"cyberpunk neon aesthetic, futuristic digital art",
-		"medieval illuminated manuscript style, gold leaf details",
-		"graffiti street art style, urban spray paint aesthetic",
-		"stained glass window art, cathedral-inspired design",
-		"mosaic tile art style, Byzantine-inspired patterns",
-		"art deco style, geometric patterns, 1920s aesthetic",
-		"surrealist style, Salvador Dali inspired dreamlike quality",
-
-		// Photography styles (26-32)
-		"macro photography style, extreme close-up detail",
-		"vintage polaroid photograph, retro instant camera aesthetic",
-		"film noir style, dramatic black and white photography",
-		"golden hour photography, warm sunset lighting",
-		"underwater photography style, ethereal aquatic atmosphere",
-		"aerial drone photography, bird's eye view perspective",
-		"long exposure photography, motion blur effects",
-
-		// Modern digital styles (33-42)
-		"vaporwave aesthetic, 80s-90s retro digital art",
-		"low poly 3D art style, geometric simplified forms",
-		"pixel art style, 8-bit retro video game aesthetic",
-		"glitch art style, digital distortion effects",
-		"double exposure photography, artistic overlay effect",
-		"tilt-shift photography, miniature world effect",
-		"infrared photography style, otherworldly color palette",
-		"holographic iridescent style, rainbow prismatic effects",
-		"origami paper folding art style, geometric paper craft",
-		"chalk art style, sidewalk drawing aesthetic",
-	}
-
-	// Select a random style
-	selectedStyle := styles[rand.Intn(len(styles))]
+	// Select a random style from the shuffled list
+	selectedStyle := styles[0]
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
 	// Create prompt with scene if available
@@ -362,7 +301,7 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 		return fmt.Sprintf(
 			"Generate a %s depicting: %s. "+
 				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: clear and recognizable, focus on the main subject. "+
+				"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the subject is shown from an angle that makes it immediately identifiable. "+
 				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
 			selectedStyle, scene,
 		)
@@ -372,9 +311,9 @@ func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation
 	return fmt.Sprintf(
 		"Generate a %s of %s. "+
 			"The image should be educational and suitable for language learning flashcards. "+
-			"Requirements: single main subject, plain background, clear and recognizable. "+
+			"Requirements: The %s must be clearly visible and easily recognizable. Show it prominently centered with excellent lighting and sharp focus. Use an angle or perspective that makes the subject immediately identifiable. Keep the background plain or simple to ensure maximum clarity of the subject. "+
 			"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-		selectedStyle, englishTranslation,
+		selectedStyle, englishTranslation, englishTranslation,
 	)
 }
 
@@ -420,11 +359,11 @@ func (c *OpenAIClient) generateSceneDescription(ctx context.Context, bulgarianWo
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are helping create educational flashcards for language learning. Generate a brief, vivid scene description that incorporates the given English word in a memorable, contextual way. The scene should be visually interesting and help with memory retention. Keep it to 1-2 sentences, focusing on visual elements that can be illustrated. IMPORTANT: Use the English word in your scene description, NOT the Bulgarian word.",
+				Content: "You are helping create educational flashcards for language learning. Generate a brief, vivid scene description that incorporates the given English word in a memorable, contextual way. The scene should be visually interesting and help with memory retention. Keep it to 1-2 sentences, focusing on visual elements that can be illustrated. The subject (the English word) should be the clear focal point of the image, prominent and centered.",
 			},
 			{
 				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf("Create a scene description for the English word '%s' (Bulgarian: %s) that would make a memorable flashcard image. Use the English word '%s' in the scene, not the Bulgarian word.", englishTranslation, bulgarianWord, englishTranslation),
+				Content: fmt.Sprintf("Create a scene description for the English word '%s' that would make a memorable flashcard image. Make sure '%s' is the main focus and most prominent element in the scene.", englishTranslation, englishTranslation),
 			},
 		},
 		Temperature: 0.7, // Balanced temperature for creativity with consistency
@@ -536,45 +475,151 @@ func (c *OpenAIClient) getSizeHeight() int {
 	}
 }
 
-// getCreativeStyleFromOpenAI asks OpenAI for a creative photo style suggestion
-func (c *OpenAIClient) getCreativeStyleFromOpenAI(ctx context.Context, subject string) string {
-	// Check if client is nil or API key is empty
-	if c.client == nil || c.apiKey == "" {
-		return ""
+// getArtisticStyles loads artistic styles from cache or generates them via OpenAI
+func (c *OpenAIClient) getArtisticStyles(ctx context.Context) ([]string, error) {
+	// Define the styles cache file path
+	stylesFile := filepath.Join(c.cacheDir, "artistic_styles.txt")
+	
+	// Check if file exists and is less than a week old
+	fileInfo, err := os.Stat(stylesFile)
+	needsRegeneration := false
+	
+	if err != nil {
+		if os.IsNotExist(err) {
+			needsRegeneration = true
+			fmt.Println("  Artistic styles file not found, will generate new styles")
+		} else {
+			return nil, fmt.Errorf("error checking styles file: %w", err)
+		}
+	} else {
+		// Check if file is older than a week
+		weekAgo := time.Now().Add(-7 * 24 * time.Hour)
+		if fileInfo.ModTime().Before(weekAgo) {
+			needsRegeneration = true
+			fmt.Println("  Artistic styles file is older than a week, will regenerate")
+		}
 	}
 	
-	fmt.Printf("  Asking OpenAI for creative style suggestion for '%s'...\n", subject)
+	// If we need to regenerate, do it
+	if needsRegeneration {
+		styles, err := c.generateArtisticStyles(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate artistic styles: %w", err)
+		}
+		
+		// Save to file
+		if err := c.saveStylesToFile(stylesFile, styles); err != nil {
+			// Log error but continue with generated styles
+			fmt.Printf("  Warning: Could not save styles to file: %v\n", err)
+		}
+		
+		return styles, nil
+	}
+	
+	// Load from file
+	return c.loadStylesFromFile(stylesFile)
+}
 
+// generateArtisticStyles asks OpenAI to generate a list of artistic styles
+func (c *OpenAIClient) generateArtisticStyles(ctx context.Context) ([]string, error) {
+	fmt.Println("  Generating artistic styles via OpenAI...")
+	
 	req := openai.ChatCompletionRequest{
 		Model: openai.GPT4oMini,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are a creative art director. Suggest unique, interesting photo/art styles for educational flashcard images. Be creative and varied. Respond with ONLY the style description, nothing else. Keep it concise (max 15 words).",
+				Content: "You are an art expert helping to create diverse visual styles for educational flashcards. Generate exactly 42 different artistic styles that could be used for images. Include a mix of: photography styles (macro, portrait, landscape, etc.), traditional art techniques (watercolor, oil painting, pencil sketch, etc.), digital art styles (3D render, pixel art, vector illustration, etc.), artistic movements (impressionist, pop art, art deco, etc.), and other creative visual approaches. Each style should be concise (2-5 words) and distinct from the others. Format your response as a simple list with one style per line, no numbers or bullets.",
 			},
 			{
 				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf("Suggest a creative visual style for an educational image of: %s", subject),
+				Content: "Please generate 42 diverse artistic styles for creating educational images. Include various photography types, painting techniques, illustration styles, and artistic movements.",
 			},
 		},
-		Temperature: 0.9, // Higher temperature for more creativity
-		MaxTokens:   30,
+		Temperature: 0.8,
+		MaxTokens:   500,
 	}
-
+	
 	resp, err := c.client.CreateChatCompletion(ctx, req)
 	if err != nil {
-		fmt.Printf("  Failed to get creative style: %v\n", err)
-		return ""
+		return nil, fmt.Errorf("OpenAI API error: %w", err)
 	}
-
+	
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
-		return ""
+		return nil, fmt.Errorf("no response from OpenAI")
 	}
+	
+	// Parse the response into lines
+	content := strings.TrimSpace(resp.Choices[0].Message.Content)
+	lines := strings.Split(content, "\n")
+	
+	// Clean up and filter valid styles
+	var styles []string
+	for _, line := range lines {
+		style := strings.TrimSpace(line)
+		// Remove any numbering or bullets
+		style = strings.TrimPrefix(style, "- ")
+		style = strings.TrimPrefix(style, "* ")
+		style = strings.TrimPrefix(style, "• ")
+		// Remove numbers like "1. " or "42. "
+		if idx := strings.Index(style, ". "); idx > 0 && idx <= 3 {
+			style = style[idx+2:]
+		}
+		style = strings.TrimSpace(style)
+		
+		if style != "" && len(style) <= 50 { // Reasonable length check
+			styles = append(styles, style)
+		}
+	}
+	
+	// Ensure we have at least some styles
+	if len(styles) < 10 {
+		return nil, fmt.Errorf("insufficient styles generated (got %d, need at least 10)", len(styles))
+	}
+	
+	fmt.Printf("  Generated %d artistic styles\n", len(styles))
+	return styles, nil
+}
 
-	style := strings.TrimSpace(resp.Choices[0].Message.Content)
-	// Remove any trailing punctuation
-	style = strings.TrimSuffix(style, ".")
-	style = strings.TrimSuffix(style, "!")
+// saveStylesToFile saves the styles to a file
+func (c *OpenAIClient) saveStylesToFile(filename string, styles []string) error {
+	// Ensure directory exists
+	dir := filepath.Dir(filename)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	
+	// Write styles to file
+	content := strings.Join(styles, "\n")
+	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+	
+	fmt.Printf("  Saved %d styles to %s\n", len(styles), filename)
+	return nil
+}
 
-	return style
+// loadStylesFromFile loads styles from a file
+func (c *OpenAIClient) loadStylesFromFile(filename string) ([]string, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	
+	// Parse lines
+	lines := strings.Split(string(data), "\n")
+	var styles []string
+	for _, line := range lines {
+		style := strings.TrimSpace(line)
+		if style != "" {
+			styles = append(styles, style)
+		}
+	}
+	
+	if len(styles) == 0 {
+		return nil, fmt.Errorf("no styles found in file")
+	}
+	
+	fmt.Printf("  Loaded %d styles from cache\n", len(styles))
+	return styles, nil
 }

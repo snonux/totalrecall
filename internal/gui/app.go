@@ -635,17 +635,26 @@ func (a *Application) onRegenerateImage() {
 			// Use the text from translationEntry if currentTranslation is not set
 			translation = strings.TrimSpace(a.translationEntry.Text)
 		}
-		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt, translation)
+		// Store the word we're generating for
+		wordForGeneration := a.currentWord
+		imageFile, err := a.generateImagesWithPrompt(wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
 			})
 		} else {
 			if imageFile != "" {
-				a.currentImage = imageFile
-				fyne.Do(func() {
-					a.imageDisplay.SetImages([]string{imageFile})
-				})
+				// Only update if we're still on the same word
+				a.mu.Lock()
+				if a.currentWord == wordForGeneration {
+					a.currentImage = imageFile
+					a.mu.Unlock()
+					fyne.Do(func() {
+						a.imageDisplay.SetImages([]string{imageFile})
+					})
+				} else {
+					a.mu.Unlock()
+				}
 			}
 		}
 		
@@ -686,17 +695,26 @@ func (a *Application) onRegenerateRandomImage() {
 			// Use the text from translationEntry if currentTranslation is not set
 			translation = strings.TrimSpace(a.translationEntry.Text)
 		}
-		imageFile, err := a.generateImagesWithPrompt(a.currentWord, customPrompt, translation)
+		// Store the word we're generating for
+		wordForGeneration := a.currentWord
+		imageFile, err := a.generateImagesWithPrompt(wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Random image generation failed: %w", err))
 			})
 		} else {
 			if imageFile != "" {
-				a.currentImage = imageFile
-				fyne.Do(func() {
-					a.imageDisplay.SetImages([]string{imageFile})
-				})
+				// Only update if we're still on the same word
+				a.mu.Lock()
+				if a.currentWord == wordForGeneration {
+					a.currentImage = imageFile
+					a.mu.Unlock()
+					fyne.Do(func() {
+						a.imageDisplay.SetImages([]string{imageFile})
+					})
+				} else {
+					a.mu.Unlock()
+				}
 			}
 		}
 		
