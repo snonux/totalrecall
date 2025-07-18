@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/sashabaranov/go-openai"
 	
@@ -192,9 +193,18 @@ func (a *Application) setupUI() {
 		a.window.Canvas().Unfocus()
 	}
 	
-	a.submitButton = widget.NewButton("Generate (g)", a.onSubmit)
-	a.prevWordBtn = widget.NewButton("◀ Prev (←)", a.onPrevWord)
-	a.nextWordBtn = widget.NewButton("Next (→) ▶", a.onNextWord)
+	// Create navigation buttons with tooltips
+	a.submitButton = widget.NewButtonWithIcon("", theme.ConfirmIcon(), a.onSubmit)
+	submitLabel := widget.NewLabelWithStyle("Generate (g)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	submitBtn := container.NewVBox(a.submitButton, submitLabel)
+	
+	a.prevWordBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), a.onPrevWord)
+	prevLabel := widget.NewLabelWithStyle("Previous (←)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	prevBtn := container.NewVBox(a.prevWordBtn, prevLabel)
+	
+	a.nextWordBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), a.onNextWord)
+	nextLabel := widget.NewLabelWithStyle("Next (→)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	nextBtn := container.NewVBox(a.nextWordBtn, nextLabel)
 	
 	// Create a grid layout for inputs
 	inputGrid := container.New(layout.NewGridLayout(2),
@@ -204,8 +214,8 @@ func (a *Application) setupUI() {
 	
 	inputSection := container.NewBorder(
 		nil, nil, 
-		a.prevWordBtn,
-		container.NewHBox(a.submitButton, a.nextWordBtn),
+		prevBtn,
+		container.NewHBox(submitBtn, nextBtn),
 		inputGrid,
 	)
 	
@@ -269,27 +279,44 @@ func (a *Application) setupUI() {
 		imageSection,
 	)
 	
-	// Create action buttons
-	a.keepButton = widget.NewButton("New Word (n)", a.onKeepAndContinue)
-	a.regenerateImageBtn = widget.NewButton("Regenerate Image (i)", a.onRegenerateImage)
-	a.regenerateRandomImageBtn = widget.NewButton("Random Image (m)", a.onRegenerateRandomImage)
-	a.regenerateAudioBtn = widget.NewButton("Regenerate Audio (a)", a.onRegenerateAudio)
-	a.regenerateAllBtn = widget.NewButton("Regenerate All (r)", a.onRegenerateAll)
-	a.deleteButton = widget.NewButton("Delete (d)", a.onDelete)
+	// Create action buttons with icons and tooltips
+	a.keepButton = widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
+	keepLabel := widget.NewLabelWithStyle("New Word (n)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	keepBtn := container.NewVBox(a.keepButton, keepLabel)
+	
+	a.regenerateImageBtn = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateImage)
+	imageLabel := widget.NewLabelWithStyle("Regenerate Image (i)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	regenerateImageBtn := container.NewVBox(a.regenerateImageBtn, imageLabel)
+	
+	a.regenerateRandomImageBtn = widget.NewButtonWithIcon("", theme.MediaPhotoIcon(), a.onRegenerateRandomImage)
+	randomLabel := widget.NewLabelWithStyle("Random Image (m)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	regenerateRandomBtn := container.NewVBox(a.regenerateRandomImageBtn, randomLabel)
+	
+	a.regenerateAudioBtn = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), a.onRegenerateAudio)
+	audioLabel := widget.NewLabelWithStyle("Regenerate Audio (a)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	regenerateAudioBtn := container.NewVBox(a.regenerateAudioBtn, audioLabel)
+	
+	a.regenerateAllBtn = widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), a.onRegenerateAll)
+	allLabel := widget.NewLabelWithStyle("Regenerate All (r)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	regenerateAllBtn := container.NewVBox(a.regenerateAllBtn, allLabel)
+	
+	a.deleteButton = widget.NewButtonWithIcon("", theme.DeleteIcon(), a.onDelete)
 	a.deleteButton.Importance = widget.DangerImportance
+	deleteLabel := widget.NewLabelWithStyle("Delete (d)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	deleteBtn := container.NewVBox(a.deleteButton, deleteLabel)
 	
 	// Initially disable action buttons
 	a.setActionButtonsEnabled(false)
 	
 	actionSection := container.NewHBox(
-		a.keepButton,
+		keepBtn,
 		layout.NewSpacer(),
-		a.deleteButton,
+		deleteBtn,
 		widget.NewSeparator(),
-		a.regenerateImageBtn,
-		a.regenerateRandomImageBtn,
-		a.regenerateAudioBtn,
-		a.regenerateAllBtn,
+		regenerateImageBtn,
+		regenerateRandomBtn,
+		regenerateAudioBtn,
+		regenerateAllBtn,
 	)
 	
 	// Create status section
@@ -344,6 +371,8 @@ func (a *Application) setupUI() {
 
 // Run starts the GUI application
 func (a *Application) Run() {
+	// Focus the Bulgarian word input on startup
+	a.window.Canvas().Focus(a.wordInput)
 	a.window.ShowAndRun()
 }
 
@@ -1237,6 +1266,12 @@ func (a *Application) setupKeyboardShortcuts() {
 			return
 		}
 		
+		// Handle Tab key for custom focus navigation
+		if ev.Name == fyne.KeyTab {
+			a.handleTabNavigation()
+			return
+		}
+		
 		// Check if input field is focused
 		focused := a.window.Canvas().Focused()
 		isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
@@ -1253,6 +1288,26 @@ func (a *Application) setupKeyboardShortcuts() {
 		
 		a.handleShortcutKey(ev.Name)
 	})
+}
+
+// handleTabNavigation manages custom Tab navigation order
+func (a *Application) handleTabNavigation() {
+	focused := a.window.Canvas().Focused()
+	
+	switch focused {
+	case a.wordInput:
+		// From Bulgarian -> English
+		a.window.Canvas().Focus(a.translationEntry)
+	case a.translationEntry:
+		// From English -> Image prompt
+		a.window.Canvas().Focus(a.imagePromptEntry)
+	case a.imagePromptEntry:
+		// From Image prompt -> Bulgarian (cycle back)
+		a.window.Canvas().Focus(a.wordInput)
+	default:
+		// If nothing focused, start with Bulgarian
+		a.window.Canvas().Focus(a.wordInput)
+	}
 }
 
 // handleShortcutKey handles the actual shortcut action

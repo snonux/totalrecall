@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -39,10 +40,21 @@ func NewAudioPlayer() *AudioPlayer {
 	p.playButton.Disable()
 	p.stopButton.Disable()
 	
-	// Create container
-	p.container = container.NewHBox(
+	// Create containers with tooltips
+	playContainer := container.NewVBox(
 		p.playButton,
+		widget.NewLabelWithStyle("Play (p)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}),
+	)
+	
+	stopContainer := container.NewVBox(
 		p.stopButton,
+		widget.NewLabelWithStyle("Stop", fyne.TextAlignCenter, fyne.TextStyle{Italic: true}),
+	)
+	
+	// Create main container
+	p.container = container.NewHBox(
+		playContainer,
+		stopContainer,
 		layout.NewSpacer(),
 		p.statusLabel,
 	)
@@ -164,7 +176,7 @@ func (p *AudioPlayer) startPlayback() error {
 			// Playback finished normally
 			fyne.Do(func() {
 				p.isPlaying = false
-				p.playButton.SetText("▶ Play (p)")
+				p.playButton.SetIcon(theme.MediaPlayIcon())
 				p.stopButton.Disable()
 				p.statusLabel.SetText("Finished: " + filepath.Base(p.audioFile))
 			})
