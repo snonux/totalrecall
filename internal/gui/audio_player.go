@@ -2,9 +2,11 @@ package gui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -23,9 +25,10 @@ type AudioPlayer struct {
 	stopButton  *ttwidget.Button
 	statusLabel *widget.Label
 
-	audioFile string
-	isPlaying bool
-	playCmd   *exec.Cmd
+	audioFile  string
+	isPlaying  bool
+	playCmd    *exec.Cmd
+	voiceInfo  string // Stores voice and speed info
 }
 
 // NewAudioPlayer creates a new audio player widget
@@ -71,7 +74,34 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 
 	if audioFile != "" {
 		p.playButton.Enable()
-		p.statusLabel.SetText(fmt.Sprintf("Audio: %s", filepath.Base(audioFile)))
+		
+		// Try to load voice metadata
+		wordDir := filepath.Dir(audioFile)
+		metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
+		voice := ""
+		speed := ""
+		
+		if data, err := os.ReadFile(metadataFile); err == nil {
+			lines := strings.Split(string(data), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "voice=") {
+					voice = strings.TrimPrefix(line, "voice=")
+				} else if strings.HasPrefix(line, "speed=") {
+					speed = strings.TrimPrefix(line, "speed=")
+				}
+			}
+		}
+		
+		// Store voice info
+		if voice != "" && speed != "" {
+			p.voiceInfo = fmt.Sprintf(" (voice: %s, speed: %s)", voice, speed)
+		} else {
+			p.voiceInfo = ""
+		}
+		
+		// Format status text with voice and speed info
+		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
+		p.statusLabel.SetText(statusText)
 	} else {
 		p.Clear()
 	}
@@ -82,6 +112,7 @@ func (p *AudioPlayer) Clear() {
 	p.onStop() // Stop any playing audio
 	p.audioFile = ""
 	p.isPlaying = false
+	p.voiceInfo = ""
 	p.playButton.Disable()
 	p.stopButton.Disable()
 	p.statusLabel.SetText("No audio loaded")
@@ -108,7 +139,7 @@ func (p *AudioPlayer) onPlay() {
 	p.isPlaying = true
 	p.playButton.SetIcon(theme.MediaPauseIcon())
 	p.stopButton.Enable()
-	p.statusLabel.SetText("Playing: " + filepath.Base(p.audioFile))
+	p.statusLabel.SetText(fmt.Sprintf("Playing: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 }
 
 // onStop handles stop button click
@@ -121,7 +152,7 @@ func (p *AudioPlayer) onStop() {
 	p.isPlaying = false
 	p.playButton.SetIcon(theme.MediaPlayIcon())
 	p.stopButton.Disable()
-	p.statusLabel.SetText("Stopped: " + filepath.Base(p.audioFile))
+	p.statusLabel.SetText(fmt.Sprintf("Stopped: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 }
 
 // Play triggers audio playback
@@ -174,7 +205,7 @@ func (p *AudioPlayer) startPlayback() error {
 				p.isPlaying = false
 				p.playButton.SetIcon(theme.MediaPlayIcon())
 				p.stopButton.Disable()
-				p.statusLabel.SetText("Finished: " + filepath.Base(p.audioFile))
+				p.statusLabel.SetText(fmt.Sprintf("Finished: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 			})
 		}
 	}()

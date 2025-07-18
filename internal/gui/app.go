@@ -65,6 +65,7 @@ type Application struct {
 	currentWordIndex   int
 	deleteConfirming   bool        // Track if we're in delete confirmation mode
 	wordChangeTimer    *time.Timer // Timer for detecting word changes
+	fileCheckTicker    *time.Ticker // Ticker for checking missing files
 
 	// Word processing queue
 	queue *WordQueue
@@ -88,7 +89,6 @@ type Config struct {
 	OutputDir     string
 	AudioFormat   string
 	ImageProvider string
-	EnableCache   bool
 	OpenAIKey     string
 }
 
@@ -98,7 +98,6 @@ func DefaultConfig() *Config {
 		OutputDir:     "./anki_cards",
 		AudioFormat:   "mp3",
 		ImageProvider: "openai",
-		EnableCache:   true,
 	}
 }
 
@@ -135,7 +134,7 @@ func New(config *Config) *Application {
 		OpenAIVoice:       "nova",
 		OpenAISpeed:       0.9,
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		EnableCache:       config.EnableCache,
+		EnableCache:       true,
 		CacheDir:          "./.audio_cache",
 	}
 
@@ -371,6 +370,10 @@ func (a *Application) setupUI() {
 	// Add the tooltip layer to enable tooltips
 	a.window.SetContent(fynetooltip.AddWindowToolTipLayer(content, a.window.Canvas()))
 	a.window.SetOnClosed(func() {
+		// Stop file check ticker
+		if a.fileCheckTicker != nil {
+			a.fileCheckTicker.Stop()
+		}
 		a.cancel()
 		a.queue.Stop()
 		a.wg.Wait()
@@ -1080,6 +1083,12 @@ func (a *Application) showError(err error) {
 }
 
 func (a *Application) clearUI() {
+	// Stop file check ticker when clearing UI
+	if a.fileCheckTicker != nil {
+		a.fileCheckTicker.Stop()
+		a.fileCheckTicker = nil
+	}
+	
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
 	// Don't clear the word input or translation entry - they should stay populated

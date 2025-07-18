@@ -334,6 +334,13 @@ func generateAudio(word string) error {
 }
 
 func generateAudioWithVoice(word, voice string) error {
+	// Generate random speed between 0.90 and 1.00 if not explicitly set
+	speed := openAISpeed
+	if openAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
+		// Default was used, generate random speed
+		speed = 0.90 + rand.Float64()*0.10
+	}
+	
 	// Create audio provider configuration
 	providerConfig := &audio.Config{
 		Provider:     "openai",
@@ -344,7 +351,7 @@ func generateAudioWithVoice(word, voice string) error {
 		OpenAIKey:         getOpenAIKey(),
 		OpenAIModel:       openAIModel,
 		OpenAIVoice:       voice,
-		OpenAISpeed:       openAISpeed,
+		OpenAISpeed:       speed,
 		OpenAIInstruction: openAIInstruction,
 		
 		// Caching
@@ -437,8 +444,6 @@ func downloadImagesWithTranslation(word, translation string) error {
 			Size:        openAIImageSize,
 			Quality:     openAIImageQuality,
 			Style:       openAIImageStyle,
-			CacheDir:    viper.GetString("image.cache_dir"),
-			EnableCache: viper.GetBool("image.enable_cache"),
 		}
 		
 		// Use config file values if not overridden by flags
@@ -455,13 +460,6 @@ func downloadImagesWithTranslation(word, translation string) error {
 			openaiConfig.Style = viper.GetString("image.openai_style")
 		}
 		
-		// Set defaults
-		if openaiConfig.CacheDir == "" {
-			openaiConfig.CacheDir = "./.image_cache"
-		}
-		if !viper.IsSet("image.enable_cache") {
-			openaiConfig.EnableCache = true
-		}
 		
 		searcher = image.NewOpenAIClient(openaiConfig)
 		if openaiConfig.APIKey == "" {
@@ -513,6 +511,19 @@ func downloadImagesWithTranslation(word, translation string) error {
 		return err
 	}
 	fmt.Printf("    Downloaded: %s\n", path)
+	
+	// If using OpenAI, save the prompt
+	if imageAPI == "openai" {
+		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
+			usedPrompt := openaiClient.GetLastPrompt()
+			if usedPrompt != "" {
+				promptFile := filepath.Join(wordDir, "image_prompt.txt")
+				if err := os.WriteFile(promptFile, []byte(usedPrompt), 0644); err != nil {
+					fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
+				}
+			}
+		}
+	}
 	
 	return nil
 }
@@ -825,6 +836,15 @@ func saveAudioAttribution(word, audioFile string, config *audio.Config) error {
 		return fmt.Errorf("failed to write audio attribution file: %w", err)
 	}
 	
+	// Also save metadata for GUI display
+	wordDir := filepath.Dir(audioFile)
+	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
+	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\n", config.OpenAIVoice, config.OpenAISpeed)
+	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+		// Non-fatal error, just log it
+		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
+	}
+	
 	return nil
 }
 
@@ -834,7 +854,6 @@ func runGUIMode() error {
 		OutputDir:     outputDir,
 		AudioFormat:   audioFormat,
 		ImageProvider: imageAPI,
-		EnableCache:   viper.GetBool("cache.enable"),
 		OpenAIKey:     getOpenAIKey(),
 	}
 	

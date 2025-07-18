@@ -197,12 +197,32 @@ func (a *Application) getAllAvailableWords() []string {
 
 // onPrevWord loads the previous word
 func (a *Application) onPrevWord() {
+	// Store current word before rescanning
+	currentWord := a.currentWord
+	
+	// Rescan to pick up any new cards added externally
+	a.scanExistingWords()
+	
 	allWords := a.getAllAvailableWords()
 	if len(allWords) == 0 {
 		return
 	}
 	
-	newIndex := a.currentWordIndex - 1
+	// Find current word's new index after rescan
+	currentIndex := -1
+	for i, word := range allWords {
+		if word == currentWord {
+			currentIndex = i
+			break
+		}
+	}
+	
+	// If current word not found, use the stored index
+	if currentIndex == -1 {
+		currentIndex = a.currentWordIndex
+	}
+	
+	newIndex := currentIndex - 1
 	// Wrap around to the end if at beginning
 	if newIndex < 0 {
 		newIndex = len(allWords) - 1
@@ -213,12 +233,32 @@ func (a *Application) onPrevWord() {
 
 // onNextWord loads the next word
 func (a *Application) onNextWord() {
+	// Store current word before rescanning
+	currentWord := a.currentWord
+	
+	// Rescan to pick up any new cards added externally
+	a.scanExistingWords()
+	
 	allWords := a.getAllAvailableWords()
 	if len(allWords) == 0 {
 		return
 	}
 	
-	newIndex := a.currentWordIndex + 1
+	// Find current word's new index after rescan
+	currentIndex := -1
+	for i, word := range allWords {
+		if word == currentWord {
+			currentIndex = i
+			break
+		}
+	}
+	
+	// If current word not found, use the stored index
+	if currentIndex == -1 {
+		currentIndex = a.currentWordIndex
+	}
+	
+	newIndex := currentIndex + 1
 	// Wrap around to the beginning if at end
 	if newIndex >= len(allWords) {
 		newIndex = 0
@@ -229,6 +269,12 @@ func (a *Application) onNextWord() {
 
 // loadWordByIndex loads a word by its index in the combined word list
 func (a *Application) loadWordByIndex(index int) {
+	// Stop any existing file check ticker
+	if a.fileCheckTicker != nil {
+		a.fileCheckTicker.Stop()
+		a.fileCheckTicker = nil
+	}
+	
 	allWords := a.getAllAvailableWords()
 	if index < 0 || index >= len(allWords) {
 		return
@@ -269,7 +315,7 @@ func (a *Application) loadWordByIndex(index int) {
 				
 				// Load image prompt from disk if it exists
 				if wordDir := a.findCardDirectory(word); wordDir != "" {
-					promptFile := filepath.Join(wordDir, "prompt.txt")
+					promptFile := filepath.Join(wordDir, "image_prompt.txt")
 					if data, err := os.ReadFile(promptFile); err == nil {
 						prompt := strings.TrimSpace(string(data))
 						a.imagePromptEntry.SetText(prompt)
@@ -297,6 +343,9 @@ func (a *Application) loadWordByIndex(index int) {
 	if hasContent {
 		a.setActionButtonsEnabled(true)
 	}
+	
+	// Start ticker to check for missing files
+	a.startFileCheckTicker()
 }
 
 // loadExistingFiles loads existing files for a word
@@ -326,7 +375,7 @@ func (a *Application) loadExistingFiles(word string) {
 	}
 	
 	// Load image prompt file
-	promptFile := filepath.Join(wordDir, "prompt.txt")
+	promptFile := filepath.Join(wordDir, "image_prompt.txt")
 	if data, err := os.ReadFile(promptFile); err == nil {
 		prompt := strings.TrimSpace(string(data))
 		fmt.Printf("Loaded prompt from file: %s\n", promptFile)
@@ -402,6 +451,112 @@ func (a *Application) loadExistingFiles(word string) {
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Loaded: %s", word))
 	})
+}
+
+// startFileCheckTicker starts a ticker to check for missing files
+func (a *Application) startFileCheckTicker() {
+	// Create ticker that checks every 2 seconds
+	a.fileCheckTicker = time.NewTicker(2 * time.Second)
+	
+	go func() {
+		for range a.fileCheckTicker.C {
+			// Only check files for the current word
+			a.mu.Lock()
+			currentWord := a.currentWord
+			a.mu.Unlock()
+			
+			if currentWord != "" {
+				a.checkForMissingFiles(currentWord)
+			}
+		}
+	}()
+}
+
+// checkForMissingFiles checks for missing files and attempts to load them
+func (a *Application) checkForMissingFiles(word string) {
+	// Find the card directory for this word
+	wordDir := a.findCardDirectory(word)
+	if wordDir == "" {
+		return
+	}
+	
+	// Check for missing audio file
+	if a.currentAudioFile == "" {
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+		if _, err := os.Stat(audioFile); err == nil {
+			a.currentAudioFile = audioFile
+			fyne.Do(func() {
+				a.audioPlayer.SetAudioFile(audioFile)
+				a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
+			})
+		}
+	}
+	
+	// Check for missing image file
+	if a.currentImage == "" {
+		patterns := []string{"image.jpg", "image.png"}
+		for _, pattern := range patterns {
+			imagePath := filepath.Join(wordDir, pattern)
+			if _, err := os.Stat(imagePath); err == nil {
+				a.currentImage = imagePath
+				fyne.Do(func() {
+					a.imageDisplay.SetImages([]string{imagePath})
+					a.updateStatus(fmt.Sprintf("Found image file for %s", word))
+				})
+				break
+			}
+		}
+	}
+	
+	// Check for missing translation
+	if a.currentTranslation == "" {
+		translationFile := filepath.Join(wordDir, "translation.txt")
+		if data, err := os.ReadFile(translationFile); err == nil {
+			content := string(data)
+			parts := strings.Split(content, "=")
+			if len(parts) >= 2 {
+				a.currentTranslation = strings.TrimSpace(parts[1])
+				fyne.Do(func() {
+					a.translationEntry.SetText(a.currentTranslation)
+					a.updateStatus(fmt.Sprintf("Found translation for %s", word))
+				})
+			}
+		}
+	}
+	
+	// Check for missing prompt
+	currentPrompt := a.imagePromptEntry.Text
+	if currentPrompt == "" {
+		promptFile := filepath.Join(wordDir, "image_prompt.txt")
+		if data, err := os.ReadFile(promptFile); err == nil {
+			prompt := strings.TrimSpace(string(data))
+			fyne.Do(func() {
+				a.imagePromptEntry.SetText(prompt)
+				a.updateStatus(fmt.Sprintf("Found prompt for %s", word))
+			})
+		}
+	}
+	
+	// Check for missing phonetic info
+	currentPhonetic := a.phoneticDisplay.Text
+	if currentPhonetic == "" {
+		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
+		if data, err := os.ReadFile(phoneticFile); err == nil {
+			phoneticInfo := string(data)
+			fyne.Do(func() {
+				a.phoneticDisplay.SetText(phoneticInfo)
+				a.updateStatus(fmt.Sprintf("Found phonetic info for %s", word))
+			})
+		}
+	}
+	
+	// Update action buttons if we now have content
+	hasContent := a.currentAudioFile != "" || a.currentImage != "" || a.currentTranslation != ""
+	if hasContent {
+		fyne.Do(func() {
+			a.setActionButtonsEnabled(true)
+		})
+	}
 }
 
 // onDelete moves the current word's files to trash bin

@@ -21,7 +21,7 @@ It has mainly been vibe coded using Claude Code CLI.
 - Batch processing of multiple words
 - Anki-compatible CSV export with translations
 - Random voice variants and speech speed
-- Audio and image caching to save API costs
+- Audio caching to save API costs
 
 ## Installation
 
@@ -121,10 +121,6 @@ image:
   openai_size: "512x512"    # Size: 256x256, 512x512, 1024x1024
   openai_quality: "standard" # Quality: standard or hd (dall-e-3 only)
   openai_style: "natural"    # Style: natural or vivid (dall-e-3 only)
-  
-  # Caching
-  enable_cache: true
-  cache_dir: "./.image_cache"
 
 output:
   directory: ./anki_cards
