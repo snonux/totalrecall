@@ -84,17 +84,37 @@ func (a *Application) translateEnglishToBulgarian(word string) (string, error) {
 
 // generateAudio generates audio for a word
 func (a *Application) generateAudio(word string) (string, error) {
-	// Get available voices
-	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	// Check if this is a regeneration by looking for existing audio file
+	wordDir := a.findCardDirectory(word)
+	isRegeneration := false
+	if wordDir != "" {
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+		if _, err := os.Stat(audioFile); err == nil {
+			isRegeneration = true
+		}
+	}
 	
-	// Select a random voice
-	rand.Seed(time.Now().UnixNano())
-	voice := allVoices[rand.Intn(len(allVoices))]
+	// For regeneration, use random voice and speed; otherwise use defaults
+	var voice string
+	var speed float64
 	
-	// Generate random speed between 0.90 and 1.00
-	speed := 0.90 + rand.Float64()*0.10
+	if isRegeneration {
+		// Get available voices
+		allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+		
+		// Select a random voice
+		rand.Seed(time.Now().UnixNano())
+		voice = allVoices[rand.Intn(len(allVoices))]
+		
+		// Generate random speed between 0.90 and 1.00
+		speed = 0.90 + rand.Float64()*0.10
+	} else {
+		// Use defaults for first generation
+		voice = "alloy"
+		speed = 0.98
+	}
 	
-	// Update audio config with random voice and speed
+	// Update audio config with selected voice and speed
 	a.audioConfig.OpenAIVoice = voice
 	a.audioConfig.OpenAISpeed = speed
 	
@@ -104,8 +124,8 @@ func (a *Application) generateAudio(word string) (string, error) {
 		return "", err
 	}
 	
-	// Find existing card directory or create new one
-	wordDir := a.findCardDirectory(word)
+	// Find existing card directory or create new one again after provider creation
+	wordDir = a.findCardDirectory(word)
 	if wordDir == "" {
 		// No existing directory, create new one with card ID
 		cardID := internal.GenerateCardID(word)
