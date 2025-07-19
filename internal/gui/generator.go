@@ -112,7 +112,7 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 	} else {
 		// Use defaults for first generation
 		voice = "alloy"
-		speed = 0.98
+		speed = 1.0
 	}
 
 	// Update audio config with selected voice and speed
