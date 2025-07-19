@@ -191,43 +191,43 @@ func (g *APKGGenerator) createTables(db *sql.DB) error {
 // insertCollection inserts the collection metadata
 func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 	now := time.Now().Unix()
-	
+
 	// Create deck configuration
 	// The arrays are [learningCount, reviewCount] for today's stats
 	decks := map[string]interface{}{
 		"1": map[string]interface{}{
-			"id":         1,
-			"name":       "Default",
-			"mod":        now,
-			"desc":       "",
-			"collapsed":  false,
-			"dyn":        0,
-			"conf":       1,
-			"usn":        0,
-			"newToday":   []int{0, 0},
-			"revToday":   []int{0, 0},
-			"lrnToday":   []int{0, 0},
-			"timeToday":  []int{0, 0},
+			"id":               1,
+			"name":             "Default",
+			"mod":              now,
+			"desc":             "",
+			"collapsed":        false,
+			"dyn":              0,
+			"conf":             1,
+			"usn":              0,
+			"newToday":         []int{0, 0},
+			"revToday":         []int{0, 0},
+			"lrnToday":         []int{0, 0},
+			"timeToday":        []int{0, 0},
 			"browserCollapsed": false,
-			"extendNew": 10,
-			"extendRev": 50,
+			"extendNew":        10,
+			"extendRev":        50,
 		},
 		fmt.Sprintf("%d", g.deckID): map[string]interface{}{
-			"id":         g.deckID,
-			"name":       g.deckName,
-			"mod":        now,
-			"desc":       "Bulgarian vocabulary cards created by TotalRecall",
-			"collapsed":  false,
-			"dyn":        0,
-			"conf":       1,
-			"usn":        0,
-			"newToday":   []int{0, 0},
-			"revToday":   []int{0, 0},
-			"lrnToday":   []int{0, 0},
-			"timeToday":  []int{0, 0},
+			"id":               g.deckID,
+			"name":             g.deckName,
+			"mod":              now,
+			"desc":             "Bulgarian vocabulary cards created by TotalRecall",
+			"collapsed":        false,
+			"dyn":              0,
+			"conf":             1,
+			"usn":              0,
+			"newToday":         []int{0, 0},
+			"revToday":         []int{0, 0},
+			"lrnToday":         []int{0, 0},
+			"timeToday":        []int{0, 0},
 			"browserCollapsed": false,
-			"extendNew": 10,
-			"extendRev": 50,
+			"extendNew":        10,
+			"extendRev":        50,
 		},
 	}
 	decksJSON, _ := json.Marshal(decks)
@@ -240,19 +240,19 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 
 	// Default configuration
 	conf := map[string]interface{}{
-		"nextPos": 1,
-		"estTimes": true,
-		"activeDecks": []int64{1},
-		"sortType": "noteFld",
+		"nextPos":       1,
+		"estTimes":      true,
+		"activeDecks":   []int64{1},
+		"sortType":      "noteFld",
 		"sortBackwards": false,
-		"addToCur": true,
-		"curDeck": 1,
-		"newSpread": 0,
-		"dueCounts": true,
-		"collapseTime": 1200,
-		"timeLim": 0,
-		"schedVer": 1,
-		"curModel": fmt.Sprintf("%d", g.modelID),
+		"addToCur":      true,
+		"curDeck":       1,
+		"newSpread":     0,
+		"dueCounts":     true,
+		"collapseTime":  1200,
+		"timeLim":       0,
+		"schedVer":      1,
+		"curModel":      fmt.Sprintf("%d", g.modelID),
 		"dayLearnFirst": false,
 	}
 	confJSON, _ := json.Marshal(conf)
@@ -260,59 +260,59 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 	// Deck options
 	dconf := map[string]interface{}{
 		"1": map[string]interface{}{
-			"id": 1,
+			"id":   1,
 			"name": "Default",
-			"dyn": 0,
+			"dyn":  0,
 			"new": map[string]interface{}{
-				"delays": []int{1, 10},
-				"ints": []int{1, 4, 7},
+				"delays":        []int{1, 10},
+				"ints":          []int{1, 4, 7},
 				"initialFactor": 2500,
-				"perDay": 20,
-				"order": 1,
-				"bury": true,
-				"separate": true,
+				"perDay":        20,
+				"order":         1,
+				"bury":          true,
+				"separate":      true,
 			},
 			"lapse": map[string]interface{}{
-				"delays": []int{10},
-				"mult": 0,
-				"minInt": 1,
-				"leechFails": 8,
+				"delays":      []int{10},
+				"mult":        0,
+				"minInt":      1,
+				"leechFails":  8,
 				"leechAction": 0,
 			},
 			"rev": map[string]interface{}{
-				"perDay": 100,
-				"ease4": 1.3,
-				"fuzz": 0.05,
-				"maxIvl": 36500,
-				"ivlFct": 1,
-				"bury": true,
+				"perDay":   100,
+				"ease4":    1.3,
+				"fuzz":     0.05,
+				"maxIvl":   36500,
+				"ivlFct":   1,
+				"bury":     true,
 				"minSpace": 1,
 			},
-			"timer": 0,
+			"timer":    0,
 			"maxTaken": 60,
-			"usn": 0,
-			"mod": now,
+			"usn":      0,
+			"mod":      now,
 			"autoplay": true,
-			"replayq": true,
+			"replayq":  true,
 		},
 	}
 	dconfJSON, _ := json.Marshal(dconf)
 
 	query := `INSERT INTO col VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := db.Exec(query,
-		1,              // id
-		now,            // crt
-		now*1000,       // mod
-		now*1000,       // scm
-		11,             // ver (schema version)
-		0,              // dty
-		0,              // usn
-		0,              // ls
+		1,        // id
+		now,      // crt
+		now*1000, // mod
+		now*1000, // scm
+		11,       // ver (schema version)
+		0,        // dty
+		0,        // usn
+		0,        // ls
 		string(confJSON),
 		string(modelsJSON),
 		string(decksJSON),
 		string(dconfJSON),
-		"{}",           // tags
+		"{}", // tags
 	)
 	return err
 }
@@ -320,11 +320,11 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 // createNoteTypeConfig creates the note type configuration
 func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"id":   g.modelID,
-		"name": "Bulgarian Vocabulary",
-		"type": 0,
-		"mod":  time.Now().Unix(),
-		"usn":  -1,
+		"id":    g.modelID,
+		"name":  "Vocabulary from TotalRecall",
+		"type":  0,
+		"mod":   time.Now().Unix(),
+		"usn":   -1,
 		"sortf": 0,
 		"did":   g.deckID,
 		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}},
@@ -387,11 +387,11 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 		},
 		"tmpls": []map[string]interface{}{
 			{
-				"name": "Card 1",
-				"ord":  0,
-				"qfmt": g.getFrontTemplate(),
-				"afmt": g.getBackTemplate(),
-				"did":  nil,
+				"name":  "Card 1",
+				"ord":   0,
+				"qfmt":  g.getFrontTemplate(),
+				"afmt":  g.getBackTemplate(),
+				"did":   nil,
 				"bqfmt": "",
 				"bafmt": "",
 			},
@@ -490,18 +490,18 @@ hr#answer {
 // insertNotesAndCards inserts all notes and cards into the database
 func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 	now := time.Now()
-	
+
 	for i, card := range g.cards {
 		// Generate unique IDs
 		noteID := now.UnixMilli() + int64(i*2)
 		cardID := noteID + 1
-		
+
 		// Prepare field values
 		english := card.Translation
 		if english == "" {
 			english = "Translation needed"
 		}
-		
+
 		imageField := ""
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
 			// Get card ID from the source path (parent directory name)
@@ -509,13 +509,13 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 			originalFilename := filepath.Base(card.ImageFile)
 			// Create unique filename with card ID prefix
 			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-			
+
 			if _, ok := g.mediaFiles[uniqueFilename]; ok {
 				// Use the unique filename in the card content
 				imageField = fmt.Sprintf(`<img src="%s">`, uniqueFilename)
 			}
 		}
-		
+
 		audioField := ""
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
 			// Get card ID from the source path (parent directory name)
@@ -523,13 +523,13 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 			originalFilename := filepath.Base(card.AudioFile)
 			// Create unique filename with card ID prefix
 			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-			
+
 			if _, ok := g.mediaFiles[uniqueFilename]; ok {
 				// Use the unique filename in the card content
 				audioField = fmt.Sprintf("[sound:%s]", uniqueFilename)
 			}
 		}
-		
+
 		// Join fields with field separator (ASCII 31)
 		fields := strings.Join([]string{
 			english,
@@ -538,63 +538,63 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 			audioField,
 			card.Notes,
 		}, "\x1f")
-		
+
 		// Generate GUID
 		guid := fmt.Sprintf("tr_%d_%s", now.Unix(), card.Bulgarian)
-		
+
 		// Insert note
 		noteQuery := `INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err := db.Exec(noteQuery,
-			noteID,           // id
-			guid,             // guid
-			g.modelID,        // mid
-			now.Unix(),       // mod
-			-1,               // usn
-			"",               // tags
-			fields,           // flds
-			card.Bulgarian,   // sfld (sort field)
-			0,                // csum
-			0,                // flags
-			"",               // data
+			noteID,         // id
+			guid,           // guid
+			g.modelID,      // mid
+			now.Unix(),     // mod
+			-1,             // usn
+			"",             // tags
+			fields,         // flds
+			card.Bulgarian, // sfld (sort field)
+			0,              // csum
+			0,              // flags
+			"",             // data
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
-		
+
 		// Insert card
 		cardQuery := `INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err = db.Exec(cardQuery,
-			cardID,           // id
-			noteID,           // nid
-			g.deckID,         // did
-			0,                // ord
-			now.Unix(),       // mod
-			-1,               // usn
-			0,                // type (0=new)
-			0,                // queue (0=new)
-			noteID,           // due (for new cards, this is position)
-			0,                // ivl
-			0,                // factor
-			0,                // reps
-			0,                // lapses
-			0,                // left
-			0,                // odue
-			0,                // odid
-			0,                // flags
-			"",               // data
+			cardID,     // id
+			noteID,     // nid
+			g.deckID,   // did
+			0,          // ord
+			now.Unix(), // mod
+			-1,         // usn
+			0,          // type (0=new)
+			0,          // queue (0=new)
+			noteID,     // due (for new cards, this is position)
+			0,          // ivl
+			0,          // factor
+			0,          // reps
+			0,          // lapses
+			0,          // left
+			0,          // odue
+			0,          // odid
+			0,          // flags
+			"",         // data
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert card: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
 // copyMediaFiles copies media files and assigns them numbers
 func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 	// Media files go directly in the temp directory with numeric names
-	
+
 	for _, card := range g.cards {
 		// Copy audio file
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
@@ -603,7 +603,7 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 			originalFilename := filepath.Base(card.AudioFile)
 			// Create unique filename with card ID prefix
 			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-			
+
 			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.AudioFile, targetPath); err != nil {
@@ -613,7 +613,7 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 				g.mediaCounter++
 			}
 		}
-		
+
 		// Copy image file
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
 			// Get card ID from the source path (parent directory name)
@@ -621,7 +621,7 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 			originalFilename := filepath.Base(card.ImageFile)
 			// Create unique filename with card ID prefix
 			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-			
+
 			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
 				if err := copyFile(card.ImageFile, targetPath); err != nil {
@@ -632,7 +632,7 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -643,12 +643,12 @@ func (g *APKGGenerator) createMediaMapping(tempDir string) error {
 	for filename, num := range g.mediaFiles {
 		mapping[fmt.Sprintf("%d", num)] = filename
 	}
-	
+
 	data, err := json.Marshal(mapping)
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(filepath.Join(tempDir, "media"), data, 0644)
 }
 
@@ -660,40 +660,40 @@ func (g *APKGGenerator) createZipPackage(tempDir, outputPath string) error {
 		return err
 	}
 	defer zipFile.Close()
-	
+
 	archive := zip.NewWriter(zipFile)
 	defer archive.Close()
-	
+
 	// Walk the temp directory and add all files to the zip
 	return filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		// Get relative path
 		relPath, err := filepath.Rel(tempDir, path)
 		if err != nil {
 			return err
 		}
-		
+
 		// Create zip entry
 		writer, err := archive.Create(relPath)
 		if err != nil {
 			return err
 		}
-		
+
 		// Open and copy file
 		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
-		
+
 		_, err = io.Copy(writer, file)
 		return err
 	})
@@ -712,13 +712,13 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer srcFile.Close()
-	
+
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer dstFile.Close()
-	
+
 	_, err = io.Copy(dstFile, srcFile)
 	return err
 }

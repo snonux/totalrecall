@@ -10,4 +10,4 @@ Terminal=false
 Categories=Education;Languages;
 Keywords=bulgarian;flashcards;anki;language;learning;
 StartupNotify=true
-StartupWMClass=totalrecall
+StartupWMClass=Totalrecall

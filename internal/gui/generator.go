@@ -115,12 +115,19 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 		speed = 1.0
 	}
 
-	// Update audio config with selected voice and speed
-	a.audioConfig.OpenAIVoice = voice
-	a.audioConfig.OpenAISpeed = speed
+	// Create a copy of audio config with selected voice and speed
+	audioConfig := *a.audioConfig
+	audioConfig.OpenAIVoice = voice
+	audioConfig.OpenAISpeed = speed
+	audioConfig.OutputDir = a.config.OutputDir // Ensure correct output directory
+
+	// Log the regeneration details
+	if isRegeneration {
+		fmt.Printf("Regenerating audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
+	}
 
 	// Create audio provider
-	provider, err := audio.NewProvider(a.audioConfig)
+	provider, err := audio.NewProvider(&audioConfig)
 	if err != nil {
 		return "", err
 	}

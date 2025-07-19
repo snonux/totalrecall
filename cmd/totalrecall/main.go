@@ -73,7 +73,7 @@ func init() {
 	// Initialize random number generator
 	rand.Seed(time.Now().UnixNano())
 	
-	// Set default output directory to Downloads
+	// Set default output directory based on mode
 	home, _ := os.UserHomeDir()
 	defaultOutputDir := filepath.Join(home, "Downloads")
 	
@@ -931,11 +931,20 @@ Word: [IPA transcription]
 func runGUIMode() error {
 	// Create GUI configuration from command line flags and viper config
 	guiConfig := &gui.Config{
-		OutputDir:     outputDir,
 		AudioFormat:   audioFormat,
 		ImageProvider: imageAPI,
 		OpenAIKey:     getOpenAIKey(),
 	}
+	
+	// Only set OutputDir if it was explicitly provided via flag
+	// Check if the outputDir is different from the default
+	home, _ := os.UserHomeDir()
+	defaultOutputDir := filepath.Join(home, "Downloads")
+	if outputDir != defaultOutputDir {
+		// User explicitly set a different output directory
+		guiConfig.OutputDir = outputDir
+	}
+	// Otherwise, gui.New will use its own default (XDG state directory)
 	
 	// Create and run GUI application
 	app := gui.New(guiConfig)

@@ -100,7 +100,8 @@ type Config struct {
 // DefaultConfig returns default GUI configuration
 func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
-	outputDir := filepath.Join(homeDir, "Downloads")
+	// Use XDG Base Directory specification for state data
+	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
 	
 	return &Config{
 		OutputDir:     outputDir,
@@ -113,6 +114,18 @@ func DefaultConfig() *Config {
 func New(config *Config) *Application {
 	if config == nil {
 		config = DefaultConfig()
+	} else {
+		// Fill in missing fields with defaults
+		defaults := DefaultConfig()
+		if config.OutputDir == "" {
+			config.OutputDir = defaults.OutputDir
+		}
+		if config.AudioFormat == "" {
+			config.AudioFormat = defaults.AudioFormat
+		}
+		if config.ImageProvider == "" {
+			config.ImageProvider = defaults.ImageProvider
+		}
 	}
 
 	// Ensure output directory exists
