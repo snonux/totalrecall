@@ -83,6 +83,10 @@ type Application struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.Mutex
+	
+	// Per-card cancellation tracking
+	cardContexts map[string]context.CancelFunc // Map of word -> cancel function
+	cardMu       sync.Mutex                   // Mutex for cardContexts map
 }
 
 // Config holds GUI application configuration
@@ -120,11 +124,12 @@ func New(config *Config) *Application {
 	myApp.SetIcon(GetAppIcon())
 	
 	app := &Application{
-		app:        myApp,
-		config:     config,
-		ctx:        ctx,
-		cancel:     cancel,
-		savedCards: make([]anki.Card, 0),
+		app:          myApp,
+		config:       config,
+		ctx:          ctx,
+		cancel:       cancel,
+		savedCards:   make([]anki.Card, 0),
+		cardContexts: make(map[string]context.CancelFunc),
 	}
 
 	// Initialize the word processing queue
@@ -316,6 +321,8 @@ func (a *Application) setupUI() {
 
 	// Initially disable action buttons
 	a.setActionButtonsEnabled(false)
+	// But keep delete button enabled for cancelling operations
+	a.deleteButton.Enable()
 
 	// Create export and help buttons for toolbar
 	exportButton := ttwidget.NewButtonWithIcon("", theme.UploadIcon(), a.onExportToAnki)
@@ -490,6 +497,8 @@ func (a *Application) onSubmit() {
 
 // generateMaterials generates all materials for a word (used by regenerate functions)
 func (a *Application) generateMaterials(word string) {
+	// Get or create context for this card
+	cardCtx, _ := a.getOrCreateCardContext(word)
 	// Check if we already have a translation
 	if a.currentTranslation == "" {
 		// Translate word
@@ -538,7 +547,7 @@ func (a *Application) generateMaterials(word string) {
 		a.updateStatus("Generating audio...")
 		a.incrementProcessing() // Audio processing starts
 	})
-	audioFile, err := a.generateAudio(word)
+	audioFile, err := a.generateAudio(cardCtx, word)
 	a.decrementProcessing() // Audio processing ends
 
 	if err != nil {
@@ -574,7 +583,7 @@ func (a *Application) generateMaterials(word string) {
 		// Use the text from translationEntry if currentTranslation is not set
 		translation = strings.TrimSpace(a.translationEntry.Text)
 	}
-	imageFile, err := a.generateImagesWithPrompt(word, customPrompt, translation)
+	imageFile, err := a.generateImagesWithPrompt(cardCtx, word, customPrompt, translation)
 	a.decrementProcessing() // Image processing ends
 
 	if err != nil {
@@ -726,7 +735,11 @@ func (a *Application) onRegenerateImage() {
 		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		imageFile, err := a.generateImagesWithPrompt(wordForGeneration, customPrompt, translation)
+		
+		// Get or create context for this card
+		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
+		
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
@@ -786,7 +799,11 @@ func (a *Application) onRegenerateRandomImage() {
 		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		imageFile, err := a.generateImagesWithPrompt(wordForGeneration, customPrompt, translation)
+		
+		// Get or create context for this card
+		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
+		
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Random image generation failed: %w", err))
@@ -831,7 +848,10 @@ func (a *Application) onRegenerateAudio() {
 		defer a.wg.Done()
 		defer a.decrementProcessing() // Audio processing ends
 
-		audioFile, err := a.generateAudio(a.currentWord)
+		// Get or create context for this card
+		cardCtx, _ := a.getOrCreateCardContext(a.currentWord)
+		
+		audioFile, err := a.generateAudio(cardCtx, a.currentWord)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
@@ -1159,7 +1179,8 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 		a.regenerateRandomImageBtn.Disable()
 		a.regenerateAudioBtn.Disable()
 		a.regenerateAllBtn.Disable()
-		a.deleteButton.Disable()
+		// Keep delete button enabled to allow cancelling generation
+		// a.deleteButton.Disable() // Don't disable this
 	}
 }
 
@@ -1273,8 +1294,48 @@ func (a *Application) processNextInQueue() {
 	}()
 }
 
+// getOrCreateCardContext returns a context for the given word, creating one if needed
+func (a *Application) getOrCreateCardContext(word string) (context.Context, context.CancelFunc) {
+	a.cardMu.Lock()
+	defer a.cardMu.Unlock()
+	
+	// Check if we already have a cancel function for this word
+	if cancel, exists := a.cardContexts[word]; exists {
+		// Cancel the old context first
+		cancel()
+	}
+	
+	// Create new context for this word
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cardContexts[word] = cancel
+	
+	return ctx, cancel
+}
+
+// cancelCardOperations cancels all ongoing operations for a specific word
+func (a *Application) cancelCardOperations(word string) {
+	a.cardMu.Lock()
+	defer a.cardMu.Unlock()
+	
+	if cancel, exists := a.cardContexts[word]; exists {
+		cancel()
+		delete(a.cardContexts, word)
+	}
+}
+
 // processWordJob processes a single word job
 func (a *Application) processWordJob(job *WordJob) {
+	// Get or create context for this card
+	cardCtx, _ := a.getOrCreateCardContext(job.Word)
+	
+	// Check if context is already cancelled
+	select {
+	case <-cardCtx.Done():
+		a.queue.FailJob(job.ID, fmt.Errorf("job cancelled"))
+		a.finishCurrentJob()
+		return
+	default:
+	}
 	// Handle translation
 	var translation string
 	var err error
@@ -1375,7 +1436,7 @@ func (a *Application) processWordJob(job *WordJob) {
 		a.incrementProcessing() // Audio processing starts
 	})
 
-	audioFile, err := a.generateAudio(job.Word)
+	audioFile, err := a.generateAudio(cardCtx, job.Word)
 	a.decrementProcessing() // Audio processing ends
 
 	if err != nil {
@@ -1408,7 +1469,7 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// Use the custom prompt from the job
 	// The translation variable already contains the correct translation (either from job or translated)
-	imageFile, err := a.generateImagesWithPrompt(job.Word, job.CustomPrompt, translation)
+	imageFile, err := a.generateImagesWithPrompt(cardCtx, job.Word, job.CustomPrompt, translation)
 	a.decrementProcessing() // Image processing ends
 
 	if err != nil {

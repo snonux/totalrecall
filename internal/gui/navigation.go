@@ -646,6 +646,9 @@ func (a *Application) onDelete() {
 
 // deleteCurrentWord moves the word's subdirectory to trash
 func (a *Application) deleteCurrentWord() {
+	// Cancel any ongoing operations for this card
+	a.cancelCardOperations(a.currentWord)
+	
 	// Find the card directory for this word
 	wordDir := a.findCardDirectory(a.currentWord)
 	if wordDir == "" {
@@ -712,6 +715,7 @@ func (a *Application) deleteCurrentWord() {
 	})
 	
 	// Clear current word
+	deletedWord := a.currentWord
 	a.currentWord = ""
 	a.wordInput.SetText("")
 	
@@ -724,5 +728,26 @@ func (a *Application) deleteCurrentWord() {
 		// No more words
 		a.updateNavigation()
 		a.setActionButtonsEnabled(false)
+		// But keep delete button enabled
+		a.deleteButton.Enable()
 	}
+	
+	// Start a cleanup goroutine to remove directory after any pending operations complete
+	go func() {
+		// Wait a bit for any ongoing operations to notice cancellation
+		time.Sleep(500 * time.Millisecond)
+		
+		// Check if the directory was somehow recreated (by a racing operation)
+		recreatedDir := a.findCardDirectory(deletedWord)
+		if recreatedDir != "" {
+			// Directory was recreated, try to delete it again
+			timestamp := time.Now().Format("20060102_150405")
+			trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s_cleanup", filepath.Base(recreatedDir), timestamp))
+			
+			// Move to trash again
+			if err := os.Rename(recreatedDir, trashWordDir); err == nil {
+				fmt.Printf("Cleanup: moved recreated directory for '%s' to trash\n", deletedWord)
+			}
+		}
+	}()
 }
