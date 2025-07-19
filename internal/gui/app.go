@@ -152,7 +152,7 @@ func New(config *Config) *Application {
 // setupUI creates the main user interface
 func (a *Application) setupUI() {
 	a.window = a.app.NewWindow(fmt.Sprintf("TotalRecall v%s - Bulgarian Flashcard Generator", internal.Version))
-	a.window.Resize(fyne.NewSize(800, 600))
+	a.window.Resize(fyne.NewSize(800, 700))
 
 	// Create input section with navigation
 	a.wordInput = widget.NewEntry()
@@ -227,8 +227,8 @@ func (a *Application) setupUI() {
 
 	inputSection := container.NewBorder(
 		nil, nil,
-		a.prevWordBtn,
-		container.NewHBox(a.submitButton, a.nextWordBtn),
+		nil,
+		a.submitButton,
 		inputGrid,
 	)
 
@@ -265,10 +265,10 @@ func (a *Application) setupUI() {
 	a.phoneticDisplay = widget.NewLabel("Phonetic information will appear here...")
 	a.phoneticDisplay.Wrapping = fyne.TextWrapWord
 
-	// Set minimum size for phonetic display (reduced to ~5 lines of text)
+	// Set minimum size for phonetic display (~8-10 lines of text)
 	// Assuming ~20 pixels per line with standard font
 	phoneticScroll := container.NewScroll(a.phoneticDisplay)
-	phoneticScroll.SetMinSize(fyne.NewSize(0, 100))
+	phoneticScroll.SetMinSize(fyne.NewSize(0, 180))
 
 	phoneticContainer := container.NewBorder(
 		widget.NewLabel("Phonetic Information:"),
@@ -283,7 +283,7 @@ func (a *Application) setupUI() {
 		phoneticContainer,
 		a.audioPlayer,
 	)
-	audioPhoneticSection.SetOffset(0.5) // Equal split between phonetic and audio
+	audioPhoneticSection.SetOffset(0.7) // Give more space to phonetic info (70/30 split)
 
 	displaySection := container.NewBorder(
 		nil,
@@ -309,8 +309,15 @@ func (a *Application) setupUI() {
 	// Initially disable action buttons
 	a.setActionButtonsEnabled(false)
 
-	// Create toolbar with all action buttons aligned to the left
+	// Create export and help buttons for toolbar
+	exportButton := ttwidget.NewButtonWithIcon("", theme.UploadIcon(), a.onExportToAnki)
+	helpButton := ttwidget.NewButtonWithIcon("", theme.HelpIcon(), a.onShowHotkeys)
+
+	// Create toolbar with navigation buttons first, then action buttons
 	toolbar := container.NewHBox(
+		a.prevWordBtn,
+		a.nextWordBtn,
+		widget.NewSeparator(),
 		a.keepButton,
 		a.deleteButton,
 		widget.NewSeparator(),
@@ -318,6 +325,9 @@ func (a *Application) setupUI() {
 		a.regenerateRandomImageBtn,
 		a.regenerateAudioBtn,
 		a.regenerateAllBtn,
+		widget.NewSeparator(),
+		exportButton,
+		helpButton,
 	)
 
 	// Create status section
@@ -334,17 +344,7 @@ func (a *Application) setupUI() {
 		),
 	)
 
-	// Create menu
-	fileMenu := fyne.NewMenu("File",
-		fyne.NewMenuItem("Export to Anki... (E)", a.onExportToAnki),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Hotkeys... (H)", a.onShowHotkeys),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Quit", a.app.Quit),
-	)
-
-	mainMenu := fyne.NewMainMenu(fileMenu)
-	a.window.SetMainMenu(mainMenu)
+	// No menu needed - all functions are in the toolbar
 
 	// Combine all sections with toolbar at the top
 	content := container.NewBorder(
@@ -364,6 +364,10 @@ func (a *Application) setupUI() {
 	// Now that tooltip layer is created, set all tooltips
 	a.setupTooltips()
 	
+	// Set tooltips for export and help buttons
+	exportButton.SetToolTip("Export to Anki (x)")
+	helpButton.SetToolTip("Show hotkeys (h)")
+	
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
 		if a.fileCheckTicker != nil {
@@ -380,8 +384,7 @@ func (a *Application) setupUI() {
 
 // Run starts the GUI application
 func (a *Application) Run() {
-	// Focus the Bulgarian word input on startup
-	a.window.Canvas().Focus(a.wordInput)
+	// Don't focus any input field on startup - let user choose
 	a.window.ShowAndRun()
 }
 
@@ -677,7 +680,7 @@ func (a *Application) onKeepAndContinue() {
 	a.currentImage = ""
 	a.mu.Unlock()
 
-	a.wordInput.FocusGained() // Focus input for next word
+	// Don't focus any input field - let user choose what to focus
 
 	// Hide progress bar if it was showing
 	a.hideProgress()
@@ -896,7 +899,11 @@ func (a *Application) onExportToAnki() {
 		widget.NewRichTextFromMarkdown("**APKG**: Complete package with media files included\n**CSV**: Text only, requires manual media copy"),
 	)
 
-	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export", "Cancel", content, func(export bool) {
+	// Store export dialog state
+	exportDialogOpen := true
+	
+	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export (e)", "Cancel (c)", content, func(export bool) {
+		exportDialogOpen = false
 		if !export {
 			return
 		}
@@ -967,35 +974,83 @@ func (a *Application) onExportToAnki() {
 		}
 	}, a.window)
 
+	// Store original keyboard handler
+	originalRuneHandler := a.window.Canvas().OnTypedRune()
+	
+	// Add keyboard shortcuts for the export dialog (both Latin and Cyrillic)
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		if exportDialogOpen {
+			switch r {
+			case 'e', 'E', 'е', 'Е':
+				// Trigger export
+				customDialog.Hide()
+				exportDialogOpen = false
+				customDialog.Confirm()
+			case 'c', 'C', 'ц', 'Ц':
+				// Cancel dialog
+				customDialog.Hide()
+				exportDialogOpen = false
+			}
+			return
+		}
+		// Call original handler if it exists
+		if originalRuneHandler != nil {
+			originalRuneHandler(r)
+		}
+	})
+	
+	// Restore original handler when dialog closes
+	customDialog.SetOnClosed(func() {
+		exportDialogOpen = false
+		// Restore original keyboard handler
+		a.window.Canvas().SetOnTypedRune(originalRuneHandler)
+	})
+
 	customDialog.Resize(fyne.NewSize(400, 300))
 	customDialog.Show()
 }
 
 // onShowHotkeys displays a dialog with all available keyboard shortcuts
 func (a *Application) onShowHotkeys() {
-	hotkeys := `## Navigation
+	hotkeys := `[Project Page: https://codeberg.org/snonux/totalrecall](https://codeberg.org/snonux/totalrecall)
+
+---
+
+## Navigation
 **←** Previous word  
 **→** Next word  
 **Tab** Navigate fields  
 **Esc** Unfocus field  
 
+## Focus Fields
+**b/б** Focus Bulgarian input  
+**e/е** Focus English input  
+**o/о** Focus image prompt  
+
 ## Word Processing
-**G** Generate word  
-**N** New word  
-**D** Delete word  
+**g/г** Generate word  
+**n/н** New word  
+**d/д** Delete word  
 
 ## Regeneration
-**I** Regenerate image  
-**M** Random image  
-**A** Regenerate audio  
-**R** Regenerate all  
-**P** Play audio  
+**i/и** Regenerate image  
+**m/м** Random image  
+**a/а** Regenerate audio  
+**r/р** Regenerate all  
+**p/п** Play audio  
 
 ## Export
-**E** Export to Anki  
+**x/ж** Export to Anki  
 
 ## Help
-**H** Show hotkeys`
+**h/х** Show hotkeys  
+**c/ц** Close dialog  
+**q/ч** Quit application  
+
+---
+*All hotkeys work with both Latin and Cyrillic keyboards*
+
+Press **c/ц** to close this dialog`
 
 	content := widget.NewRichTextFromMarkdown(hotkeys)
 	content.Wrapping = fyne.TextWrapWord
@@ -1005,9 +1060,38 @@ func (a *Application) onShowHotkeys() {
 
 	// Create a scrollable container for the content
 	scroll := container.NewScroll(paddedContent)
-	scroll.SetMinSize(fyne.NewSize(350, 450))
+	scroll.SetMinSize(fyne.NewSize(700, 480)) // Doubled width from 350 to 700
 
-	dialog.NewCustom("Keyboard Shortcuts", "Close", scroll, a.window).Show()
+	// Create the dialog
+	d := dialog.NewCustom("Keyboard Shortcuts", "Close", scroll, a.window)
+	
+	// Store dialog state
+	dialogOpen := true
+	
+	// Store original rune handler
+	originalRuneHandler := a.window.Canvas().OnTypedRune()
+	
+	// Add temporary handler for 'c' to close dialog (both Latin and Cyrillic)
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		if dialogOpen && (r == 'c' || r == 'C' || r == 'ц' || r == 'Ц') {
+			d.Hide()
+			return
+		}
+		// Call original handler if it exists
+		if originalRuneHandler != nil {
+			originalRuneHandler(r)
+		}
+	})
+	
+	// Show the dialog
+	d.Show()
+	
+	// Restore original handlers when dialog closes
+	d.SetOnClosed(func() {
+		dialogOpen = false
+		// Restore original keyboard shortcuts
+		a.setupKeyboardShortcuts()
+	})
 }
 
 // Helper methods
@@ -1096,17 +1180,20 @@ func (a *Application) clearUI() {
 // setupTooltips sets up all tooltips after the tooltip layer has been created
 func (a *Application) setupTooltips() {
 	// Navigation button tooltips
-	a.submitButton.SetToolTip("Generate word (G)")
+	a.submitButton.SetToolTip("Generate word (g)")
 	a.prevWordBtn.SetToolTip("Previous word (←)")
 	a.nextWordBtn.SetToolTip("Next word (→)")
 	
 	// Action button tooltips
-	a.keepButton.SetToolTip("Keep card and new word (N)")
-	a.regenerateImageBtn.SetToolTip("Regenerate image (I)")
-	a.regenerateRandomImageBtn.SetToolTip("Random image (M)")
-	a.regenerateAudioBtn.SetToolTip("Regenerate audio (A)")
-	a.regenerateAllBtn.SetToolTip("Regenerate all (R)")
-	a.deleteButton.SetToolTip("Delete word (D)")
+	a.keepButton.SetToolTip("Keep card and new word (n)")
+	a.regenerateImageBtn.SetToolTip("Regenerate image (i)")
+	a.regenerateRandomImageBtn.SetToolTip("Random image (m)")
+	a.regenerateAudioBtn.SetToolTip("Regenerate audio (a)")
+	a.regenerateAllBtn.SetToolTip("Regenerate all (r)")
+	a.deleteButton.SetToolTip("Delete word (d)")
+	
+	// Export and help button tooltips need to be set after creation
+	// We'll handle this in setupUI where they are created
 }
 
 // processNextInQueue processes the next word in the queue
@@ -1439,6 +1526,73 @@ func (a *Application) decrementProcessing() {
 
 // setupKeyboardShortcuts sets up keyboard shortcuts for the application
 func (a *Application) setupKeyboardShortcuts() {
+	// Handle character input (for focus shortcuts that shouldn't type the character)
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		// Check if input field is focused
+		focused := a.window.Canvas().Focused()
+		isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
+
+		// If input is focused, let the character be typed normally
+		if isInputFocused {
+			return
+		}
+
+		// Don't process if we're in delete confirmation mode
+		if a.deleteConfirming {
+			return
+		}
+
+		// Handle focus shortcuts that shouldn't type the character
+		// Support both Latin and Cyrillic keyboard layouts
+		switch r {
+		case 'b', 'B', 'б', 'Б':
+			a.window.Canvas().Focus(a.wordInput)
+		case 'e', 'E', 'е', 'Е':
+			a.window.Canvas().Focus(a.translationEntry)
+		case 'o', 'O', 'о', 'О':
+			a.window.Canvas().Focus(a.imagePromptEntry)
+		// Handle Cyrillic shortcuts for actions
+		case 'г', 'Г': // г = g
+			if !a.submitButton.Disabled() {
+				a.onSubmit()
+			}
+		case 'н', 'Н': // н = n  
+			if !a.keepButton.Disabled() {
+				a.onKeepAndContinue()
+			}
+		case 'и', 'И': // и = i
+			if !a.regenerateImageBtn.Disabled() {
+				a.onRegenerateImage()
+			}
+		case 'м', 'М': // м = m
+			if !a.regenerateRandomImageBtn.Disabled() {
+				a.onRegenerateRandomImage()
+			}
+		case 'а', 'А': // а = a
+			if !a.regenerateAudioBtn.Disabled() {
+				a.onRegenerateAudio()
+			}
+		case 'р', 'Р': // р = r
+			if !a.regenerateAllBtn.Disabled() {
+				a.onRegenerateAll()
+			}
+		case 'д', 'Д': // д = d
+			if !a.deleteButton.Disabled() {
+				a.onDelete()
+			}
+		case 'п', 'П': // п = p (play audio)
+			if a.currentAudioFile != "" {
+				a.audioPlayer.Play()
+			}
+		case 'ж', 'Ж': // ж = x
+			a.onExportToAnki()
+		case 'х', 'Х': // х = h
+			a.onShowHotkeys()
+		case 'ч', 'Ч': // ч = q
+			a.window.Close()
+		}
+	})
+
 	// Create a custom shortcut handler for regular keys (when input fields are not focused)
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		// Handle Escape key to unfocus any field
@@ -1465,6 +1619,11 @@ func (a *Application) setupKeyboardShortcuts() {
 
 		// Don't process if we're in delete confirmation mode (handled by dialog)
 		if a.deleteConfirming {
+			return
+		}
+
+		// Skip focus keys in SetOnTypedKey since they're handled in SetOnTypedRune
+		if ev.Name == fyne.KeyB || ev.Name == fyne.KeyE || ev.Name == fyne.KeyO {
 			return
 		}
 
@@ -1559,11 +1718,13 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 			a.audioPlayer.Play()
 		}
 
-	case fyne.KeyE: // Export to APKG
+	case fyne.KeyX: // Export to APKG
 		a.onExportToAnki()
 
 	case fyne.KeyH: // Show hotkeys
 		a.onShowHotkeys()
+	case fyne.KeyQ: // Quit application
+		a.window.Close()
 	}
 }
 

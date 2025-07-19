@@ -458,18 +458,30 @@ func (a *Application) loadExistingFiles(word string) {
 
 // startFileCheckTicker starts a ticker to check for missing files
 func (a *Application) startFileCheckTicker() {
+	// Stop any existing ticker first
+	if a.fileCheckTicker != nil {
+		a.fileCheckTicker.Stop()
+	}
+	
 	// Create ticker that checks every 2 seconds
-	a.fileCheckTicker = time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
+	a.fileCheckTicker = ticker
 	
 	go func() {
-		for range a.fileCheckTicker.C {
-			// Only check files for the current word
-			a.mu.Lock()
-			currentWord := a.currentWord
-			a.mu.Unlock()
-			
-			if currentWord != "" {
-				a.checkForMissingFiles(currentWord)
+		for {
+			select {
+			case <-ticker.C:
+				// Only check files for the current word
+				a.mu.Lock()
+				currentWord := a.currentWord
+				a.mu.Unlock()
+				
+				if currentWord != "" {
+					a.checkForMissingFiles(currentWord)
+				}
+			case <-a.ctx.Done():
+				// Application is shutting down
+				return
 			}
 		}
 	}()
@@ -582,6 +594,31 @@ func (a *Application) onDelete() {
 	
 	// Create a custom key handler for the dialog window
 	oldKeyHandler := a.window.Canvas().OnTypedKey()
+	oldRuneHandler := a.window.Canvas().OnTypedRune()
+	
+	// Handle both Latin and Cyrillic keys
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		if a.deleteConfirming {
+			switch r {
+			case 'y', 'Y', 'ъ', 'Ъ':
+				confirmDialog.Hide()
+				a.deleteConfirming = false
+				a.deleteCurrentWord()
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			case 'n', 'N', 'н', 'Н':
+				confirmDialog.Hide()
+				a.deleteConfirming = false
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			}
+		} else if oldRuneHandler != nil {
+			oldRuneHandler(r)
+		}
+	})
+	
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if a.deleteConfirming {
 			switch ev.Name {
@@ -589,13 +626,15 @@ func (a *Application) onDelete() {
 				confirmDialog.Hide()
 				a.deleteConfirming = false
 				a.deleteCurrentWord()
-				// Restore original key handler
+				// Restore original handlers
 				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
 			case fyne.KeyN, fyne.KeyEscape:
 				confirmDialog.Hide()
 				a.deleteConfirming = false
-				// Restore original key handler
+				// Restore original handlers
 				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
 			}
 		} else if oldKeyHandler != nil {
 			oldKeyHandler(ev)
