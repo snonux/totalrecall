@@ -112,8 +112,11 @@ func New(config *Config) *Application {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	myApp := app.New()
+	myApp.SetIcon(GetAppIcon())
+	
 	app := &Application{
-		app:        app.New(),
+		app:        myApp,
 		config:     config,
 		ctx:        ctx,
 		cancel:     cancel,
@@ -152,6 +155,7 @@ func New(config *Config) *Application {
 // setupUI creates the main user interface
 func (a *Application) setupUI() {
 	a.window = a.app.NewWindow(fmt.Sprintf("TotalRecall v%s - Bulgarian Flashcard Generator", internal.Version))
+	a.window.SetIcon(GetAppIcon())
 	a.window.Resize(fyne.NewSize(800, 700))
 
 	// Create input section with navigation

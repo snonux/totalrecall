@@ -44,3 +44,8 @@ anki_cards
 # Configuration with API keys
 .totalrecall.yaml
 .image_cache/
+
+# Test output directories
+test_output/
+test_output2/
+test_phonetic/

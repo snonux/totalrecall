@@ -1,5 +1,9 @@
 # totalrecall - Bulgarian Anki Flashcard Generator
 
+<p align="center">
+  <img src="assets/icons/totalrecall_512.png" alt="TotalRecall Icon" width="256" height="256">
+</p>
+
 `totalrecall` is a versatile tool for generating Anki flashcard materials from Bulgarian words. It offers both a command-line interface (CLI) and a graphical user interface (GUI) for creating audio pronunciation files and AI-generated images.
 
 It has mainly been vibe coded using Claude Code CLI.
@@ -22,6 +26,7 @@ It has mainly been vibe coded using Claude Code CLI.
 - Anki-compatible CSV export with translations
 - Random voice variants and speech speed
 - Audio caching to save API costs
+- **Default output directory**: `~/.local/state/totalrecall/` (configurable)
 
 ## Installation
 
@@ -42,11 +47,44 @@ cd totalrecall
 go build -o totalrecall ./cmd/totalrecall
 ```
 
-Or install directly:
+### Installing to Go Bin Directory
 
+Using Task (recommended):
+```bash
+cd totalrecall
+task install
+```
+
+Or using go install directly:
+```bash
+cd totalrecall
+go install ./cmd/totalrecall
+```
+
+Or install from remote repository:
 ```bash
 go install codeberg.org/snonux/totalrecall/cmd/totalrecall@latest
 ```
+
+This will install the binary to `~/go/bin/totalrecall`, which should be in your PATH.
+
+### Desktop Icon Installation (GNOME/Fedora)
+
+TotalRecall includes a desktop icon for GNOME integration. To install:
+
+**For current user only:**
+```bash
+cd totalrecall
+./install-icon.sh
+```
+
+**System-wide installation:**
+```bash
+cd totalrecall
+sudo ./install-icon.sh
+```
+
+After installation, you may need to log out and log back in for the icon to appear in GNOME's application menu. The icon will show up as "TotalRecall" in the Education category.
 
 ## Quick Start
 
@@ -92,7 +130,13 @@ Launch the interactive graphical interface:
 totalrecall --gui
 ```
 
-Then use keyboard shortcuts or buttons to generate and manage flashcards interactively.
+The GUI is best navigated using keyboard shortcuts for efficient workflow. Press **`h`** at any time to display a complete list of all available keyboard shortcuts.
+
+Key features:
+- Fast keyboard-driven interface
+- Real-time audio playback
+- Batch processing support
+- Visual feedback for all operations
 
 ## Configuration
 
@@ -123,7 +167,7 @@ image:
   openai_style: "natural"    # Style: natural or vivid (dall-e-3 only)
 
 output:
-  directory: ./anki_cards
+  directory: ~/.local/state/totalrecall  # Default location (can be overridden)
   naming: "{word}_{type}"
 ```
 
@@ -173,6 +217,8 @@ Create a text file with Bulgarian words, optionally with English translations:
 When translations are provided, they are used directly without calling the translation API, saving time and API quota. Spaces around the words and translations are automatically trimmed.
 
 ### Output Files
+
+By default, all files are saved to `~/.local/state/totalrecall/`. You can override this with the `-o` flag or the `output.directory` config option.
 
 For each word, the tool generates:
 - `word.mp3` - Audio pronunciation (random voice)

@@ -73,11 +73,15 @@ func init() {
 	// Initialize random number generator
 	rand.Seed(time.Now().UnixNano())
 	
+	// Set default output directory
+	home, _ := os.UserHomeDir()
+	defaultOutputDir := filepath.Join(home, ".local", "state", "totalrecall")
+	
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.totalrecall.yaml)")
 	
 	// Local flags
-	rootCmd.Flags().StringVarP(&outputDir, "output", "o", "./anki_cards", "Output directory")
+	rootCmd.Flags().StringVarP(&outputDir, "output", "o", defaultOutputDir, "Output directory")
 	rootCmd.Flags().StringVarP(&audioFormat, "format", "f", "mp3", "Audio format (wav or mp3)")
 	rootCmd.Flags().StringVar(&imageAPI, "image-api", "openai", "Image source (only openai supported)")
 	rootCmd.Flags().StringVar(&batchFile, "batch", "", "Process words from file (one per line)")
@@ -151,6 +155,11 @@ func initConfig() {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
+	// Check if output directory was set in config file
+	if !cmd.Flags().Changed("output") && viper.IsSet("output.directory") {
+		outputDir = viper.GetString("output.directory")
+	}
+	
 	// Handle --list-models flag
 	if listModels {
 		return listAvailableModels()
