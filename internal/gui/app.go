@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
@@ -94,8 +95,11 @@ type Config struct {
 
 // DefaultConfig returns default GUI configuration
 func DefaultConfig() *Config {
+	homeDir, _ := os.UserHomeDir()
+	outputDir := filepath.Join(homeDir, "Downloads")
+	
 	return &Config{
-		OutputDir:     "./anki_cards",
+		OutputDir:     outputDir,
 		AudioFormat:   "mp3",
 		ImageProvider: "openai",
 	}
@@ -112,7 +116,7 @@ func New(config *Config) *Application {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	myApp := app.New()
+	myApp := app.NewWithID("org.codeberg.snonux.totalrecall")
 	myApp.SetIcon(GetAppIcon())
 	
 	app := &Application{
@@ -893,12 +897,43 @@ func (a *Application) onExportToAnki() {
 	deckNameEntry := widget.NewEntry()
 	deckNameEntry.SetPlaceHolder("Bulgarian Vocabulary")
 
+	// Export directory selection
+	homeDir, _ := os.UserHomeDir()
+	defaultExportDir := filepath.Join(homeDir, "Downloads")
+	selectedDir := defaultExportDir
+	
+	dirLabel := widget.NewLabel(selectedDir)
+	
+	dirButton := widget.NewButton("Browse...", func() {
+		folderDialog := dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
+			if err != nil || dir == nil {
+				return
+			}
+			selectedDir = dir.Path()
+			dirLabel.SetText(selectedDir)
+		}, a.window)
+		
+		// Try to set initial directory
+		if uri, err := storage.ParseURI("file://" + selectedDir); err == nil {
+			if listableURI, ok := uri.(fyne.ListableURI); ok {
+				folderDialog.SetLocation(listableURI)
+			}
+		}
+		
+		folderDialog.Show()
+	})
+
+	dirContainer := container.NewBorder(nil, nil, nil, dirButton, dirLabel)
+
 	content := container.NewVBox(
 		widget.NewLabel("Export Format:"),
 		formatSelect,
 		widget.NewSeparator(),
 		widget.NewLabel("Deck Name:"),
 		deckNameEntry,
+		widget.NewSeparator(),
+		widget.NewLabel("Export Directory:"),
+		dirContainer,
 		widget.NewLabel(""),
 		widget.NewRichTextFromMarkdown("**APKG**: Complete package with media files included\n**CSV**: Text only, requires manual media copy"),
 	)
@@ -924,7 +959,7 @@ func (a *Application) onExportToAnki() {
 
 		if isAPKG {
 			filename = fmt.Sprintf("%s.apkg", internal.SanitizeFilename(deckName))
-			outputPath = filepath.Join(a.config.OutputDir, filename)
+			outputPath = filepath.Join(selectedDir, filename)
 
 			// Generate APKG from all cards in directory
 			gen := anki.NewGenerator(nil)
@@ -948,7 +983,7 @@ func (a *Application) onExportToAnki() {
 				total, outputPath, withAudio, withImages))
 		} else {
 			filename = "anki_import.csv"
-			outputPath = filepath.Join(a.config.OutputDir, filename)
+			outputPath = filepath.Join(selectedDir, filename)
 
 			// Generate CSV from all cards in directory
 			gen := anki.NewGenerator(&anki.GeneratorOptions{

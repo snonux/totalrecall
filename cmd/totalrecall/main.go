@@ -73,9 +73,9 @@ func init() {
 	// Initialize random number generator
 	rand.Seed(time.Now().UnixNano())
 	
-	// Set default output directory
+	// Set default output directory to Downloads
 	home, _ := os.UserHomeDir()
-	defaultOutputDir := filepath.Join(home, ".local", "state", "totalrecall")
+	defaultOutputDir := filepath.Join(home, "Downloads")
 	
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.totalrecall.yaml)")
@@ -384,9 +384,7 @@ func generateAudioWithVoice(word, voice string) error {
 	if openAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
 		providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
 	}
-	if openAIVoice == "nova" && viper.IsSet("audio.openai_voice") {
-		providerConfig.OpenAIVoice = viper.GetString("audio.openai_voice")
-	}
+	// Voice is always random or specified via command line, not from config
 	if openAISpeed == 0.9 && viper.IsSet("audio.openai_speed") {
 		providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
 	}
