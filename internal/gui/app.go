@@ -308,9 +308,9 @@ func (a *Application) setupUI() {
 	// Create action buttons (tooltips will be set after tooltip layer is created)
 	a.keepButton = ttwidget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
 
-	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateImage)
+	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.FileImageIcon(), a.onRegenerateImage)
 
-	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.MediaPhotoIcon(), a.onRegenerateRandomImage)
+	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.ColorPaletteIcon(), a.onRegenerateRandomImage)
 
 	a.regenerateAudioBtn = ttwidget.NewButtonWithIcon("", theme.MediaRecordIcon(), a.onRegenerateAudio)
 
