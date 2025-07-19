@@ -59,9 +59,11 @@ var rootCmd = &cobra.Command{
 It creates audio pronunciation files using OpenAI TTS and downloads
 representative images from web search APIs.
 
-Example:
-  totalrecall ябълка              # Generate materials for "apple"
-  totalrecall --batch words.txt   # Process multiple words from file`,
+Examples:
+  totalrecall                     # Launch interactive GUI (default)
+  totalrecall ябълка              # Generate materials for "apple" via CLI
+  totalrecall --batch words.txt   # Process multiple words from file
+  totalrecall --gui               # Explicitly launch GUI mode`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runCommand,
 	Version: internal.Version,
@@ -215,8 +217,8 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		// Single word from command line
 		entries = []wordEntry{{bulgarian: args[0], translation: ""}}
 	} else {
-		// No input provided
-		return fmt.Errorf("please provide a Bulgarian word or use --batch flag")
+		// No input provided - launch GUI mode by default
+		return runGUIMode()
 	}
 	
 	// Validate words

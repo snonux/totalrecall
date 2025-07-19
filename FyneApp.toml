@@ -1,0 +1,7 @@
+[Details]
+Icon = "assets/icons/totalrecall_256.png"
+Name = "TotalRecall"
+ID = "org.codeberg.snonux.totalrecall"
+
+[Development]
+HelperText = "Bulgarian Flashcard Generator"

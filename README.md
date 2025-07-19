@@ -93,6 +93,12 @@ After installation, you may need to log out and log back in for the icon to appe
 export OPENAI_API_KEY="sk-..."
 ```
 
+### GUI Mode (Default)
+When launched without arguments, totalrecall opens an interactive graphical interface:
+```bash
+totalrecall
+```
+
 ### CLI Mode
 1. Generate materials for a single word (uses OpenAI by default):
    ```bash
@@ -127,6 +133,8 @@ export OPENAI_API_KEY="sk-..."
 ### GUI Mode
 Launch the interactive graphical interface:
 ```bash
+totalrecall                 # GUI mode is now the default
+# or explicitly:
 totalrecall --gui
 ```
 
@@ -179,7 +187,7 @@ totalrecall [word] [flags]
 
 ### GUI Mode
 ```bash
-totalrecall --gui
+totalrecall           # Default mode when no arguments provided
 ```
 
 ### Batch file format
