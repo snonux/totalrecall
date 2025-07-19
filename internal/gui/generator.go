@@ -95,25 +95,15 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 		}
 	}
 
-	// For regeneration, use random voice and speed; otherwise use defaults
-	var voice string
-	var speed float64
+	// Always use random voice and speed
+	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
 
-	if isRegeneration {
-		// Get available voices
-		allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	// Select a random voice
+	rand.Seed(time.Now().UnixNano())
+	voice := allVoices[rand.Intn(len(allVoices))]
 
-		// Select a random voice
-		rand.Seed(time.Now().UnixNano())
-		voice = allVoices[rand.Intn(len(allVoices))]
-
-		// Generate random speed between 0.90 and 1.00
-		speed = 0.90 + rand.Float64()*0.10
-	} else {
-		// Use defaults for first generation
-		voice = "alloy"
-		speed = 1.0
-	}
+	// Generate random speed between 0.90 and 1.00
+	speed := 0.90 + rand.Float64()*0.10
 
 	// Create a copy of audio config with selected voice and speed
 	audioConfig := *a.audioConfig
@@ -121,9 +111,11 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 	audioConfig.OpenAISpeed = speed
 	audioConfig.OutputDir = a.config.OutputDir // Ensure correct output directory
 
-	// Log the regeneration details
+	// Log the audio generation details
 	if isRegeneration {
 		fmt.Printf("Regenerating audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
+	} else {
+		fmt.Printf("Generating audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	}
 
 	// Create audio provider
