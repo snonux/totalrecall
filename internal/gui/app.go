@@ -394,7 +394,7 @@ func (a *Application) setupUI() {
 	
 	// Set tooltips for export and help buttons
 	exportButton.SetToolTip("Export to Anki (x)")
-	helpButton.SetToolTip("Show hotkeys (h)")
+	helpButton.SetToolTip("Show hotkeys (?)")
 	
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
@@ -1089,8 +1089,8 @@ func (a *Application) onShowHotkeys() {
 ---
 
 ## Navigation
-**←** Previous word  
-**→** Next word  
+**← / h/х** Previous word (vim-style)  
+**→ / l/л** Next word (vim-style)  
 **Tab** Navigate fields  
 **Esc** Unfocus field  
 
@@ -1115,7 +1115,7 @@ func (a *Application) onShowHotkeys() {
 **x/ж** Export to Anki  
 
 ## Help
-**h/х** Show hotkeys  
+**?** Show hotkeys  
 **c/ц** Close dialog  
 **q/ч** Quit application  
 
@@ -1254,8 +1254,8 @@ func (a *Application) clearUI() {
 func (a *Application) setupTooltips() {
 	// Navigation button tooltips
 	a.submitButton.SetToolTip("Generate word (g)")
-	a.prevWordBtn.SetToolTip("Previous word (←)")
-	a.nextWordBtn.SetToolTip("Next word (→)")
+	a.prevWordBtn.SetToolTip("Previous word (← / h/х)")
+	a.nextWordBtn.SetToolTip("Next word (→ / l/л)")
 	
 	// Action button tooltips
 	a.keepButton.SetToolTip("Keep card and new word (n)")
@@ -1699,8 +1699,16 @@ func (a *Application) setupKeyboardShortcuts() {
 			}
 		case 'ж', 'Ж': // ж = x
 			a.onExportToAnki()
-		case 'х', 'Х': // х = h
+		case '?':
 			a.onShowHotkeys()
+		case 'h', 'H', 'х', 'Х': // h/х = previous (vim-style)
+			if !a.prevWordBtn.Disabled() {
+				a.onPrevWord()
+			}
+		case 'l', 'L', 'л', 'Л': // l/л = next (vim-style)
+			if !a.nextWordBtn.Disabled() {
+				a.onNextWord()
+			}
 		case 'ч', 'Ч': // ч = q
 			a.window.Close()
 		}
@@ -1834,8 +1842,17 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 	case fyne.KeyX: // Export to APKG
 		a.onExportToAnki()
 
-	case fyne.KeyH: // Show hotkeys
-		a.onShowHotkeys()
+	case fyne.KeyH: // Previous word (vim-style)
+		if a.prevWordBtn.Disabled() {
+			return
+		}
+		a.onPrevWord()
+	
+	case fyne.KeyL: // Next word (vim-style)
+		if a.nextWordBtn.Disabled() {
+			return
+		}
+		a.onNextWord()
 	case fyne.KeyQ: // Quit application
 		a.window.Close()
 	}
