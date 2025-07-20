@@ -974,7 +974,7 @@ func (a *Application) onExportToAnki() {
 	// Store export dialog state
 	exportDialogOpen := true
 	
-	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export (e)", "Cancel (c)", content, func(export bool) {
+	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export (e)", "Cancel (c/Esc)", content, func(export bool) {
 		exportDialogOpen = false
 		if !export {
 			return
@@ -1046,8 +1046,9 @@ func (a *Application) onExportToAnki() {
 		}
 	}, a.window)
 
-	// Store original keyboard handler
+	// Store original keyboard handlers
 	originalRuneHandler := a.window.Canvas().OnTypedRune()
+	originalKeyHandler := a.window.Canvas().OnTypedKey()
 	
 	// Add keyboard shortcuts for the export dialog (both Latin and Cyrillic)
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
@@ -1071,11 +1072,25 @@ func (a *Application) onExportToAnki() {
 		}
 	})
 	
-	// Restore original handler when dialog closes
+	// Add ESC key handler
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if exportDialogOpen && ev.Name == fyne.KeyEscape {
+			customDialog.Hide()
+			exportDialogOpen = false
+			return
+		}
+		// Call original handler if it exists
+		if originalKeyHandler != nil {
+			originalKeyHandler(ev)
+		}
+	})
+	
+	// Restore original handlers when dialog closes
 	customDialog.SetOnClosed(func() {
 		exportDialogOpen = false
-		// Restore original keyboard handler
+		// Restore original keyboard handlers
 		a.window.Canvas().SetOnTypedRune(originalRuneHandler)
+		a.window.Canvas().SetOnTypedKey(originalKeyHandler)
 	})
 
 	customDialog.Resize(fyne.NewSize(400, 300))
@@ -1122,7 +1137,7 @@ func (a *Application) onShowHotkeys() {
 ---
 *All hotkeys work with both Latin and Cyrillic keyboards*
 
-Press **c/ц** to close this dialog`
+Press **c/ц** or **Esc** to close this dialog`
 
 	content := widget.NewRichTextFromMarkdown(hotkeys)
 	content.Wrapping = fyne.TextWrapWord
@@ -1140,8 +1155,9 @@ Press **c/ц** to close this dialog`
 	// Store dialog state
 	dialogOpen := true
 	
-	// Store original rune handler
+	// Store original handlers
 	originalRuneHandler := a.window.Canvas().OnTypedRune()
+	originalKeyHandler := a.window.Canvas().OnTypedKey()
 	
 	// Add temporary handler for 'c' to close dialog (both Latin and Cyrillic)
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
@@ -1152,6 +1168,18 @@ Press **c/ц** to close this dialog`
 		// Call original handler if it exists
 		if originalRuneHandler != nil {
 			originalRuneHandler(r)
+		}
+	})
+	
+	// Add ESC key handler
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if dialogOpen && ev.Name == fyne.KeyEscape {
+			d.Hide()
+			return
+		}
+		// Call original handler if it exists
+		if originalKeyHandler != nil {
+			originalKeyHandler(ev)
 		}
 	})
 	
