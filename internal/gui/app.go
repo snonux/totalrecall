@@ -65,6 +65,7 @@ type Application struct {
 	existingWords      []string // Words already in anki_cards folder
 	currentWordIndex   int
 	deleteConfirming   bool        // Track if we're in delete confirmation mode
+	quitConfirming     bool        // Track if we're in quit confirmation mode
 	wordChangeTimer    *time.Timer // Timer for detecting word changes
 	fileCheckTicker    *time.Ticker // Ticker for checking missing files
 
@@ -1194,6 +1195,79 @@ Press **c/ц** or **Esc** to close this dialog`
 	})
 }
 
+// onQuitConfirm shows a confirmation dialog before quitting
+func (a *Application) onQuitConfirm() {
+	// Don't show if already confirming
+	if a.quitConfirming {
+		return
+	}
+	
+	// Create confirmation dialog
+	message := "Are you sure you want to quit?\n\nPress y to quit or n to cancel"
+	confirmDialog := dialog.NewConfirm("Quit Application", message, func(confirm bool) {
+		a.quitConfirming = false
+		if confirm {
+			a.window.Close()
+		}
+	}, a.window)
+	
+	// Set up keyboard handler for the dialog
+	a.quitConfirming = true
+	
+	// Store original handlers
+	oldKeyHandler := a.window.Canvas().OnTypedKey()
+	oldRuneHandler := a.window.Canvas().OnTypedRune()
+	
+	// Handle both Latin and Cyrillic keys
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		if a.quitConfirming {
+			switch r {
+			case 'y', 'Y', 'ъ', 'Ъ':
+				confirmDialog.Hide()
+				a.quitConfirming = false
+				a.window.Close()
+			case 'n', 'N', 'н', 'Н':
+				confirmDialog.Hide()
+				a.quitConfirming = false
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			}
+		} else if oldRuneHandler != nil {
+			oldRuneHandler(r)
+		}
+	})
+	
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if a.quitConfirming {
+			switch ev.Name {
+			case fyne.KeyY:
+				confirmDialog.Hide()
+				a.quitConfirming = false
+				a.window.Close()
+			case fyne.KeyN, fyne.KeyEscape:
+				confirmDialog.Hide()
+				a.quitConfirming = false
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			}
+		} else if oldKeyHandler != nil {
+			oldKeyHandler(ev)
+		}
+	})
+	
+	// Set dialog closed handler
+	confirmDialog.SetOnClosed(func() {
+		a.quitConfirming = false
+		// Restore original handlers
+		a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+		a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+	})
+	
+	confirmDialog.Show()
+}
+
 // Helper methods
 func (a *Application) setUIEnabled(enabled bool) {
 	if enabled {
@@ -1678,8 +1752,8 @@ func (a *Application) setupKeyboardShortcuts() {
 			return
 		}
 
-		// Don't process if we're in delete confirmation mode
-		if a.deleteConfirming {
+		// Don't process if we're in delete or quit confirmation mode
+		if a.deleteConfirming || a.quitConfirming {
 			return
 		}
 
@@ -1738,7 +1812,7 @@ func (a *Application) setupKeyboardShortcuts() {
 				a.onNextWord()
 			}
 		case 'ч', 'Ч': // ч = q
-			a.window.Close()
+			a.onQuitConfirm()
 		}
 	})
 
@@ -1748,6 +1822,7 @@ func (a *Application) setupKeyboardShortcuts() {
 		if ev.Name == fyne.KeyEscape {
 			a.window.Canvas().Unfocus()
 			a.deleteConfirming = false
+			a.quitConfirming = false
 			return
 		}
 
@@ -1766,8 +1841,8 @@ func (a *Application) setupKeyboardShortcuts() {
 			return
 		}
 
-		// Don't process if we're in delete confirmation mode (handled by dialog)
-		if a.deleteConfirming {
+		// Don't process if we're in delete or quit confirmation mode (handled by dialog)
+		if a.deleteConfirming || a.quitConfirming {
 			return
 		}
 
@@ -1802,8 +1877,8 @@ func (a *Application) handleTabNavigation() {
 
 // handleShortcutKey handles the actual shortcut action
 func (a *Application) handleShortcutKey(key fyne.KeyName) {
-	// Don't process if we're in delete confirmation mode
-	if a.deleteConfirming {
+	// Don't process if we're in delete or quit confirmation mode
+	if a.deleteConfirming || a.quitConfirming {
 		return
 	}
 
@@ -1882,7 +1957,7 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 		}
 		a.onNextWord()
 	case fyne.KeyQ: // Quit application
-		a.window.Close()
+		a.onQuitConfirm()
 	}
 }
 
