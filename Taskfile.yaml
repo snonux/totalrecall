@@ -8,8 +8,49 @@ tasks:
     cmds:
       - go run ./cmd/totalrecall
   test:
+    desc: Run all tests
     cmds:
       - go test ./...
+  
+  test-verbose:
+    desc: Run all tests with verbose output
+    cmds:
+      - go test -v ./...
+  
+  test-coverage:
+    desc: Run all tests with coverage report
+    cmds:
+      - go test -cover ./...
+  
+  test-coverage-html:
+    desc: Run all tests and generate HTML coverage report
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated at coverage.html"
+  
+  test-race:
+    desc: Run all tests with race detector
+    cmds:
+      - go test -race ./...
+  
+  test-short:
+    desc: Run only short tests (skip integration tests)
+    cmds:
+      - go test -short ./...
+  
+  test-all:
+    desc: Run comprehensive test suite with coverage and race detection
+    cmds:
+      - echo "Running comprehensive test suite..."
+      - go test -v -race -cover ./...
   install:
     cmds:
       - go install ./cmd/totalrecall
+  
+  clean:
+    desc: Clean build artifacts and test coverage files
+    cmds:
+      - rm -f totalrecall
+      - rm -f coverage.out coverage.html
+      - go clean -testcache
