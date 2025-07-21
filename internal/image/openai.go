@@ -23,6 +23,9 @@ type OpenAIClient struct {
 	quality    string // standard or hd (dall-e-3 only)
 	style      string // natural or vivid (dall-e-3 only)
 	lastPrompt string // Store the last used prompt for attribution
+
+	// PromptCallback is called when the prompt is generated, before the image is created
+	PromptCallback func(prompt string)
 }
 
 // OpenAIConfig holds configuration for the OpenAI image provider
@@ -119,6 +122,11 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 
 	// Store the prompt for attribution
 	c.lastPrompt = prompt
+
+	// Call the callback if set
+	if c.PromptCallback != nil {
+		c.PromptCallback(prompt)
+	}
 
 	// Log the prompt to stdout for debugging
 	fmt.Printf("OpenAI Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
@@ -218,6 +226,11 @@ func (c *OpenAIClient) Name() string {
 // GetLastPrompt returns the last prompt used for image generation
 func (c *OpenAIClient) GetLastPrompt() string {
 	return c.lastPrompt
+}
+
+// SetPromptCallback sets a callback function that will be called when the prompt is generated
+func (c *OpenAIClient) SetPromptCallback(callback func(prompt string)) {
+	c.PromptCallback = callback
 }
 
 // createEducationalPrompt generates a prompt optimized for language learning

@@ -187,11 +187,11 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 			Style:   "natural",
 		}
 
-		searcher = image.NewOpenAIClient(openaiConfig)
+		openaiClient := image.NewOpenAIClient(openaiConfig)
+		searcher = openaiClient
 		if openaiConfig.APIKey == "" {
 			return "", fmt.Errorf("OpenAI API key is required for image generation")
 		}
-
 	default:
 		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
@@ -224,6 +224,28 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 
 	downloader := image.NewDownloader(searcher, downloadOpts)
 
+	// Set up callback for OpenAI to update prompt immediately when it's generated
+	if a.config.ImageProvider == "openai" {
+		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
+			openaiClient.SetPromptCallback(func(prompt string) {
+				// Save the prompt to disk immediately for this word
+				promptFile := filepath.Join(wordDir, "image_prompt.txt")
+				os.WriteFile(promptFile, []byte(prompt), 0644)
+
+				// Only update UI if this word is still the current word
+				a.mu.Lock()
+				isCurrentWord := a.currentWord == word
+				a.mu.Unlock()
+
+				if isCurrentWord {
+					fyne.Do(func() {
+						a.imagePromptEntry.SetText(prompt)
+					})
+				}
+			})
+		}
+	}
+
 	// Create search options with custom prompt and translation if provided
 	searchOpts := image.DefaultSearchOptions(word)
 	if customPrompt != "" {
@@ -239,28 +261,7 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 		return "", err
 	}
 
-	// If using OpenAI, get the last used prompt
-	if a.config.ImageProvider == "openai" {
-		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
-			usedPrompt := openaiClient.GetLastPrompt()
-			if usedPrompt != "" {
-				// Save the prompt to disk immediately for this word
-				promptFile := filepath.Join(wordDir, "image_prompt.txt")
-				os.WriteFile(promptFile, []byte(usedPrompt), 0644)
-
-				// Only update UI if this word is still the current word
-				a.mu.Lock()
-				isCurrentWord := a.currentWord == word
-				a.mu.Unlock()
-
-				if isCurrentWord {
-					fyne.Do(func() {
-						a.imagePromptEntry.SetText(usedPrompt)
-					})
-				}
-			}
-		}
-	}
+	// The prompt has already been saved and UI updated via the callback
 
 	return path, nil
 }

@@ -143,6 +143,11 @@ func (p *AudioPlayer) Clear() {
 // SetPhonetic sets the phonetic transcription text
 func (p *AudioPlayer) SetPhonetic(phonetic string) {
 	p.phoneticLabel.SetText(phonetic)
+	p.phoneticLabel.Refresh()
+	// Also refresh the container to ensure layout updates
+	if p.container != nil {
+		p.container.Refresh()
+	}
 }
 
 // SetAutoPlayEnabled sets the reference to the auto-play state

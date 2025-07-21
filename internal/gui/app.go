@@ -400,22 +400,45 @@ func (a *Application) setupUI() {
 	// Now that tooltip layer is created, set all tooltips
 	a.setupTooltips()
 
-	// Set tooltips for export and help buttons
-	exportButton.SetToolTip("Export to Anki (x)")
-	helpButton.SetToolTip("Show hotkeys (?)")
+	// Set tooltips for export and help buttons with a delay
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		fyne.Do(func() {
+			if exportButton != nil {
+				exportButton.SetToolTip("Export to Anki (x)")
+			}
+			if helpButton != nil {
+				helpButton.SetToolTip("Show hotkeys (?)")
+			}
+		})
+	}()
 
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
 		if a.fileCheckTicker != nil {
 			a.fileCheckTicker.Stop()
 		}
-		// Stop log capture
-		if a.logViewer != nil {
-			a.logViewer.StopCapture()
+		// Cancel any ongoing operations
+		if a.cancel != nil {
+			a.cancel()
 		}
-		a.cancel()
-		a.queue.Stop()
-		a.wg.Wait()
+		// Wait for all goroutines to finish with timeout
+		done := make(chan struct{})
+		go func() {
+			a.wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// All goroutines finished
+		case <-time.After(2 * time.Second):
+			// Timeout after 2 seconds
+			fmt.Println("Warning: Some operations did not complete before window close")
+		}
+
+		// Close the application
+		a.app.Quit()
 	})
 
 	// Set up keyboard shortcuts
@@ -567,71 +590,70 @@ func (a *Application) generateMaterials(word string) {
 		}
 	}
 
-	// Generate audio
-	fyne.Do(func() {
-		a.updateStatus("Generating audio...")
-		a.incrementProcessing() // Audio processing starts
-	})
-	audioFile, err := a.generateAudio(cardCtx, word)
-	a.decrementProcessing() // Audio processing ends
-
-	if err != nil {
-		fyne.Do(func() {
-			a.showError(fmt.Errorf("Audio generation failed: %w", err))
-			a.setUIEnabled(true)
-		})
-		return
+	// Create channels for parallel operations
+	type audioResult struct {
+		file string
+		err  error
+	}
+	type imageResult struct {
+		file string
+		err  error
+	}
+	type phoneticResult struct {
+		info string
+		err  error
 	}
 
-	// Only update UI if this word is still the current word
-	a.mu.Lock()
-	if a.currentWord == word {
-		a.currentAudioFile = audioFile
-		fyne.Do(func() {
-			a.audioPlayer.SetAudioFile(audioFile)
-		})
-	}
-	a.mu.Unlock()
+	audioChan := make(chan audioResult, 1)
+	imageChan := make(chan imageResult, 1)
+	phoneticChan := make(chan phoneticResult, 1)
 
-	// Generate images with custom prompt if provided
-	fyne.Do(func() {
-		a.updateStatus("Waiting for/downloading images...")
-		a.incrementProcessing() // Image processing starts
-	})
-
-	// Get custom prompt from UI
+	// Get custom prompt and translation before starting goroutines
 	customPrompt := a.imagePromptEntry.Text
-
-	// Pass the current translation to avoid re-translating
 	translation := a.currentTranslation
 	if translation == "" {
 		// Use the text from translationEntry if currentTranslation is not set
 		translation = strings.TrimSpace(a.translationEntry.Text)
 	}
-	imageFile, err := a.generateImagesWithPrompt(cardCtx, word, customPrompt, translation)
-	a.decrementProcessing() // Image processing ends
 
-	if err != nil {
+	// Update status to show parallel processing
+	fyne.Do(func() {
+		a.updateStatus("Generating audio, images, and phonetics in parallel...")
+	})
+
+	// Start all three operations in parallel
+
+	// 1. Audio generation
+	go func() {
 		fyne.Do(func() {
-			a.showError(fmt.Errorf("Image download failed: %w", err))
-			a.setUIEnabled(true)
+			a.incrementProcessing() // Audio processing starts
 		})
-		return
-	}
 
-	// Only update UI if this word is still the current word
-	if imageFile != "" {
-		a.mu.Lock()
-		if a.currentWord == word {
-			a.currentImage = imageFile
-			fyne.Do(func() {
-				a.imageDisplay.SetImages([]string{imageFile})
-			})
-		}
-		a.mu.Unlock()
-	}
+		audioFile, err := a.generateAudio(cardCtx, word)
+		a.decrementProcessing() // Audio processing ends
 
-	// Fetch phonetic information in a separate goroutine
+		audioChan <- audioResult{file: audioFile, err: err}
+	}()
+
+	// 2. Image generation
+	go func() {
+		fyne.Do(func() {
+			a.incrementProcessing() // Image processing starts
+			// Show generating status if this is still the current word
+			a.mu.Lock()
+			if a.currentWord == word {
+				a.imageDisplay.SetGenerating()
+			}
+			a.mu.Unlock()
+		})
+
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, word, customPrompt, translation)
+		a.decrementProcessing() // Image processing ends
+
+		imageChan <- imageResult{file: imageFile, err: err}
+	}()
+
+	// 3. Phonetic information fetching
 	go func() {
 		fyne.Do(func() {
 			a.incrementProcessing() // Phonetic processing starts
@@ -642,23 +664,9 @@ func (a *Application) generateMaterials(word string) {
 			// Log error but don't fail - phonetic info is optional
 			fmt.Printf("Warning: Failed to get phonetic info: %v\n", err)
 			phoneticInfo = "Failed to fetch phonetic information"
+		} else {
+			fmt.Printf("Successfully fetched phonetic info for '%s': %s\n", word, phoneticInfo)
 		}
-
-		// Update UI with phonetic info if this is still the current word
-		a.mu.Lock()
-		if a.currentWord == word {
-			a.currentPhonetic = phoneticInfo
-			fyne.Do(func() {
-				// Extract and display just the IPA
-				// Display the IPA directly
-				if phoneticInfo != "" {
-					a.audioPlayer.SetPhonetic(phoneticInfo)
-				} else {
-					a.audioPlayer.SetPhonetic("")
-				}
-			})
-		}
-		a.mu.Unlock()
 
 		// Save phonetic info to disk
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
@@ -666,7 +674,79 @@ func (a *Application) generateMaterials(word string) {
 		}
 
 		a.decrementProcessing() // Phonetic processing ends
+		phoneticChan <- phoneticResult{info: phoneticInfo, err: nil}
 	}()
+
+	// Wait for all operations to complete
+	var hasError bool
+
+	// Collect audio result
+	audioRes := <-audioChan
+	if audioRes.err != nil {
+		fyne.Do(func() {
+			a.showError(fmt.Errorf("Audio generation failed: %w", audioRes.err))
+		})
+		hasError = true
+	} else {
+		// Only update UI if this word is still the current word
+		a.mu.Lock()
+		if a.currentWord == word {
+			a.currentAudioFile = audioRes.file
+			fyne.Do(func() {
+				a.audioPlayer.SetAudioFile(audioRes.file)
+			})
+		}
+		a.mu.Unlock()
+	}
+
+	// Collect image result
+	imageRes := <-imageChan
+	if imageRes.err != nil {
+		fyne.Do(func() {
+			a.showError(fmt.Errorf("Image download failed: %w", imageRes.err))
+		})
+		hasError = true
+	} else if imageRes.file != "" {
+		// Only update UI if this word is still the current word
+		a.mu.Lock()
+		if a.currentWord == word {
+			a.currentImage = imageRes.file
+			fyne.Do(func() {
+				a.imageDisplay.SetImages([]string{imageRes.file})
+			})
+		}
+		a.mu.Unlock()
+	}
+
+	// Collect phonetic result
+	phoneticRes := <-phoneticChan
+	if phoneticRes.info != "" {
+		// Update UI with phonetic info if this is still the current word
+		a.mu.Lock()
+		shouldUpdate := a.currentWord == word
+		if shouldUpdate {
+			a.currentPhonetic = phoneticRes.info
+		}
+		a.mu.Unlock()
+
+		if shouldUpdate {
+			fmt.Printf("Updating phonetic display in UI for word '%s': %s\n", word, phoneticRes.info)
+			fyne.Do(func() {
+				// Display the IPA directly
+				a.audioPlayer.SetPhonetic(phoneticRes.info)
+			})
+		} else {
+			fmt.Printf("Not updating phonetic display - word mismatch (current: %s, this: %s)\n", a.currentWord, word)
+		}
+	}
+
+	// If any critical operation failed, re-enable UI
+	if hasError {
+		fyne.Do(func() {
+			a.setUIEnabled(true)
+		})
+		return
+	}
 
 	// Enable action buttons
 	fyne.Do(func() {
@@ -747,8 +827,8 @@ func (a *Application) onRegenerateImage() {
 	a.regenerateAllBtn.Disable()
 	a.showProgress("Regenerating image...")
 
-	// Clear the current image immediately
-	a.imageDisplay.Clear()
+	// Show generating status immediately
+	a.imageDisplay.SetGenerating()
 
 	// Get custom prompt from UI
 	customPrompt := a.imagePromptEntry.Text
@@ -811,8 +891,8 @@ func (a *Application) onRegenerateRandomImage() {
 	a.regenerateAllBtn.Disable()
 	a.showProgress("Generating random image...")
 
-	// Clear the current image immediately
-	a.imageDisplay.Clear()
+	// Show generating status immediately
+	a.imageDisplay.SetGenerating()
 
 	// Clear the custom prompt to let the system generate a new one
 	customPrompt := ""
@@ -910,8 +990,8 @@ func (a *Application) onRegenerateAll() {
 	a.setUIEnabled(false)
 	a.showProgress("Regenerating all materials...")
 
-	// Clear the current image immediately
-	a.imageDisplay.Clear()
+	// Show generating status immediately
+	a.imageDisplay.SetGenerating()
 
 	a.wg.Add(1)
 	go func() {
@@ -1386,25 +1466,54 @@ func (a *Application) clearUI() {
 
 // setupTooltips sets up all tooltips after the tooltip layer has been created
 func (a *Application) setupTooltips() {
-	// Navigation button tooltips
-	a.submitButton.SetToolTip("Generate word (g)")
-	a.prevWordBtn.SetToolTip("Previous word (← / h/х)")
-	a.nextWordBtn.SetToolTip("Next word (→ / l/л)")
+	// Use a goroutine with a delay to ensure the tooltip layer is fully initialized
+	go func() {
+		time.Sleep(500 * time.Millisecond)
 
-	// Action button tooltips
-	a.keepButton.SetToolTip("Keep card and new word (n)")
-	a.regenerateImageBtn.SetToolTip("Regenerate image (i)")
-	a.regenerateRandomImageBtn.SetToolTip("Random image (m)")
-	a.regenerateAudioBtn.SetToolTip("Regenerate audio (a)")
-	a.regenerateAllBtn.SetToolTip("Regenerate all (r)")
-	a.deleteButton.SetToolTip("Delete word (d)")
+		fyne.Do(func() {
+			// Navigation button tooltips
+			if a.submitButton != nil {
+				a.submitButton.SetToolTip("Generate word (g)")
+			}
+			if a.prevWordBtn != nil {
+				a.prevWordBtn.SetToolTip("Previous word (← / h/х)")
+			}
+			if a.nextWordBtn != nil {
+				a.nextWordBtn.SetToolTip("Next word (→ / l/л)")
+			}
 
-	// Export and help button tooltips need to be set after creation
-	// We'll handle this in setupUI where they are created
+			// Action button tooltips
+			if a.keepButton != nil {
+				a.keepButton.SetToolTip("Keep card and new word (n)")
+			}
+			if a.regenerateImageBtn != nil {
+				a.regenerateImageBtn.SetToolTip("Regenerate image (i)")
+			}
+			if a.regenerateRandomImageBtn != nil {
+				a.regenerateRandomImageBtn.SetToolTip("Random image (m)")
+			}
+			if a.regenerateAudioBtn != nil {
+				a.regenerateAudioBtn.SetToolTip("Regenerate audio (a)")
+			}
+			if a.regenerateAllBtn != nil {
+				a.regenerateAllBtn.SetToolTip("Regenerate all (r)")
+			}
+			if a.deleteButton != nil {
+				a.deleteButton.SetToolTip("Delete word (d)")
+			}
 
-	// Audio player tooltips
-	a.audioPlayer.playButton.SetToolTip("Play audio (p)")
-	a.audioPlayer.stopButton.SetToolTip("Stop audio")
+			// Export and help button tooltips need to be set after creation
+			// They are set in the main window setup
+
+			// Audio player tooltips
+			if a.audioPlayer != nil && a.audioPlayer.playButton != nil {
+				a.audioPlayer.playButton.SetToolTip("Play audio (p)")
+			}
+			if a.audioPlayer != nil && a.audioPlayer.stopButton != nil {
+				a.audioPlayer.stopButton.SetToolTip("Stop audio")
+			}
+		})
+	}()
 }
 
 // processNextInQueue processes the next word in the queue
@@ -1536,20 +1645,76 @@ func (a *Application) processWordJob(job *WordJob) {
 	}
 	a.mu.Unlock()
 
-	// Start fetching phonetic information concurrently
-	phoneticDone := make(chan struct{})
-	go func() {
-		defer close(phoneticDone)
+	// Create channels for parallel operations
+	type audioResult struct {
+		file string
+		err  error
+	}
+	type imageResult struct {
+		file string
+		err  error
+	}
+	type phoneticResult struct {
+		info string
+		err  error
+	}
 
+	audioChan := make(chan audioResult, 1)
+	imageChan := make(chan imageResult, 1)
+	phoneticChan := make(chan phoneticResult, 1)
+
+	// Update status to show parallel processing
+	fyne.Do(func() {
+		a.updateStatus(fmt.Sprintf("Processing '%s' - generating audio, images, and phonetics in parallel...", job.Word))
+	})
+
+	// Start all three operations in parallel
+
+	// 1. Audio generation
+	go func() {
+		fyne.Do(func() {
+			a.incrementProcessing() // Audio processing starts
+		})
+
+		audioFile, err := a.generateAudio(cardCtx, job.Word)
+		a.decrementProcessing() // Audio processing ends
+
+		audioChan <- audioResult{file: audioFile, err: err}
+	}()
+
+	// 2. Image generation (includes scene description)
+	go func() {
+		fyne.Do(func() {
+			a.incrementProcessing() // Image processing starts
+			// Show generating status if this is still the current job
+			a.mu.Lock()
+			if a.currentJobID == job.ID {
+				a.imageDisplay.SetGenerating()
+			}
+			a.mu.Unlock()
+		})
+
+		// Use the custom prompt from the job
+		// The translation variable already contains the correct translation (either from job or translated)
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, job.Word, job.CustomPrompt, translation)
+		a.decrementProcessing() // Image processing ends
+
+		imageChan <- imageResult{file: imageFile, err: err}
+	}()
+
+	// 3. Phonetic information fetching
+	go func() {
 		fyne.Do(func() {
 			a.incrementProcessing() // Phonetic processing starts
 		})
 
 		phoneticInfo, err := a.getPhoneticInfo(job.Word)
 		if err != nil {
-			// Log error but don't fail the job - phonetic info is optional
+			// Log error but don't fail - phonetic info is optional
 			fmt.Printf("Warning: Failed to get phonetic info: %v\n", err)
 			phoneticInfo = "Failed to fetch phonetic information"
+		} else {
+			fmt.Printf("Successfully fetched phonetic info for '%s': %s\n", job.Word, phoneticInfo)
 		}
 
 		// Save phonetic info to disk immediately for this specific word
@@ -1569,75 +1734,76 @@ func (a *Application) processWordJob(job *WordJob) {
 			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
 		}
 
-		// Update UI with phonetic info if this is still the current job
+		a.decrementProcessing() // Phonetic processing ends
+		phoneticChan <- phoneticResult{info: phoneticInfo, err: nil}
+	}()
+
+	// Wait for all operations to complete
+	var audioFile, imageFile string
+	var phoneticInfo string
+	var hasError bool
+
+	// Collect audio result
+	audioRes := <-audioChan
+	if audioRes.err != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("audio generation failed: %w", audioRes.err))
+		hasError = true
+	} else {
+		audioFile = audioRes.file
+
+		// Update UI with audio immediately if this is still the current job
 		a.mu.Lock()
-		if a.currentJobID == job.ID {
-			a.currentPhonetic = phoneticInfo
-			fyne.Do(func() {
-				// Extract and display just the IPA
-				// Display the IPA directly
-				if phoneticInfo != "" {
-					a.audioPlayer.SetPhonetic(phoneticInfo)
-				} else {
-					a.audioPlayer.SetPhonetic("")
-				}
-			})
+		isCurrentJob := a.currentJobID == job.ID
+		if isCurrentJob {
+			a.currentAudioFile = audioFile
 		}
 		a.mu.Unlock()
 
-		a.decrementProcessing() // Phonetic processing ends
-	}()
-
-	// Generate audio
-	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Generating audio for '%s'...", job.Word))
-		a.incrementProcessing() // Audio processing starts
-	})
-
-	audioFile, err := a.generateAudio(cardCtx, job.Word)
-	a.decrementProcessing() // Audio processing ends
-
-	if err != nil {
-		a.queue.FailJob(job.ID, fmt.Errorf("audio generation failed: %w", err))
-		a.finishCurrentJob()
-		return
+		if isCurrentJob {
+			fyne.Do(func() {
+				a.audioPlayer.SetAudioFile(audioFile)
+				// Enable audio-related actions
+				a.regenerateAudioBtn.Enable()
+			})
+		}
 	}
 
-	// Update UI with audio immediately if this is still the current job
+	// Collect image result
+	imageRes := <-imageChan
+	if imageRes.err != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("image download failed: %w", imageRes.err))
+		hasError = true
+	} else {
+		imageFile = imageRes.file
+	}
+
+	// Collect phonetic result
+	phoneticRes := <-phoneticChan
+	phoneticInfo = phoneticRes.info
+
+	// Update UI with phonetic info if this is still the current job
 	a.mu.Lock()
-	isCurrentJob := a.currentJobID == job.ID
-	if isCurrentJob {
-		a.currentAudioFile = audioFile
+	shouldUpdate := a.currentJobID == job.ID && phoneticInfo != ""
+	if shouldUpdate {
+		a.currentPhonetic = phoneticInfo
 	}
 	a.mu.Unlock()
 
-	if isCurrentJob {
+	if shouldUpdate {
+		fmt.Printf("Updating phonetic display in UI for job %d: %s\n", job.ID, phoneticInfo)
 		fyne.Do(func() {
-			a.audioPlayer.SetAudioFile(audioFile)
-			// Enable audio-related actions
-			a.regenerateAudioBtn.Enable()
+			// Display the IPA directly
+			a.audioPlayer.SetPhonetic(phoneticInfo)
 		})
+	} else {
+		fmt.Printf("Not updating phonetic display - job mismatch or empty info (current job: %d, this job: %d, info: %s)\n", a.currentJobID, job.ID, phoneticInfo)
 	}
 
-	// Generate images
-	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Waiting for/downloading images for '%s'...", job.Word))
-		a.incrementProcessing() // Image processing starts
-	})
-
-	// Use the custom prompt from the job
-	// The translation variable already contains the correct translation (either from job or translated)
-	imageFile, err := a.generateImagesWithPrompt(cardCtx, job.Word, job.CustomPrompt, translation)
-	a.decrementProcessing() // Image processing ends
-
-	if err != nil {
-		a.queue.FailJob(job.ID, fmt.Errorf("image download failed: %w", err))
+	// If any critical operation failed, finish the job and return
+	if hasError {
 		a.finishCurrentJob()
 		return
 	}
-
-	// Wait for phonetic fetching to complete before finalizing
-	<-phoneticDone
 
 	// Mark job as completed
 	fyne.Do(func() {
@@ -1648,12 +1814,16 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// Update UI with results if this is still the current job
 	a.mu.Lock()
-	isCurrentJob = a.currentJobID == job.ID
+	isCurrentJob := a.currentJobID == job.ID
 	if isCurrentJob {
 		a.currentTranslation = translation
 		a.currentAudioFile = audioFile
 		if imageFile != "" {
 			a.currentImage = imageFile
+		}
+		// Make sure we have the phonetic info too
+		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
+			a.currentPhonetic = phoneticInfo
 		}
 	}
 	a.mu.Unlock()
@@ -1665,6 +1835,13 @@ func (a *Application) processWordJob(job *WordJob) {
 				a.imageDisplay.SetImages([]string{imageFile})
 			}
 			a.audioPlayer.SetAudioFile(audioFile)
+			// Make sure phonetic info is displayed if we have it
+			if a.currentPhonetic != "" {
+				fmt.Printf("Setting phonetic in final UI update: %s\n", a.currentPhonetic)
+				a.audioPlayer.SetPhonetic(a.currentPhonetic)
+			} else {
+				fmt.Printf("No phonetic info available in final UI update\n")
+			}
 			a.hideProgress()
 			a.setActionButtonsEnabled(true)
 			a.updateStatus(fmt.Sprintf("Completed: %s", job.Word))
