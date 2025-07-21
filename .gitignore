@@ -21,12 +21,6 @@ go.work.sum
 # Build output
 totalrecall
 
-# IDE files
-.idea/
-.vscode/
-*.swp
-*.swo
-
 # OS files
 .DS_Store
 Thumbs.db
@@ -34,18 +28,3 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-
-# Audio cache (OpenAI TTS)
-.audio_cache/
-
-# Geberated cards data
-anki_cards
-
-# Configuration with API keys
-.totalrecall.yaml
-.image_cache/
-
-# Test output directories
-test_output/
-test_output2/
-test_phonetic/
