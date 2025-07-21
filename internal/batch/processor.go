@@ -10,12 +10,15 @@ import (
 type WordEntry struct {
 	Bulgarian   string
 	Translation string
+	// NeedsTranslation indicates if translation from English to Bulgarian is needed
+	NeedsTranslation bool
 }
 
 // ReadBatchFile reads words from a file and returns WordEntry slice
 // Supports formats:
-// - Bulgarian word only: "ябълка"
-// - With translation: "ябълка = apple"
+// - Bulgarian word only: "ябълка" (will be translated to English)
+// - With translation: "ябълка = apple" (both provided, no translation needed)
+// - English only: "= apple" (will be translated to Bulgarian)
 func ReadBatchFile(filename string) ([]WordEntry, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
@@ -27,24 +30,36 @@ func ReadBatchFile(filename string) ([]WordEntry, error) {
 
 	for _, line := range splitLines(lines) {
 		if line = trimSpace(line); line != "" {
-			// Check if line contains '=' for bulgarian = english format
+			// Check if line contains '=' for translation format
 			if strings.Contains(line, "=") {
 				parts := strings.SplitN(line, "=", 2)
 				if len(parts) == 2 {
 					bulgarian := strings.TrimSpace(parts[0])
 					english := strings.TrimSpace(parts[1])
-					if bulgarian != "" {
+
+					if bulgarian == "" && english != "" {
+						// Format: "= ENGLISH" - need to translate English to Bulgarian
 						entries = append(entries, WordEntry{
-							Bulgarian:   bulgarian,
-							Translation: english,
+							Bulgarian:        "", // Will be filled by translation
+							Translation:      english,
+							NeedsTranslation: true,
+						})
+					} else if bulgarian != "" && english != "" {
+						// Format: "BULGARIAN = ENGLISH" - both provided
+						entries = append(entries, WordEntry{
+							Bulgarian:        bulgarian,
+							Translation:      english,
+							NeedsTranslation: false,
 						})
 					}
+					// Ignore lines with empty English part
 				}
 			} else {
-				// Just a bulgarian word
+				// Just a Bulgarian word - needs translation to English
 				entries = append(entries, WordEntry{
-					Bulgarian:   line,
-					Translation: "",
+					Bulgarian:        line,
+					Translation:      "",
+					NeedsTranslation: false,
 				})
 			}
 		}

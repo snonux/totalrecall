@@ -30,9 +30,9 @@ func TestReadBatchFile(t *testing.T) {
 котка = cat
 куче = dog`,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "apple"},
-				{Bulgarian: "котка", Translation: "cat"},
-				{Bulgarian: "куче", Translation: "dog"},
+				{Bulgarian: "ябълка", Translation: "apple", NeedsTranslation: false},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
+				{Bulgarian: "куче", Translation: "dog", NeedsTranslation: false},
 			},
 		},
 		{
@@ -42,10 +42,10 @@ func TestReadBatchFile(t *testing.T) {
 куче
 хляб = bread`,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: ""},
-				{Bulgarian: "котка", Translation: "cat"},
-				{Bulgarian: "куче", Translation: ""},
-				{Bulgarian: "хляб", Translation: "bread"},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false},
 			},
 		},
 		{
@@ -59,25 +59,53 @@ func TestReadBatchFile(t *testing.T) {
 
 `,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: ""},
-				{Bulgarian: "котка", Translation: "cat"},
-				{Bulgarian: "куче", Translation: ""},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
 			},
 		},
 		{
 			name:        "windows line endings",
 			fileContent: "ябълка\r\nкотка = cat\r\nкуче",
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: ""},
-				{Bulgarian: "котка", Translation: "cat"},
-				{Bulgarian: "куче", Translation: ""},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
 			},
 		},
 		{
 			name:        "multiple equals signs",
 			fileContent: `test = word = with = equals`,
 			want: []WordEntry{
-				{Bulgarian: "test", Translation: "word = with = equals"},
+				{Bulgarian: "test", Translation: "word = with = equals", NeedsTranslation: false},
+			},
+		},
+		{
+			name: "english only format",
+			fileContent: `= apple
+= cat
+= dog`,
+			want: []WordEntry{
+				{Bulgarian: "", Translation: "apple", NeedsTranslation: true},
+				{Bulgarian: "", Translation: "cat", NeedsTranslation: true},
+				{Bulgarian: "", Translation: "dog", NeedsTranslation: true},
+			},
+		},
+		{
+			name: "all three formats mixed",
+			fileContent: `ябълка
+котка = cat
+= dog
+хляб = bread
+= table
+стол`,
+			want: []WordEntry{
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
+				{Bulgarian: "", Translation: "dog", NeedsTranslation: true},
+				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false},
+				{Bulgarian: "", Translation: "table", NeedsTranslation: true},
+				{Bulgarian: "стол", Translation: "", NeedsTranslation: false},
 			},
 		},
 	}

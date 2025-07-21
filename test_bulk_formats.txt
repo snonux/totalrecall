@@ -1,0 +1,24 @@
+# Test file demonstrating all bulk import formats
+
+# Format 1: Bulgarian only (will be translated to English)
+ябълка
+котка
+куче
+
+# Format 2: Both Bulgarian and English provided (no translation needed)
+хляб = bread
+вода = water
+мляко = milk
+
+# Format 3: English only (will be translated to Bulgarian)
+= table
+= chair
+= window
+
+# Mixed format example
+книга = book
+= computer
+стол
+прозорец = window
+= pencil
+молив

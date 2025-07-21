@@ -48,27 +48,79 @@ func (p *Processor) ProcessBatch() error {
 		return err
 	}
 
-	// Validate words
-	for _, entry := range entries {
-		if err := audio.ValidateBulgarianText(entry.Bulgarian); err != nil {
-			return fmt.Errorf("invalid word '%s': %w", entry.Bulgarian, err)
-		}
-	}
-
 	// Create output directory (including parent directories)
 	if err := os.MkdirAll(p.flags.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// First pass: handle entries that need English to Bulgarian translation
+	for i, entry := range entries {
+		if entry.NeedsTranslation && entry.Translation != "" {
+			// Translate English to Bulgarian
+			bulgarian, err := p.translator.TranslateEnglishToBulgarian(entry.Translation)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error translating '%s' to Bulgarian: %v\n", entry.Translation, err)
+				continue
+			}
+			entries[i].Bulgarian = bulgarian
+			fmt.Printf("Translated '%s' to Bulgarian: %s\n", entry.Translation, bulgarian)
+		}
+	}
+
+	// Validate Bulgarian words
+	for _, entry := range entries {
+		if entry.Bulgarian != "" {
+			if err := audio.ValidateBulgarianText(entry.Bulgarian); err != nil {
+				return fmt.Errorf("invalid word '%s': %w", entry.Bulgarian, err)
+			}
+		}
+	}
+
+	// Track statistics
+	skippedCount := 0
+	processedCount := 0
+	errorCount := 0
+
 	// Process each entry
 	for i, entry := range entries {
+		if entry.Bulgarian == "" {
+			continue // Skip entries without Bulgarian word
+		}
+
 		fmt.Printf("\nProcessing %d/%d: %s\n", i+1, len(entries), entry.Bulgarian)
+
+		// Check if word already exists and has all required files
+		if os.Getenv("DEBUG_BATCH") != "" {
+			fmt.Printf("  [DEBUG] Checking if word is fully processed...\n")
+		}
+		if p.isWordFullyProcessed(entry.Bulgarian) {
+			wordDir := p.findCardDirectory(entry.Bulgarian)
+			fmt.Printf("  ✓ Skipping '%s' - already fully processed in %s\n", entry.Bulgarian, filepath.Base(wordDir))
+			skippedCount++
+			continue
+		}
+		if os.Getenv("DEBUG_BATCH") != "" {
+			fmt.Printf("  [DEBUG] Word is not fully processed, will process it\n")
+		}
 
 		if err := p.ProcessWordWithTranslation(entry.Bulgarian, entry.Translation); err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing '%s': %v\n", entry.Bulgarian, err)
+			errorCount++
 			// Continue with next word
+		} else {
+			processedCount++
 		}
 	}
+
+	// Print summary
+	fmt.Printf("\n=== Batch Processing Summary ===\n")
+	fmt.Printf("Total words: %d\n", len(entries))
+	fmt.Printf("Processed: %d\n", processedCount)
+	fmt.Printf("Skipped (already complete): %d\n", skippedCount)
+	if errorCount > 0 {
+		fmt.Printf("Errors: %d\n", errorCount)
+	}
+	fmt.Printf("================================\n")
 
 	return nil
 }
@@ -117,9 +169,15 @@ func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string)
 		// Find or create word directory
 		wordDir := p.findOrCreateWordDirectory(word)
 
-		// Save translation to file
-		if err := translation.SaveTranslation(wordDir, word, translationText); err != nil {
-			fmt.Printf("  Warning: Failed to save translation: %v\n", err)
+		// Check if translation file already exists
+		translationFile := filepath.Join(wordDir, "translation.txt")
+		if _, err := os.Stat(translationFile); os.IsNotExist(err) {
+			// Save translation to file
+			if err := translation.SaveTranslation(wordDir, word, translationText); err != nil {
+				fmt.Printf("  Warning: Failed to save translation: %v\n", err)
+			}
+		} else {
+			fmt.Printf("  Translation file already exists\n")
 		}
 	}
 
@@ -344,11 +402,23 @@ func (p *Processor) downloadImagesWithTranslation(word, translationText string) 
 	return nil
 }
 
-// GenerateAnkiFile generates the Anki import file
-func (p *Processor) GenerateAnkiFile() error {
+// GenerateAnkiFile generates the Anki import file and returns the output path
+func (p *Processor) GenerateAnkiFile() (string, error) {
+	// When --anki is used from CLI, save to home directory
+	var outputDir string
+	if p.flags.GenerateAnki {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		outputDir = homeDir
+	} else {
+		outputDir = p.flags.OutputDir
+	}
+
 	// Create Anki generator
 	gen := anki.NewGenerator(&anki.GeneratorOptions{
-		OutputPath:     filepath.Join(p.flags.OutputDir, "anki_import.csv"),
+		OutputPath:     filepath.Join(outputDir, "anki_import.csv"),
 		MediaFolder:    p.flags.OutputDir,
 		IncludeHeaders: true,
 		AudioFormat:    p.flags.AudioFormat,
@@ -356,7 +426,7 @@ func (p *Processor) GenerateAnkiFile() error {
 
 	// Generate cards from output directory
 	if err := gen.GenerateFromDirectory(p.flags.OutputDir); err != nil {
-		return fmt.Errorf("failed to generate cards: %w", err)
+		return "", fmt.Errorf("failed to generate cards: %w", err)
 	}
 
 	// Add translations to cards
@@ -367,16 +437,18 @@ func (p *Processor) GenerateAnkiFile() error {
 		}
 	}
 
+	var outputPath string
 	if p.flags.AnkiCSV {
 		// Generate CSV
+		outputPath = filepath.Join(outputDir, "anki_import.csv")
 		if err := gen.GenerateCSV(); err != nil {
-			return fmt.Errorf("failed to generate CSV: %w", err)
+			return "", fmt.Errorf("failed to generate CSV: %w", err)
 		}
 	} else {
 		// Generate APKG
-		outputPath := filepath.Join(p.flags.OutputDir, fmt.Sprintf("%s.apkg", internal.SanitizeFilename(p.flags.DeckName)))
+		outputPath = filepath.Join(outputDir, fmt.Sprintf("%s.apkg", internal.SanitizeFilename(p.flags.DeckName)))
 		if err := gen.GenerateAPKG(outputPath, p.flags.DeckName); err != nil {
-			return fmt.Errorf("failed to generate APKG: %w", err)
+			return "", fmt.Errorf("failed to generate APKG: %w", err)
 		}
 	}
 
@@ -385,7 +457,7 @@ func (p *Processor) GenerateAnkiFile() error {
 	fmt.Printf("  Generated %d cards (%d with audio, %d with images)\n",
 		total, withAudio, withImages)
 
-	return nil
+	return outputPath, nil
 }
 
 // RunGUIMode launches the GUI application
@@ -461,21 +533,105 @@ func (p *Processor) findCardDirectory(word string) string {
 			if storedWord == word {
 				return dirPath
 			}
-		} else {
-			// Try old format with underscore for backward compatibility
-			wordFile = filepath.Join(dirPath, "_word.txt")
-			if data, err := os.ReadFile(wordFile); err == nil {
-				storedWord := strings.TrimSpace(string(data))
-				if storedWord == word {
-					return dirPath
-				}
-			}
 		}
 	}
 
 	return ""
 }
 
+// isWordFullyProcessed checks if a word has already been fully processed
+func (p *Processor) isWordFullyProcessed(word string) bool {
+	// Find the word directory
+	wordDir := p.findCardDirectory(word)
+	if wordDir == "" {
+		return false // No directory exists
+	}
+
+	// Debug logging
+	if os.Getenv("DEBUG_BATCH") != "" {
+		fmt.Printf("  [DEBUG] Checking word directory: %s\n", wordDir)
+	}
+
+	// Check for required files
+	requiredFiles := []string{
+		"word.txt",        // Word metadata
+		"translation.txt", // Translation file
+		"phonetic.txt",    // Phonetic information
+	}
+
+	// Check for audio-related files (unless skipped)
+	if !p.flags.SkipAudio {
+		// Add audio-related files to required list
+		requiredFiles = append(requiredFiles,
+			"audio_attribution.txt",
+			"audio_metadata.txt",
+		)
+
+		// Check for audio file (without voice suffix for single voice mode)
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+		if _, err := os.Stat(audioFile); os.IsNotExist(err) {
+			// Also check for audio files with voice suffix (for all-voices mode)
+			audioPattern := fmt.Sprintf("audio_*.%s", p.flags.AudioFormat)
+			matches, _ := filepath.Glob(filepath.Join(wordDir, audioPattern))
+			if len(matches) == 0 {
+				if os.Getenv("DEBUG_BATCH") != "" {
+					fmt.Printf("  [DEBUG] No audio file found: %s or pattern %s\n", audioFile, audioPattern)
+				}
+				return false // No audio file found
+			}
+		}
+	}
+
+	// Check for image-related files (unless skipped)
+	if !p.flags.SkipImages {
+		// Add image-related files to required list
+		requiredFiles = append(requiredFiles,
+			"image_attribution.txt",
+			"image_prompt.txt",
+		)
+
+		// Check for at least one image file
+		imagePatterns := []string{"image_*.jpg", "image_*.png", "image_*.webp", "image.jpg", "image.png", "image.webp"}
+		hasImage := false
+		for _, pattern := range imagePatterns {
+			if strings.Contains(pattern, "*") {
+				matches, _ := filepath.Glob(filepath.Join(wordDir, pattern))
+				if len(matches) > 0 {
+					hasImage = true
+					break
+				}
+			} else {
+				// Direct file check
+				if _, err := os.Stat(filepath.Join(wordDir, pattern)); err == nil {
+					hasImage = true
+					break
+				}
+			}
+		}
+		if !hasImage {
+			if os.Getenv("DEBUG_BATCH") != "" {
+				fmt.Printf("  [DEBUG] No image files found in %s\n", wordDir)
+			}
+			return false // No image files found
+		}
+	}
+
+	// Check all required files exist
+	for _, file := range requiredFiles {
+		filePath := filepath.Join(wordDir, file)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			if os.Getenv("DEBUG_BATCH") != "" {
+				fmt.Printf("  [DEBUG] Required file missing: %s\n", filePath)
+			}
+			return false // Required file missing
+		}
+	}
+
+	if os.Getenv("DEBUG_BATCH") != "" {
+		fmt.Printf("  [DEBUG] All required files exist, word is fully processed\n")
+	}
+	return true // All required files exist
+}
 func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config) error {
 	// Create attribution text
 	attribution := fmt.Sprintf("Audio generated by OpenAI TTS\n\n")

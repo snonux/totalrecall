@@ -57,6 +57,39 @@ func (t *Translator) TranslateWord(word string) (string, error) {
 	return translation, nil
 }
 
+// TranslateEnglishToBulgarian translates an English word to Bulgarian
+func (t *Translator) TranslateEnglishToBulgarian(word string) (string, error) {
+	if t.apiKey == "" {
+		return "", fmt.Errorf("OpenAI API key not found")
+	}
+
+	ctx := context.Background()
+
+	req := openai.ChatCompletionRequest{
+		Model: openai.GPT4oMini,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf("Translate the English word '%s' to Bulgarian. Respond with only the Bulgarian translation in Cyrillic script, nothing else.", word),
+			},
+		},
+		MaxTokens:   50,
+		Temperature: 0.3,
+	}
+
+	resp, err := t.client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("OpenAI API error: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no translation returned")
+	}
+
+	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
+	return translation, nil
+}
+
 // SaveTranslation saves the translation to a file in the word directory
 func SaveTranslation(wordDir, word, translation string) error {
 	outputFile := filepath.Join(wordDir, "translation.txt")

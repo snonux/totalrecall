@@ -23,6 +23,7 @@ import (
 
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
+	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
@@ -345,8 +346,9 @@ func (a *Application) setupUI() {
 	// But keep delete button enabled for cancelling operations
 	a.deleteButton.Enable()
 
-	// Create export and help buttons for toolbar
+	// Create export, archive and help buttons for toolbar
 	exportButton := ttwidget.NewButtonWithIcon("", theme.UploadIcon(), a.onExportToAnki)
+	archiveButton := ttwidget.NewButtonWithIcon("", theme.FolderOpenIcon(), a.onArchive)
 	helpButton := ttwidget.NewButtonWithIcon("", theme.HelpIcon(), a.onShowHotkeys)
 
 	// Create toolbar with navigation buttons first, then action buttons
@@ -363,6 +365,7 @@ func (a *Application) setupUI() {
 		a.regenerateAllBtn,
 		widget.NewSeparator(),
 		exportButton,
+		archiveButton,
 		helpButton,
 	)
 
@@ -400,12 +403,15 @@ func (a *Application) setupUI() {
 	// Now that tooltip layer is created, set all tooltips
 	a.setupTooltips()
 
-	// Set tooltips for export and help buttons with a delay
+	// Set tooltips for export, archive and help buttons with a delay
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		fyne.Do(func() {
 			if exportButton != nil {
 				exportButton.SetToolTip("Export to Anki (x)")
+			}
+			if archiveButton != nil {
+				archiveButton.SetToolTip("Archive all cards")
 			}
 			if helpButton != nil {
 				helpButton.SetToolTip("Show hotkeys (?)")
@@ -1034,7 +1040,7 @@ func (a *Application) onExportToAnki() {
 
 	// Export directory selection
 	homeDir, _ := os.UserHomeDir()
-	defaultExportDir := filepath.Join(homeDir, "Downloads")
+	defaultExportDir := homeDir // Changed from Downloads to home directory
 	selectedDir := defaultExportDir
 
 	dirLabel := widget.NewLabel(selectedDir)
@@ -1199,6 +1205,110 @@ func (a *Application) onExportToAnki() {
 	customDialog.Show()
 }
 
+// onArchive archives the current cards directory
+func (a *Application) onArchive() {
+	// Function to perform the archive
+	performArchive := func() {
+		// Get the cards directory path
+		home, _ := os.UserHomeDir()
+		cardsDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
+
+		// Archive the cards
+		if err := archive.ArchiveCards(cardsDir); err != nil {
+			dialog.ShowError(err, a.window)
+			return
+		}
+
+		// Clear the saved cards list
+		a.mu.Lock()
+		a.savedCards = []anki.Card{}
+		a.existingWords = []string{}
+		a.mu.Unlock()
+
+		// Update status
+		a.updateStatus("Cards archived successfully")
+
+		// Refresh the current word display
+		a.scanExistingWords()
+		if a.currentWord != "" {
+			a.loadExistingFiles(a.currentWord)
+		}
+	}
+
+	// Create confirmation dialog
+	confirmDialog := dialog.NewConfirm("Archive Cards",
+		"Are you sure you want to archive all existing cards?\n\nThis will move the cards directory to:\n~/.local/state/totalrecall/archive/cards-TIMESTAMP",
+		func(confirmed bool) {
+			if confirmed {
+				performArchive()
+			}
+		},
+		a.window,
+	)
+
+	// Track if we're in archive confirmation mode
+	archiveConfirming := true
+
+	// Save original key handlers
+	oldKeyHandler := a.window.Canvas().OnTypedKey()
+	oldRuneHandler := a.window.Canvas().OnTypedRune()
+
+	// Handle both Latin and Cyrillic keys
+	a.window.Canvas().SetOnTypedRune(func(r rune) {
+		if archiveConfirming {
+			switch r {
+			case 'y', 'Y', 'ъ', 'Ъ':
+				confirmDialog.Hide()
+				archiveConfirming = false
+				performArchive()
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			case 'n', 'N', 'н', 'Н', 'c', 'C', 'ц', 'Ц':
+				confirmDialog.Hide()
+				archiveConfirming = false
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			}
+		} else if oldRuneHandler != nil {
+			oldRuneHandler(r)
+		}
+	})
+
+	// Handle special keys
+	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if archiveConfirming {
+			switch ev.Name {
+			case fyne.KeyY:
+				confirmDialog.Hide()
+				archiveConfirming = false
+				performArchive()
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			case fyne.KeyN, fyne.KeyC, fyne.KeyEscape:
+				confirmDialog.Hide()
+				archiveConfirming = false
+				// Restore original handlers
+				a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+				a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+			}
+		} else if oldKeyHandler != nil {
+			oldKeyHandler(ev)
+		}
+	})
+
+	// Set up dialog close handler to restore key handlers
+	confirmDialog.SetOnClosed(func() {
+		archiveConfirming = false
+		a.window.Canvas().SetOnTypedKey(oldKeyHandler)
+		a.window.Canvas().SetOnTypedRune(oldRuneHandler)
+	})
+
+	confirmDialog.Show()
+}
+
 // onShowHotkeys displays a dialog with all available keyboard shortcuts
 func (a *Application) onShowHotkeys() {
 	hotkeys := `[Project Page: https://codeberg.org/snonux/totalrecall](https://codeberg.org/snonux/totalrecall)
@@ -1236,6 +1346,12 @@ func (a *Application) onShowHotkeys() {
 **?** Show hotkeys  
 **c/ц** Close dialog  
 **q/ч** Quit application  
+
+## Dialogs
+**y/ъ** Confirm action  
+**n/н** Cancel action  
+**c/ц** Cancel action  
+**Esc** Cancel action  
 
 ---
 *All hotkeys work with both Latin and Cyrillic keyboards*

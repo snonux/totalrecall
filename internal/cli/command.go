@@ -24,7 +24,13 @@ representative images from web search APIs.
 Examples:
   totalrecall                     # Launch interactive GUI (default)
   totalrecall ябълка              # Generate materials for "apple" via CLI
-  totalrecall --batch words.txt   # Process multiple words from file`,
+  totalrecall --batch words.txt   # Process multiple words from file
+  totalrecall --archive           # Archive existing cards directory
+
+Batch file formats:
+  ябълка                          # Bulgarian word (will be translated to English)
+  ябълка = apple                  # Bulgarian with translation provided
+  = apple                         # English only (will be translated to Bulgarian)`,
 		Args:    cobra.MaximumNArgs(1),
 		Version: internal.Version,
 	}
@@ -41,6 +47,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	defaultOutputDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 
 	// Global flags
+	// AGENT: The default config file location should be ~/.config/totalrecall/config.yaml
 	cmd.PersistentFlags().StringVar(&flags.CfgFile, "config", "", "config file (default is $HOME/.totalrecall.yaml)")
 
 	// Local flags
@@ -56,6 +63,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().BoolVar(&flags.ListModels, "list-models", false, "List available OpenAI models for the current API key")
 	cmd.Flags().BoolVar(&flags.AllVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
 	cmd.Flags().BoolVar(&flags.NoAutoPlay, "no-auto-play", false, "Disable automatic audio playback in GUI mode (auto-play is enabled by default)")
+	cmd.Flags().BoolVar(&flags.Archive, "archive", false, "Archive existing cards directory with timestamp")
 
 	// OpenAI flags
 	cmd.Flags().StringVar(&flags.OpenAIModel, "openai-model", flags.OpenAIModel, "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")

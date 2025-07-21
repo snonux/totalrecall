@@ -208,7 +208,7 @@ func TestGenerateAnkiFile(t *testing.T) {
 	p.translationCache.Add("ябълка", "apple")
 	p.translationCache.Add("котка", "cat")
 
-	err := p.GenerateAnkiFile()
+	_, err := p.GenerateAnkiFile()
 	if err != nil {
 		t.Errorf("GenerateAnkiFile failed: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 	os.WriteFile(filepath.Join(word1Dir, "ябълка.mp3"), []byte("audio1"), 0644)
 	os.WriteFile(filepath.Join(word2Dir, "котка.mp3"), []byte("audio2"), 0644)
 
-	err := p.GenerateAnkiFile()
+	_, err := p.GenerateAnkiFile()
 	if err != nil {
 		t.Errorf("GenerateAnkiFile (APKG) failed: %v", err)
 	}

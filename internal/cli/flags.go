@@ -16,6 +16,7 @@ type Flags struct {
 	ListModels   bool
 	AllVoices    bool
 	NoAutoPlay   bool
+	Archive      bool
 
 	// OpenAI flags
 	OpenAIModel       string

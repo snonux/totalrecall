@@ -60,6 +60,55 @@ func TestTranslateWord_Integration(t *testing.T) {
 	t.Logf("Translation of 'ябълка': %s", translation)
 }
 
+func TestTranslateEnglishToBulgarian_NoAPIKey(t *testing.T) {
+	translator := NewTranslator("")
+
+	_, err := translator.TranslateEnglishToBulgarian("apple")
+	if err == nil {
+		t.Error("Expected error for missing API key")
+	}
+
+	if err.Error() != "OpenAI API key not found" {
+		t.Errorf("Expected 'OpenAI API key not found' error, got: %v", err)
+	}
+}
+
+func TestTranslateEnglishToBulgarian_Integration(t *testing.T) {
+	// Skip if no API key
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
+	}
+
+	translator := NewTranslator(apiKey)
+
+	// Test with a simple word
+	translation, err := translator.TranslateEnglishToBulgarian("apple")
+	if err != nil {
+		t.Errorf("TranslateEnglishToBulgarian failed: %v", err)
+	}
+
+	// Check that we got a reasonable translation
+	// The exact translation might vary, but it should be in Cyrillic
+	if translation == "" {
+		t.Error("Got empty translation")
+	}
+
+	// Check that the result contains Cyrillic characters
+	hasCyrillic := false
+	for _, r := range translation {
+		if r >= 'А' && r <= 'я' {
+			hasCyrillic = true
+			break
+		}
+	}
+	if !hasCyrillic {
+		t.Errorf("Expected Cyrillic translation, got: %s", translation)
+	}
+
+	t.Logf("Translation of 'apple': %s", translation)
+}
+
 func TestSaveTranslation(t *testing.T) {
 	tmpDir := t.TempDir()
 

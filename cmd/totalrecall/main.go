@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
+	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
@@ -40,10 +42,27 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		// Output directory already set by flags
 	}
 
+	// Handle --archive flag
+	if flags.Archive {
+		home, _ := os.UserHomeDir()
+		cardsDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
+		if err := archive.ArchiveCards(cardsDir); err != nil {
+			return fmt.Errorf("failed to archive cards: %w", err)
+		}
+		return nil
+	}
+
 	// Handle --list-models flag
 	if flags.ListModels {
 		lister := models.NewLister(cli.GetOpenAIKey())
 		return lister.ListAvailableModels()
+	}
+
+	// Auto-adjust image size for DALL-E 3
+	if flags.OpenAIImageModel == "dall-e-3" && !cmd.Flags().Changed("openai-image-size") {
+		// If user didn't explicitly set size, use 1024x1024 for DALL-E 3
+		flags.OpenAIImageSize = "1024x1024"
+		fmt.Printf("Note: Using image size 1024x1024 for DALL-E 3 (use --openai-image-size to override)\n")
 	}
 
 	// Create processor
@@ -68,14 +87,11 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	// Generate Anki file if requested
 	if flags.GenerateAnki {
 		fmt.Printf("\nGenerating Anki import file...\n")
-		if err := proc.GenerateAnkiFile(); err != nil {
+		outputPath, err := proc.GenerateAnkiFile()
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to generate Anki file: %v\n", err)
 		} else {
-			if flags.AnkiCSV {
-				fmt.Println("Anki import file created: anki_import.csv")
-			} else {
-				fmt.Printf("Anki package created: %s.apkg\n", flags.DeckName)
-			}
+			fmt.Printf("Anki package created: %s\n", outputPath)
 		}
 	}
 
