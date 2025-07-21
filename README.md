@@ -9,7 +9,15 @@
 It has mainly been vibe coded using Claude Code CLI.
 
 <p align="center">
-  <img src="assets/screenshots/totalrecall.png" alt="TotalRecall screens hot">
+  <img src="assets/totalrecall.png" alt="TotalRecall screens hot">
+</p>
+
+<p align="center">
+  <strong>Computer / Компютър</strong><br>
+  <audio controls>
+    <source src="assets/audio.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
 </p>
 
 
