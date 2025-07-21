@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -20,40 +21,48 @@ import (
 type AudioPlayer struct {
 	widget.BaseWidget
 
-	container   *fyne.Container
-	playButton  *ttwidget.Button
-	stopButton  *ttwidget.Button
-	statusLabel *widget.Label
+	container     *fyne.Container
+	playButton    *ttwidget.Button
+	stopButton    *ttwidget.Button
+	statusLabel   *widget.Label
+	phoneticLabel *widget.Label
 
-	audioFile  string
-	isPlaying  bool
-	playCmd    *exec.Cmd
-	voiceInfo  string // Stores voice and speed info
+	audioFile       string
+	isPlaying       bool
+	playCmd         *exec.Cmd
+	voiceInfo       string // Stores voice and speed info
+	autoPlayEnabled *bool  // Pointer to parent's auto-play state
 }
 
 // NewAudioPlayer creates a new audio player widget
 func NewAudioPlayer() *AudioPlayer {
 	p := &AudioPlayer{}
 
-	// Create controls with tooltips
+	// Create controls (tooltips will be set later after tooltip layer is created)
 	p.playButton = ttwidget.NewButton("", p.onPlay)
 	p.playButton.Icon = theme.MediaPlayIcon()
-	p.playButton.SetToolTip("Play audio (P)")
 
 	p.stopButton = ttwidget.NewButton("", p.onStop)
 	p.stopButton.Icon = theme.MediaStopIcon()
-	p.stopButton.SetToolTip("Stop audio")
 
 	p.statusLabel = widget.NewLabel("No audio loaded")
+
+	// Create phonetic label
+	p.phoneticLabel = widget.NewLabel("")
+	p.phoneticLabel.TextStyle = fyne.TextStyle{
+		Bold:   true,
+		Italic: true,
+	}
 
 	// Initially disable controls
 	p.playButton.Disable()
 	p.stopButton.Disable()
 
-	// Create main container
+	// Create main container with phonetic display
 	p.container = container.NewHBox(
 		p.playButton,
 		p.stopButton,
+		p.phoneticLabel,
 		layout.NewSpacer(),
 		p.statusLabel,
 	)
@@ -74,13 +83,13 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 
 	if audioFile != "" {
 		p.playButton.Enable()
-		
+
 		// Try to load voice metadata
 		wordDir := filepath.Dir(audioFile)
 		metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
 		voice := ""
 		speed := ""
-		
+
 		if data, err := os.ReadFile(metadataFile); err == nil {
 			lines := strings.Split(string(data), "\n")
 			for _, line := range lines {
@@ -91,17 +100,29 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 				}
 			}
 		}
-		
+
 		// Store voice info
 		if voice != "" && speed != "" {
 			p.voiceInfo = fmt.Sprintf(" (voice: %s, speed: %s)", voice, speed)
 		} else {
 			p.voiceInfo = ""
 		}
-		
+
 		// Format status text with voice and speed info
 		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
 		p.statusLabel.SetText(statusText)
+
+		// Auto-play if enabled
+		if p.autoPlayEnabled != nil && *p.autoPlayEnabled {
+			// Small delay to ensure UI is ready
+			go func() {
+				// Wait a tiny bit for UI to be ready
+				time.Sleep(100 * time.Millisecond)
+				fyne.Do(func() {
+					p.onPlay()
+				})
+			}()
+		}
 	} else {
 		p.Clear()
 	}
@@ -116,6 +137,17 @@ func (p *AudioPlayer) Clear() {
 	p.playButton.Disable()
 	p.stopButton.Disable()
 	p.statusLabel.SetText("No audio loaded")
+	p.phoneticLabel.SetText("")
+}
+
+// SetPhonetic sets the phonetic transcription text
+func (p *AudioPlayer) SetPhonetic(phonetic string) {
+	p.phoneticLabel.SetText(phonetic)
+}
+
+// SetAutoPlayEnabled sets the reference to the auto-play state
+func (p *AudioPlayer) SetAutoPlayEnabled(autoPlayEnabled *bool) {
+	p.autoPlayEnabled = autoPlayEnabled
 }
 
 // onPlay handles play button click
@@ -158,7 +190,9 @@ func (p *AudioPlayer) onStop() {
 // Play triggers audio playback
 func (p *AudioPlayer) Play() {
 	if !p.playButton.Disabled() {
-		p.onPlay()
+		fyne.Do(func() {
+			p.onPlay()
+		})
 	}
 }
 

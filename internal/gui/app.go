@@ -33,15 +33,15 @@ type Application struct {
 	window fyne.Window
 
 	// UI elements
-	wordInput        *widget.Entry
+	wordInput        *CustomEntry
 	submitButton     *ttwidget.Button
 	imageDisplay     *ImageDisplay
 	audioPlayer      *AudioPlayer
-	translationEntry *widget.Entry
+	translationEntry *CustomEntry
 	statusLabel      *widget.Label
 	queueStatusLabel *widget.Label
-	imagePromptEntry *widget.Entry
-	phoneticDisplay  *widget.Label
+	imagePromptEntry *CustomMultiLineEntry
+	logViewer        *LogViewer
 
 	// Navigation buttons
 	prevWordBtn *ttwidget.Button
@@ -60,13 +60,14 @@ type Application struct {
 	currentAudioFile   string
 	currentImage       string
 	currentTranslation string
+	currentPhonetic    string // Full phonetic information
 	currentJobID       int
 	savedCards         []anki.Card
 	existingWords      []string // Words already in anki_cards folder
 	currentWordIndex   int
-	deleteConfirming   bool        // Track if we're in delete confirmation mode
-	quitConfirming     bool        // Track if we're in quit confirmation mode
-	wordChangeTimer    *time.Timer // Timer for detecting word changes
+	deleteConfirming   bool         // Track if we're in delete confirmation mode
+	quitConfirming     bool         // Track if we're in quit confirmation mode
+	wordChangeTimer    *time.Timer  // Timer for detecting word changes
 	fileCheckTicker    *time.Ticker // Ticker for checking missing files
 
 	// Word processing queue
@@ -74,6 +75,9 @@ type Application struct {
 
 	// Processing statistics
 	processingCount int // Number of tasks currently processing (audio/image)
+
+	// Auto-play state
+	autoPlayEnabled bool // Whether to automatically play audio when generated or navigated to
 
 	// Configuration
 	config      *Config
@@ -84,10 +88,10 @@ type Application struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.Mutex
-	
+
 	// Per-card cancellation tracking
 	cardContexts map[string]context.CancelFunc // Map of word -> cancel function
-	cardMu       sync.Mutex                   // Mutex for cardContexts map
+	cardMu       sync.Mutex                    // Mutex for cardContexts map
 }
 
 // Config holds GUI application configuration
@@ -103,7 +107,7 @@ func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	// Use XDG Base Directory specification for state data
 	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
-	
+
 	return &Config{
 		OutputDir:     outputDir,
 		AudioFormat:   "mp3",
@@ -136,14 +140,15 @@ func New(config *Config) *Application {
 
 	myApp := app.NewWithID("org.codeberg.snonux.totalrecall")
 	myApp.SetIcon(GetAppIcon())
-	
+
 	app := &Application{
-		app:          myApp,
-		config:       config,
-		ctx:          ctx,
-		cancel:       cancel,
-		savedCards:   make([]anki.Card, 0),
-		cardContexts: make(map[string]context.CancelFunc),
+		app:             myApp,
+		config:          config,
+		ctx:             ctx,
+		cancel:          cancel,
+		savedCards:      make([]anki.Card, 0),
+		cardContexts:    make(map[string]context.CancelFunc),
+		autoPlayEnabled: true, // Auto-play enabled by default
 	}
 
 	// Initialize the word processing queue
@@ -179,16 +184,20 @@ func New(config *Config) *Application {
 func (a *Application) setupUI() {
 	a.window = a.app.NewWindow(fmt.Sprintf("TotalRecall v%s - Bulgarian Flashcard Generator", internal.Version))
 	a.window.SetIcon(GetAppIcon())
-	a.window.Resize(fyne.NewSize(800, 700))
+	a.window.Resize(fyne.NewSize(880, 770))
 
 	// Create input section with navigation
-	a.wordInput = widget.NewEntry()
+	a.wordInput = NewCustomEntry()
 	a.wordInput.SetPlaceHolder("Bulgarian word...")
 	a.wordInput.OnSubmitted = func(string) {
 		a.onSubmit()
 		// Remove focus from input field after submit
 		a.window.Canvas().Unfocus()
 	}
+	// Set escape handler to unfocus
+	a.wordInput.SetOnEscape(func() {
+		a.window.Canvas().Unfocus()
+	})
 	a.wordInput.OnChanged = func(text string) {
 		// When user starts typing a new word, disconnect from any previous job
 		// to prevent mix-ups with background processing
@@ -215,7 +224,7 @@ func (a *Application) setupUI() {
 	}
 
 	// Create translation entry
-	a.translationEntry = widget.NewEntry()
+	a.translationEntry = NewCustomEntry()
 	a.translationEntry.SetPlaceHolder("English translation...")
 	a.translationEntry.OnChanged = func(text string) {
 		// When user starts typing in translation field, disconnect from any previous job
@@ -235,6 +244,10 @@ func (a *Application) setupUI() {
 		// Remove focus from input field after submit
 		a.window.Canvas().Unfocus()
 	}
+	// Set escape handler to unfocus
+	a.translationEntry.SetOnEscape(func() {
+		a.window.Canvas().Unfocus()
+	})
 
 	// Create navigation buttons (tooltips will be set after tooltip layer is created)
 	a.submitButton = ttwidget.NewButton("", a.onSubmit)
@@ -262,17 +275,20 @@ func (a *Application) setupUI() {
 	// Create display section
 	a.imageDisplay = NewImageDisplay()
 	a.audioPlayer = NewAudioPlayer()
+	a.audioPlayer.SetAutoPlayEnabled(&a.autoPlayEnabled)
 
-	// Create image prompt entry
-	a.imagePromptEntry = widget.NewMultiLineEntry()
+	// Create image prompt entry with custom escape handling
+	a.imagePromptEntry = NewCustomMultiLineEntry()
 	a.imagePromptEntry.SetPlaceHolder("Custom image prompt (optional)... Press Escape to exit field")
 	a.imagePromptEntry.Wrapping = fyne.TextWrapWord // Enable word wrapping
 	a.imagePromptEntry.OnChanged = func(text string) {
 		// Save the image prompt immediately when changed
 		a.saveImagePrompt()
 	}
-
-	// Create container for image and prompt with proper sizing
+	// Set escape handler to unfocus
+	a.imagePromptEntry.SetOnEscape(func() {
+		a.window.Canvas().Unfocus()
+	}) // Create container for image and prompt with proper sizing
 	promptContainer := container.NewBorder(
 		widget.NewLabel("Image Prompt:"),
 		nil,
@@ -288,33 +304,20 @@ func (a *Application) setupUI() {
 	)
 	imageSection.SetOffset(0.5) // Equal 50/50 split
 
-	// Create phonetic display section
-	a.phoneticDisplay = widget.NewLabel("Phonetic information will appear here...")
-	a.phoneticDisplay.Wrapping = fyne.TextWrapWord
+	// Create log viewer
+	a.logViewer = NewLogViewer()
+	a.logViewer.StartCapture() // Start capturing stdout/stderr
 
-	// Set minimum size for phonetic display (~8-10 lines of text)
-	// Assuming ~20 pixels per line with standard font
-	phoneticScroll := container.NewScroll(a.phoneticDisplay)
-	phoneticScroll.SetMinSize(fyne.NewSize(0, 180))
-
-	phoneticContainer := container.NewBorder(
-		widget.NewLabel("Phonetic Information:"),
-		nil,
-		nil,
-		nil,
-		phoneticScroll,
-	)
-
-	// Create a container for audio player and phonetic info
-	audioPhoneticSection := container.NewVSplit(
-		phoneticContainer,
+	// Create a container for log viewer and audio player
+	audioLogSection := container.NewVSplit(
+		a.logViewer,
 		a.audioPlayer,
 	)
-	audioPhoneticSection.SetOffset(0.7) // Give more space to phonetic info (70/30 split)
+	audioLogSection.SetOffset(0.7) // Give more space to log viewer (70/30 split)
 
 	displaySection := container.NewBorder(
 		nil,
-		audioPhoneticSection,
+		audioLogSection,
 		nil, nil,
 		imageSection,
 	)
@@ -389,18 +392,22 @@ func (a *Application) setupUI() {
 
 	// Add the tooltip layer to enable tooltips
 	a.window.SetContent(fynetooltip.AddWindowToolTipLayer(content, a.window.Canvas()))
-	
+
 	// Now that tooltip layer is created, set all tooltips
 	a.setupTooltips()
-	
+
 	// Set tooltips for export and help buttons
 	exportButton.SetToolTip("Export to Anki (x)")
 	helpButton.SetToolTip("Show hotkeys (?)")
-	
+
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
 		if a.fileCheckTicker != nil {
 			a.fileCheckTicker.Stop()
+		}
+		// Stop log capture
+		if a.logViewer != nil {
+			a.logViewer.StopCapture()
 		}
 		a.cancel()
 		a.queue.Stop()
@@ -636,8 +643,15 @@ func (a *Application) generateMaterials(word string) {
 		// Update UI with phonetic info if this is still the current word
 		a.mu.Lock()
 		if a.currentWord == word {
+			a.currentPhonetic = phoneticInfo
 			fyne.Do(func() {
-				a.phoneticDisplay.SetText(phoneticInfo)
+				// Extract and display just the IPA
+				// Display the IPA directly
+				if phoneticInfo != "" {
+					a.audioPlayer.SetPhonetic(phoneticInfo)
+				} else {
+					a.audioPlayer.SetPhonetic("")
+				}
 			})
 		}
 		a.mu.Unlock()
@@ -709,6 +723,7 @@ func (a *Application) onKeepAndContinue() {
 	a.currentTranslation = ""
 	a.currentAudioFile = ""
 	a.currentImage = ""
+	a.currentPhonetic = ""
 	a.mu.Unlock()
 
 	// Don't focus any input field - let user choose what to focus
@@ -749,10 +764,10 @@ func (a *Application) onRegenerateImage() {
 		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		
+
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
-		
+
 		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
@@ -813,10 +828,10 @@ func (a *Application) onRegenerateRandomImage() {
 		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		
+
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
-		
+
 		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
 		if err != nil {
 			fyne.Do(func() {
@@ -864,7 +879,7 @@ func (a *Application) onRegenerateAudio() {
 
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(a.currentWord)
-		
+
 		audioFile, err := a.generateAudio(cardCtx, a.currentWord)
 		if err != nil {
 			fyne.Do(func() {
@@ -935,9 +950,9 @@ func (a *Application) onExportToAnki() {
 	homeDir, _ := os.UserHomeDir()
 	defaultExportDir := filepath.Join(homeDir, "Downloads")
 	selectedDir := defaultExportDir
-	
+
 	dirLabel := widget.NewLabel(selectedDir)
-	
+
 	dirButton := widget.NewButton("Browse...", func() {
 		folderDialog := dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
 			if err != nil || dir == nil {
@@ -946,14 +961,14 @@ func (a *Application) onExportToAnki() {
 			selectedDir = dir.Path()
 			dirLabel.SetText(selectedDir)
 		}, a.window)
-		
+
 		// Try to set initial directory
 		if uri, err := storage.ParseURI("file://" + selectedDir); err == nil {
 			if listableURI, ok := uri.(fyne.ListableURI); ok {
 				folderDialog.SetLocation(listableURI)
 			}
 		}
-		
+
 		folderDialog.Show()
 	})
 
@@ -974,7 +989,7 @@ func (a *Application) onExportToAnki() {
 
 	// Store export dialog state
 	exportDialogOpen := true
-	
+
 	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export (e)", "Cancel (c/Esc)", content, func(export bool) {
 		exportDialogOpen = false
 		if !export {
@@ -1050,7 +1065,7 @@ func (a *Application) onExportToAnki() {
 	// Store original keyboard handlers
 	originalRuneHandler := a.window.Canvas().OnTypedRune()
 	originalKeyHandler := a.window.Canvas().OnTypedKey()
-	
+
 	// Add keyboard shortcuts for the export dialog (both Latin and Cyrillic)
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
 		if exportDialogOpen {
@@ -1072,7 +1087,7 @@ func (a *Application) onExportToAnki() {
 			originalRuneHandler(r)
 		}
 	})
-	
+
 	// Add ESC key handler
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if exportDialogOpen && ev.Name == fyne.KeyEscape {
@@ -1085,7 +1100,7 @@ func (a *Application) onExportToAnki() {
 			originalKeyHandler(ev)
 		}
 	})
-	
+
 	// Restore original handlers when dialog closes
 	customDialog.SetOnClosed(func() {
 		exportDialogOpen = false
@@ -1126,6 +1141,7 @@ func (a *Application) onShowHotkeys() {
 **a/а** Regenerate audio  
 **r/р** Regenerate all  
 **p/п** Play audio  
+**u/у** Toggle auto-play  
 
 ## Export
 **x/ж** Export to Anki  
@@ -1152,14 +1168,14 @@ Press **c/ц** or **Esc** to close this dialog`
 
 	// Create the dialog
 	d := dialog.NewCustom("Keyboard Shortcuts", "Close", scroll, a.window)
-	
+
 	// Store dialog state
 	dialogOpen := true
-	
+
 	// Store original handlers
 	originalRuneHandler := a.window.Canvas().OnTypedRune()
 	originalKeyHandler := a.window.Canvas().OnTypedKey()
-	
+
 	// Add temporary handler for 'c' to close dialog (both Latin and Cyrillic)
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
 		if dialogOpen && (r == 'c' || r == 'C' || r == 'ц' || r == 'Ц') {
@@ -1171,7 +1187,7 @@ Press **c/ц** or **Esc** to close this dialog`
 			originalRuneHandler(r)
 		}
 	})
-	
+
 	// Add ESC key handler
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if dialogOpen && ev.Name == fyne.KeyEscape {
@@ -1183,10 +1199,10 @@ Press **c/ц** or **Esc** to close this dialog`
 			originalKeyHandler(ev)
 		}
 	})
-	
+
 	// Show the dialog
 	d.Show()
-	
+
 	// Restore original handlers when dialog closes
 	d.SetOnClosed(func() {
 		dialogOpen = false
@@ -1195,13 +1211,24 @@ Press **c/ц** or **Esc** to close this dialog`
 	})
 }
 
+// toggleAutoPlay toggles the auto-play feature on/off
+func (a *Application) toggleAutoPlay() {
+	a.autoPlayEnabled = !a.autoPlayEnabled
+
+	if a.autoPlayEnabled {
+		a.updateStatus("Auto-play enabled")
+	} else {
+		a.updateStatus("Auto-play disabled")
+	}
+}
+
 // onQuitConfirm shows a confirmation dialog before quitting
 func (a *Application) onQuitConfirm() {
 	// Don't show if already confirming
 	if a.quitConfirming {
 		return
 	}
-	
+
 	// Create confirmation dialog
 	message := "Are you sure you want to quit?\n\nPress y to quit or n to cancel"
 	confirmDialog := dialog.NewConfirm("Quit Application", message, func(confirm bool) {
@@ -1210,14 +1237,14 @@ func (a *Application) onQuitConfirm() {
 			a.window.Close()
 		}
 	}, a.window)
-	
+
 	// Set up keyboard handler for the dialog
 	a.quitConfirming = true
-	
+
 	// Store original handlers
 	oldKeyHandler := a.window.Canvas().OnTypedKey()
 	oldRuneHandler := a.window.Canvas().OnTypedRune()
-	
+
 	// Handle both Latin and Cyrillic keys
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
 		if a.quitConfirming {
@@ -1237,7 +1264,7 @@ func (a *Application) onQuitConfirm() {
 			oldRuneHandler(r)
 		}
 	})
-	
+
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if a.quitConfirming {
 			switch ev.Name {
@@ -1256,7 +1283,7 @@ func (a *Application) onQuitConfirm() {
 			oldKeyHandler(ev)
 		}
 	})
-	
+
 	// Set dialog closed handler
 	confirmDialog.SetOnClosed(func() {
 		a.quitConfirming = false
@@ -1264,7 +1291,7 @@ func (a *Application) onQuitConfirm() {
 		a.window.Canvas().SetOnTypedKey(oldKeyHandler)
 		a.window.Canvas().SetOnTypedRune(oldRuneHandler)
 	})
-	
+
 	confirmDialog.Show()
 }
 
@@ -1342,13 +1369,14 @@ func (a *Application) clearUI() {
 		a.fileCheckTicker.Stop()
 		a.fileCheckTicker = nil
 	}
-	
+
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
 	// Don't clear the word input or translation entry - they should stay populated
 	// Clear the image prompt entry - it will be loaded from disk if available
 	a.imagePromptEntry.SetText("")
-	a.phoneticDisplay.SetText("Phonetic information will appear here...")
+	a.audioPlayer.SetPhonetic("")
+	a.currentPhonetic = ""
 	a.setActionButtonsEnabled(false)
 }
 
@@ -1358,7 +1386,7 @@ func (a *Application) setupTooltips() {
 	a.submitButton.SetToolTip("Generate word (g)")
 	a.prevWordBtn.SetToolTip("Previous word (← / h/х)")
 	a.nextWordBtn.SetToolTip("Next word (→ / l/л)")
-	
+
 	// Action button tooltips
 	a.keepButton.SetToolTip("Keep card and new word (n)")
 	a.regenerateImageBtn.SetToolTip("Regenerate image (i)")
@@ -1366,9 +1394,13 @@ func (a *Application) setupTooltips() {
 	a.regenerateAudioBtn.SetToolTip("Regenerate audio (a)")
 	a.regenerateAllBtn.SetToolTip("Regenerate all (r)")
 	a.deleteButton.SetToolTip("Delete word (d)")
-	
+
 	// Export and help button tooltips need to be set after creation
 	// We'll handle this in setupUI where they are created
+
+	// Audio player tooltips
+	a.audioPlayer.playButton.SetToolTip("Play audio (p)")
+	a.audioPlayer.stopButton.SetToolTip("Stop audio")
 }
 
 // processNextInQueue processes the next word in the queue
@@ -1413,17 +1445,17 @@ func (a *Application) processNextInQueue() {
 func (a *Application) getOrCreateCardContext(word string) (context.Context, context.CancelFunc) {
 	a.cardMu.Lock()
 	defer a.cardMu.Unlock()
-	
+
 	// Check if we already have a cancel function for this word
 	if cancel, exists := a.cardContexts[word]; exists {
 		// Cancel the old context first
 		cancel()
 	}
-	
+
 	// Create new context for this word
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cardContexts[word] = cancel
-	
+
 	return ctx, cancel
 }
 
@@ -1431,7 +1463,7 @@ func (a *Application) getOrCreateCardContext(word string) (context.Context, cont
 func (a *Application) cancelCardOperations(word string) {
 	a.cardMu.Lock()
 	defer a.cardMu.Unlock()
-	
+
 	if cancel, exists := a.cardContexts[word]; exists {
 		cancel()
 		delete(a.cardContexts, word)
@@ -1442,7 +1474,7 @@ func (a *Application) cancelCardOperations(word string) {
 func (a *Application) processWordJob(job *WordJob) {
 	// Get or create context for this card
 	cardCtx, _ := a.getOrCreateCardContext(job.Word)
-	
+
 	// Check if context is already cancelled
 	select {
 	case <-cardCtx.Done():
@@ -1536,8 +1568,15 @@ func (a *Application) processWordJob(job *WordJob) {
 		// Update UI with phonetic info if this is still the current job
 		a.mu.Lock()
 		if a.currentJobID == job.ID {
+			a.currentPhonetic = phoneticInfo
 			fyne.Do(func() {
-				a.phoneticDisplay.SetText(phoneticInfo)
+				// Extract and display just the IPA
+				// Display the IPA directly
+				if phoneticInfo != "" {
+					a.audioPlayer.SetPhonetic(phoneticInfo)
+				} else {
+					a.audioPlayer.SetPhonetic("")
+				}
 			})
 		}
 		a.mu.Unlock()
@@ -1771,7 +1810,7 @@ func (a *Application) setupKeyboardShortcuts() {
 			if !a.submitButton.Disabled() {
 				a.onSubmit()
 			}
-		case 'н', 'Н': // н = n  
+		case 'н', 'Н': // н = n
 			if !a.keepButton.Disabled() {
 				a.onKeepAndContinue()
 			}
@@ -1813,12 +1852,18 @@ func (a *Application) setupKeyboardShortcuts() {
 			}
 		case 'ч', 'Ч': // ч = q
 			a.onQuitConfirm()
+		case 'u', 'U', 'у', 'У': // u/у = toggle auto-play
+			a.toggleAutoPlay()
 		}
 	})
 
 	// Create a custom shortcut handler for regular keys (when input fields are not focused)
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		// Handle Escape key to unfocus any field
+		// Check if input field is focused
+		focused := a.window.Canvas().Focused()
+		isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
+
+		// Handle Escape key to unfocus any field (works even when input is focused)
 		if ev.Name == fyne.KeyEscape {
 			a.window.Canvas().Unfocus()
 			a.deleteConfirming = false
@@ -1831,10 +1876,6 @@ func (a *Application) setupKeyboardShortcuts() {
 			a.handleTabNavigation()
 			return
 		}
-
-		// Check if input field is focused
-		focused := a.window.Canvas().Focused()
-		isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
 
 		// If input is focused, don't process regular shortcuts
 		if isInputFocused {
@@ -1945,17 +1986,6 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 	case fyne.KeyX: // Export to APKG
 		a.onExportToAnki()
 
-	case fyne.KeyH: // Previous word (vim-style)
-		if a.prevWordBtn.Disabled() {
-			return
-		}
-		a.onPrevWord()
-	
-	case fyne.KeyL: // Next word (vim-style)
-		if a.nextWordBtn.Disabled() {
-			return
-		}
-		a.onNextWord()
 	case fyne.KeyQ: // Quit application
 		a.onQuitConfirm()
 	}
@@ -2018,10 +2048,9 @@ func (a *Application) handleWordChange(oldWord, newWord string) {
 
 // savePhoneticInfo saves the phonetic information to a file
 func (a *Application) savePhoneticInfo() {
-	phoneticText := a.phoneticDisplay.Text
+	phoneticText := a.currentPhonetic
 	if a.currentWord != "" && phoneticText != "" &&
-		phoneticText != "Failed to fetch phonetic information" &&
-		phoneticText != "Phonetic information will appear here..." {
+		phoneticText != "Failed to fetch phonetic information" {
 		// Find existing card directory
 		wordDir := a.findCardDirectory(a.currentWord)
 		if wordDir == "" {
@@ -2065,12 +2094,18 @@ func (a *Application) loadPhoneticInfo(word string) {
 	if wordDir == "" {
 		return
 	}
-	
+
 	phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		phoneticText := string(data)
+		a.currentPhonetic = phoneticText
 		fyne.Do(func() {
-			a.phoneticDisplay.SetText(phoneticText)
+			// Display the IPA in the audio player
+			if phoneticText != "" {
+				a.audioPlayer.SetPhonetic(phoneticText)
+			} else {
+				a.audioPlayer.SetPhonetic("")
+			}
 		})
 	}
 }
@@ -2091,28 +2126,15 @@ func (a *Application) getPhoneticInfo(word string) (string, error) {
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are a Bulgarian language expert helping language learners understand pronunciation. Provide detailed phonetic information using the International Phonetic Alphabet (IPA). For each IPA symbol used, give concrete examples of how it sounds using familiar English words or sounds when possible.",
+				Content: "You are a Bulgarian language expert. Provide only the IPA (International Phonetic Alphabet) transcription for Bulgarian words. Return ONLY the IPA transcription in square brackets, nothing else. No explanations, no word labels, just the IPA.",
 			},
 			{
-				Role: openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf(`For the Bulgarian word '%s':
-1. Provide the complete IPA transcription
-2. Break down EACH phonetic symbol used in the transcription
-3. For EVERY symbol, explain how it's pronounced with examples:
-   - If similar to an English sound, give English word examples
-   - If not in English, describe tongue/mouth position or compare to similar sounds
-   - Include stress marks and explain which syllable is stressed
-
-Example format:
-Word: [IPA transcription]
-• /p/ - like 'p' in English 'pot'
-• /a/ - like 'a' in 'father'
-• /ˈ/ - stress mark (following syllable is stressed)
-etc.`, word),
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf(`%s`, word),
 			},
 		},
 		Temperature: 0.3,
-		MaxTokens:   800,
+		MaxTokens:   50,
 	}
 
 	resp, err := client.CreateChatCompletion(ctx, req)
