@@ -60,8 +60,8 @@ func TestFetchAndSave_Integration(t *testing.T) {
 		t.Errorf("Failed to read phonetic file: %v", err)
 	}
 
-	// Check content is reasonable
-	if len(content) < 50 {
+	// Check content is reasonable (should be just IPA transcription)
+	if len(content) < 5 {
 		t.Error("Phonetic content seems too short")
 	}
 

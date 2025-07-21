@@ -55,7 +55,7 @@ func (p *Processor) ProcessBatch() error {
 		}
 	}
 
-	// Create output directory
+	// Create output directory (including parent directories)
 	if err := os.MkdirAll(p.flags.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -80,7 +80,7 @@ func (p *Processor) ProcessSingleWord(word string) error {
 		return fmt.Errorf("invalid word '%s': %w", word, err)
 	}
 
-	// Create output directory
+	// Create output directory (including parent directories)
 	if err := os.MkdirAll(p.flags.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -280,10 +280,10 @@ func (p *Processor) downloadImagesWithTranslation(word, translationText string) 
 		}
 
 		// Use config file values if not overridden by flags
-		if p.flags.OpenAIImageModel == "dall-e-3" && viper.IsSet("image.openai_model") {
+		if p.flags.OpenAIImageModel == "dall-e-2" && viper.IsSet("image.openai_model") {
 			openaiConfig.Model = viper.GetString("image.openai_model")
 		}
-		if p.flags.OpenAIImageSize == "1024x1024" && viper.IsSet("image.openai_size") {
+		if p.flags.OpenAIImageSize == "512x512" && viper.IsSet("image.openai_size") {
 			openaiConfig.Size = viper.GetString("image.openai_size")
 		}
 		if p.flags.OpenAIImageQuality == "standard" && viper.IsSet("image.openai_quality") {
@@ -397,6 +397,7 @@ func (p *Processor) RunGUIMode() error {
 		AudioFormat:   p.flags.AudioFormat,
 		ImageProvider: p.flags.ImageAPI,
 		OpenAIKey:     cli.GetOpenAIKey(),
+		AutoPlay:      !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
 	}
 
 	// Only set OutputDir if it was explicitly provided via flag

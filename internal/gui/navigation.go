@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 	"time"
-	
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
-	
+
 	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
@@ -20,16 +20,16 @@ func (a *Application) findCardDirectory(word string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	// Look through all directories to find one with matching _word.txt
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		
+
 		dirPath := filepath.Join(a.config.OutputDir, entry.Name())
 		wordFile := filepath.Join(dirPath, "word.txt")
-		
+
 		// Read the word file to check if it matches
 		if data, err := os.ReadFile(wordFile); err == nil {
 			storedWord := strings.TrimSpace(string(data))
@@ -47,31 +47,31 @@ func (a *Application) findCardDirectory(word string) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
 // scanExistingWords scans the output directory for existing words
 func (a *Application) scanExistingWords() {
 	a.existingWords = []string{}
-	
+
 	// Read directory
 	entries, err := os.ReadDir(a.config.OutputDir)
 	if err != nil {
 		// Directory doesn't exist yet, that's OK
 		return
 	}
-	
+
 	// Each subdirectory represents a word
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		
+
 		// Directory name is now a card ID
 		cardID := entry.Name()
 		wordDir := filepath.Join(a.config.OutputDir, cardID)
-		
+
 		// Read the original Bulgarian word from word.txt
 		wordFile := filepath.Join(wordDir, "word.txt")
 		wordData, err := os.ReadFile(wordFile)
@@ -84,21 +84,21 @@ func (a *Application) scanExistingWords() {
 				continue
 			}
 		}
-		
+
 		word := string(wordData)
 		if word == "" {
 			continue
 		}
-		
+
 		// Look for at least one of: audio, image, or translation file
 		hasContent := false
-		
+
 		// Check for audio file
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			hasContent = true
 		}
-		
+
 		// Check for image files
 		if !hasContent {
 			patterns := []string{
@@ -112,7 +112,7 @@ func (a *Application) scanExistingWords() {
 				}
 			}
 		}
-		
+
 		// Check for translation file
 		if !hasContent {
 			translationFile := filepath.Join(wordDir, "translation.txt")
@@ -120,19 +120,19 @@ func (a *Application) scanExistingWords() {
 				hasContent = true
 			}
 		}
-		
+
 		// If directory has content, add the word to the list
 		if hasContent {
 			a.existingWords = append(a.existingWords, word)
 		}
 	}
-	
+
 	// Sort the words
 	sort.Strings(a.existingWords)
-	
+
 	// Update navigation buttons
 	a.updateNavigation()
-	
+
 	// Load first word if available and nothing is loaded yet
 	if len(a.existingWords) > 0 && a.currentWord == "" {
 		a.loadWordByIndex(0)
@@ -143,12 +143,12 @@ func (a *Application) scanExistingWords() {
 func (a *Application) updateNavigation() {
 	// Get all available words (existing + completed from queue)
 	allWords := a.getAllAvailableWords()
-	
+
 	if len(allWords) > 1 {
 		// Enable both buttons when there's more than one word (allows circular navigation)
 		a.prevWordBtn.Enable()
 		a.nextWordBtn.Enable()
-		
+
 		// Find current word index
 		a.currentWordIndex = -1
 		for i, word := range allWords {
@@ -173,7 +173,7 @@ func (a *Application) getAllAvailableWords() []string {
 	// Start with existing words from disk
 	words := make([]string, len(a.existingWords))
 	copy(words, a.existingWords)
-	
+
 	// Add completed jobs from queue
 	completedJobs := a.queue.GetCompletedJobs()
 	for _, job := range completedJobs {
@@ -189,7 +189,7 @@ func (a *Application) getAllAvailableWords() []string {
 			words = append(words, job.Word)
 		}
 	}
-	
+
 	// Sort the combined list
 	sort.Strings(words)
 	return words
@@ -199,15 +199,15 @@ func (a *Application) getAllAvailableWords() []string {
 func (a *Application) onPrevWord() {
 	// Store current word before rescanning
 	currentWord := a.currentWord
-	
+
 	// Rescan to pick up any new cards added externally
 	a.scanExistingWords()
-	
+
 	allWords := a.getAllAvailableWords()
 	if len(allWords) == 0 {
 		return
 	}
-	
+
 	// Find current word's new index after rescan
 	currentIndex := -1
 	for i, word := range allWords {
@@ -216,18 +216,18 @@ func (a *Application) onPrevWord() {
 			break
 		}
 	}
-	
+
 	// If current word not found, use the stored index
 	if currentIndex == -1 {
 		currentIndex = a.currentWordIndex
 	}
-	
+
 	newIndex := currentIndex - 1
 	// Wrap around to the end if at beginning
 	if newIndex < 0 {
 		newIndex = len(allWords) - 1
 	}
-	
+
 	a.loadWordByIndex(newIndex)
 }
 
@@ -235,15 +235,15 @@ func (a *Application) onPrevWord() {
 func (a *Application) onNextWord() {
 	// Store current word before rescanning
 	currentWord := a.currentWord
-	
+
 	// Rescan to pick up any new cards added externally
 	a.scanExistingWords()
-	
+
 	allWords := a.getAllAvailableWords()
 	if len(allWords) == 0 {
 		return
 	}
-	
+
 	// Find current word's new index after rescan
 	currentIndex := -1
 	for i, word := range allWords {
@@ -252,18 +252,18 @@ func (a *Application) onNextWord() {
 			break
 		}
 	}
-	
+
 	// If current word not found, use the stored index
 	if currentIndex == -1 {
 		currentIndex = a.currentWordIndex
 	}
-	
+
 	newIndex := currentIndex + 1
 	// Wrap around to the beginning if at end
 	if newIndex >= len(allWords) {
 		newIndex = 0
 	}
-	
+
 	a.loadWordByIndex(newIndex)
 }
 
@@ -274,22 +274,22 @@ func (a *Application) loadWordByIndex(index int) {
 		a.fileCheckTicker.Stop()
 		a.fileCheckTicker = nil
 	}
-	
+
 	allWords := a.getAllAvailableWords()
 	if index < 0 || index >= len(allWords) {
 		return
 	}
-	
+
 	word := allWords[index]
 	a.currentWord = word
 	a.currentWordIndex = index
-	
+
 	// Update input field
 	a.wordInput.SetText(word)
-	
+
 	// Clear UI
 	a.clearUI()
-	
+
 	// Check if this word is from a completed queue job
 	var fromQueue bool
 	completedJobs := a.queue.GetCompletedJobs()
@@ -299,7 +299,7 @@ func (a *Application) loadWordByIndex(index int) {
 			a.currentTranslation = job.Translation
 			a.currentAudioFile = job.AudioFile
 			a.currentImage = job.ImageFile
-			
+
 			fyne.Do(func() {
 				if job.Translation != "" {
 					a.translationEntry.SetText(job.Translation)
@@ -312,7 +312,7 @@ func (a *Application) loadWordByIndex(index int) {
 				}
 				// Load phonetic info from disk if it exists
 				a.loadPhoneticInfo(word)
-				
+
 				// Load image prompt from disk if it exists
 				if wordDir := a.findCardDirectory(word); wordDir != "" {
 					promptFile := filepath.Join(wordDir, "image_prompt.txt")
@@ -321,29 +321,29 @@ func (a *Application) loadWordByIndex(index int) {
 						a.imagePromptEntry.SetText(prompt)
 					}
 				}
-				
+
 				a.updateStatus(fmt.Sprintf("Loaded from queue: %s", word))
 			})
-			
+
 			fromQueue = true
 			break
 		}
 	}
-	
+
 	// If not from queue, load existing files from disk
 	if !fromQueue {
 		a.loadExistingFiles(word)
 	}
-	
+
 	// Update navigation
 	a.updateNavigation()
-	
+
 	// Enable action buttons if we have content
 	hasContent := a.currentAudioFile != "" || a.currentImage != "" || a.currentTranslation != ""
 	if hasContent {
 		a.setActionButtonsEnabled(true)
 	}
-	
+
 	// Start ticker to check for missing files
 	a.startFileCheckTicker()
 }
@@ -357,9 +357,9 @@ func (a *Application) loadExistingFiles(word string) {
 		fmt.Printf("No card directory found for word: %s\n", word)
 		return
 	}
-	
+
 	fmt.Printf("Loading files from directory: %s\n", wordDir)
-	
+
 	// Load translation
 	translationFile := filepath.Join(wordDir, "translation.txt")
 	if data, err := os.ReadFile(translationFile); err == nil {
@@ -373,7 +373,7 @@ func (a *Application) loadExistingFiles(word string) {
 			})
 		}
 	}
-	
+
 	// Load image prompt file
 	promptFile := filepath.Join(wordDir, "image_prompt.txt")
 	if data, err := os.ReadFile(promptFile); err == nil {
@@ -385,19 +385,19 @@ func (a *Application) loadExistingFiles(word string) {
 	} else {
 		fmt.Printf("No prompt file found at: %s\n", promptFile)
 	}
-	
+
 	// Load phonetic information
 	phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 	if data, err := os.ReadFile(phoneticFile); err == nil {
 		phoneticInfo := string(data)
 		fmt.Printf("Loaded phonetic info from file: %s\n", phoneticFile)
 		fyne.Do(func() {
-			a.phoneticDisplay.SetText(phoneticInfo)
+			a.audioPlayer.SetPhonetic(phoneticInfo)
 		})
 	} else {
 		fmt.Printf("No phonetic file found at: %s (error: %v)\n", phoneticFile, err)
 	}
-	
+
 	// Load audio file
 	audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 	if _, err := os.Stat(audioFile); err == nil {
@@ -406,7 +406,7 @@ func (a *Application) loadExistingFiles(word string) {
 			a.audioPlayer.SetAudioFile(audioFile)
 		})
 	}
-	
+
 	// Load image file
 	a.currentImage = ""
 	// Try to find images with different patterns
@@ -414,7 +414,7 @@ func (a *Application) loadExistingFiles(word string) {
 		"image.jpg",
 		"image.png",
 	}
-	
+
 	for _, pattern := range patterns {
 		imagePath := filepath.Join(wordDir, pattern)
 		if _, err := os.Stat(imagePath); err == nil {
@@ -422,12 +422,12 @@ func (a *Application) loadExistingFiles(word string) {
 			break // Just load the first image found
 		}
 	}
-	
+
 	if a.currentImage != "" {
 		fyne.Do(func() {
 			a.imageDisplay.SetImages([]string{a.currentImage})
 		})
-		
+
 		// Try to load the prompt from attribution file if using OpenAI
 		if a.config.ImageProvider == "openai" {
 			// Look for attribution file
@@ -450,7 +450,7 @@ func (a *Application) loadExistingFiles(word string) {
 			}
 		}
 	}
-	
+
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Loaded: %s", word))
 	})
@@ -462,11 +462,11 @@ func (a *Application) startFileCheckTicker() {
 	if a.fileCheckTicker != nil {
 		a.fileCheckTicker.Stop()
 	}
-	
+
 	// Create ticker that checks every 2 seconds
 	ticker := time.NewTicker(2 * time.Second)
 	a.fileCheckTicker = ticker
-	
+
 	go func() {
 		for {
 			select {
@@ -475,7 +475,7 @@ func (a *Application) startFileCheckTicker() {
 				a.mu.Lock()
 				currentWord := a.currentWord
 				a.mu.Unlock()
-				
+
 				if currentWord != "" {
 					a.checkForMissingFiles(currentWord)
 				}
@@ -494,7 +494,7 @@ func (a *Application) checkForMissingFiles(word string) {
 	if wordDir == "" {
 		return
 	}
-	
+
 	// Check for missing audio file
 	if a.currentAudioFile == "" {
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
@@ -506,7 +506,7 @@ func (a *Application) checkForMissingFiles(word string) {
 			})
 		}
 	}
-	
+
 	// Check for missing image file
 	if a.currentImage == "" {
 		patterns := []string{"image.jpg", "image.png"}
@@ -522,7 +522,7 @@ func (a *Application) checkForMissingFiles(word string) {
 			}
 		}
 	}
-	
+
 	// Check for missing translation
 	if a.currentTranslation == "" {
 		translationFile := filepath.Join(wordDir, "translation.txt")
@@ -538,7 +538,7 @@ func (a *Application) checkForMissingFiles(word string) {
 			}
 		}
 	}
-	
+
 	// Check for missing prompt
 	currentPrompt := a.imagePromptEntry.Text
 	if currentPrompt == "" {
@@ -551,20 +551,20 @@ func (a *Application) checkForMissingFiles(word string) {
 			})
 		}
 	}
-	
+
 	// Check for missing phonetic info
-	currentPhonetic := a.phoneticDisplay.Text
-	if currentPhonetic == "" || currentPhonetic == "Phonetic information will appear here..." {
+	if a.currentPhonetic == "" {
 		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 		if data, err := os.ReadFile(phoneticFile); err == nil {
 			phoneticInfo := string(data)
+			a.currentPhonetic = phoneticInfo
 			fyne.Do(func() {
-				a.phoneticDisplay.SetText(phoneticInfo)
+				a.audioPlayer.SetPhonetic(phoneticInfo)
 				a.updateStatus(fmt.Sprintf("Found phonetic info for %s", word))
 			})
 		}
 	}
-	
+
 	// Update action buttons if we now have content
 	hasContent := a.currentAudioFile != "" || a.currentImage != "" || a.currentTranslation != ""
 	if hasContent {
@@ -579,7 +579,7 @@ func (a *Application) onDelete() {
 	if a.currentWord == "" {
 		return
 	}
-	
+
 	// Create custom confirmation dialog with keyboard support
 	message := fmt.Sprintf("Move all files for '%s' to trash?\n\nPress y to confirm or n to cancel", a.currentWord)
 	confirmDialog := dialog.NewConfirm("Move to Trash", message, func(confirm bool) {
@@ -588,14 +588,14 @@ func (a *Application) onDelete() {
 			a.deleteCurrentWord()
 		}
 	}, a.window)
-	
+
 	// Set up keyboard handler for the dialog
 	a.deleteConfirming = true
-	
+
 	// Create a custom key handler for the dialog window
 	oldKeyHandler := a.window.Canvas().OnTypedKey()
 	oldRuneHandler := a.window.Canvas().OnTypedRune()
-	
+
 	// Handle both Latin and Cyrillic keys
 	a.window.Canvas().SetOnTypedRune(func(r rune) {
 		if a.deleteConfirming {
@@ -618,7 +618,7 @@ func (a *Application) onDelete() {
 			oldRuneHandler(r)
 		}
 	})
-	
+
 	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if a.deleteConfirming {
 			switch ev.Name {
@@ -640,7 +640,7 @@ func (a *Application) onDelete() {
 			oldKeyHandler(ev)
 		}
 	})
-	
+
 	confirmDialog.Show()
 }
 
@@ -648,7 +648,7 @@ func (a *Application) onDelete() {
 func (a *Application) deleteCurrentWord() {
 	// Cancel any ongoing operations for this card
 	a.cancelCardOperations(a.currentWord)
-	
+
 	// Find the card directory for this word
 	wordDir := a.findCardDirectory(a.currentWord)
 	if wordDir == "" {
@@ -657,7 +657,7 @@ func (a *Application) deleteCurrentWord() {
 		})
 		return
 	}
-	
+
 	// Create trash directory if it doesn't exist
 	trashDir := filepath.Join(a.config.OutputDir, ".trashbin")
 	if err := os.MkdirAll(trashDir, 0755); err != nil {
@@ -666,13 +666,13 @@ func (a *Application) deleteCurrentWord() {
 		})
 		return
 	}
-	
-	// Create destination path in trash  
+
+	// Create destination path in trash
 	// Use the directory name from the card directory
 	dirName := filepath.Base(wordDir)
 	timestamp := time.Now().Format("20060102_150405")
 	trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s", dirName, timestamp))
-	
+
 	// Move entire directory to trash
 	if err := os.Rename(wordDir, trashWordDir); err != nil {
 		fyne.Do(func() {
@@ -680,7 +680,7 @@ func (a *Application) deleteCurrentWord() {
 		})
 		return
 	}
-	
+
 	// Remove from existingWords
 	newWords := []string{}
 	for _, w := range a.existingWords {
@@ -689,7 +689,7 @@ func (a *Application) deleteCurrentWord() {
 		}
 	}
 	a.existingWords = newWords
-	
+
 	// Also remove from saved cards if present
 	a.mu.Lock()
 	newSavedCards := make([]anki.Card, 0, len(a.savedCards))
@@ -700,25 +700,25 @@ func (a *Application) deleteCurrentWord() {
 	}
 	a.savedCards = newSavedCards
 	a.mu.Unlock()
-	
+
 	// Also remove from completed queue jobs
 	a.queue.RemoveCompletedJobByWord(a.currentWord)
-	
+
 	// Clear UI
 	a.clearUI()
-	
+
 	// Update status
 	fyne.Do(func() {
 		a.updateStatus(fmt.Sprintf("Moved '%s' to trash", a.currentWord))
 		// Update queue status to reflect the reduced card count
 		a.updateQueueStatus()
 	})
-	
+
 	// Clear current word
 	deletedWord := a.currentWord
 	a.currentWord = ""
 	a.wordInput.SetText("")
-	
+
 	// Try to load previous or next word
 	if a.currentWordIndex > 0 && a.currentWordIndex <= len(a.existingWords) {
 		a.loadWordByIndex(a.currentWordIndex - 1)
@@ -731,19 +731,19 @@ func (a *Application) deleteCurrentWord() {
 		// But keep delete button enabled
 		a.deleteButton.Enable()
 	}
-	
+
 	// Start a cleanup goroutine to remove directory after any pending operations complete
 	go func() {
 		// Wait a bit for any ongoing operations to notice cancellation
 		time.Sleep(500 * time.Millisecond)
-		
+
 		// Check if the directory was somehow recreated (by a racing operation)
 		recreatedDir := a.findCardDirectory(deletedWord)
 		if recreatedDir != "" {
 			// Directory was recreated, try to delete it again
 			timestamp := time.Now().Format("20060102_150405")
 			trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s_cleanup", filepath.Base(recreatedDir), timestamp))
-			
+
 			// Move to trash again
 			if err := os.Rename(recreatedDir, trashWordDir); err == nil {
 				fmt.Printf("Cleanup: moved recreated directory for '%s' to trash\n", deletedWord)

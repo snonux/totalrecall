@@ -41,7 +41,7 @@ func TestCreateRootCommand(t *testing.T) {
 		{"deck-name", true},
 		{"list-models", true},
 		{"all-voices", true},
-		{"gui", true},
+		{"no-auto-play", true},
 		{"openai-model", true},
 		{"openai-voice", true},
 		{"openai-speed", true},
@@ -80,7 +80,7 @@ func TestSetupFlags(t *testing.T) {
 	}
 
 	home, _ := os.UserHomeDir()
-	expectedDefault := filepath.Join(home, "Downloads")
+	expectedDefault := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 	if outputFlag.DefValue != expectedDefault {
 		t.Errorf("Expected default output dir to be %s, got %s", expectedDefault, outputFlag.DefValue)
 	}

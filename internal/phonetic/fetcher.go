@@ -39,27 +39,15 @@ func (f *Fetcher) FetchAndSave(word, wordDir string) error {
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are a Bulgarian language expert helping language learners understand pronunciation. Provide detailed phonetic information using the International Phonetic Alphabet (IPA). For each IPA symbol used, give concrete examples of how it sounds using familiar English words or sounds when possible.",
+				Content: "You are a Bulgarian language expert. Provide only the IPA (International Phonetic Alphabet) transcription for Bulgarian words. Return ONLY the IPA transcription in square brackets, nothing else. No explanations, no word labels, just the IPA.",
 			},
 			{
-				Role: openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf(`For the Bulgarian word '%s':
-1. Provide the complete IPA transcription
-2. Break down EACH phonetic symbol used in the transcription
-3. For EVERY symbol, explain how it's pronounced with examples:
-   - If similar to an English sound, give English word examples
-   - If not in English, describe tongue/mouth position or compare to similar sounds
-   - Include stress marks and explain which syllable is stressed
-
-Example format:
-Word: [IPA transcription]
-• /p/ - like 'p' in English 'pot'
-• /a/ - like 'a' in 'father'
-• /ˈ/ - stress mark (following syllable is stressed)`, word),
+				Role:    openai.ChatMessageRoleUser,
+				Content: fmt.Sprintf(`%s`, word),
 			},
 		},
 		Temperature: 0.3,
-		MaxTokens:   500,
+		MaxTokens:   50,
 	}
 
 	resp, err := f.client.CreateChatCompletion(ctx, req)

@@ -49,11 +49,6 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	// Create processor
 	proc := processor.NewProcessor(flags)
 
-	// Handle --gui flag
-	if flags.GUIMode {
-		return proc.RunGUIMode()
-	}
-
 	// Handle batch processing
 	if flags.BatchFile != "" {
 		// Process batch file
@@ -84,6 +79,6 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		}
 	}
 
-	fmt.Println("\nDone! Materials saved to:", flags.OutputDir)
+	fmt.Printf("\nDone! Materials saved to: %s\n", flags.OutputDir)
 	return nil
 }

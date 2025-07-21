@@ -16,6 +16,8 @@ It has mainly been vibe coded using Claude Code CLI.
 - Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
   - Random voice selection by default for variety
   - Option to generate in all 11 available voices
+- Phoenetic pronunciation:
+  - Fetches IPA (International Phonetic Alphabet) for each word
 - Automatic Bulgarian to English translation
   - Saves translations to separate text files
   - Includes translations in Anki CSV export

@@ -24,8 +24,7 @@ representative images from web search APIs.
 Examples:
   totalrecall                     # Launch interactive GUI (default)
   totalrecall ябълка              # Generate materials for "apple" via CLI
-  totalrecall --batch words.txt   # Process multiple words from file
-  totalrecall --gui               # Explicitly launch GUI mode`,
+  totalrecall --batch words.txt   # Process multiple words from file`,
 		Args:    cobra.MaximumNArgs(1),
 		Version: internal.Version,
 	}
@@ -37,9 +36,9 @@ Examples:
 }
 
 func setupFlags(cmd *cobra.Command, flags *Flags) {
-	// Set default output directory
+	// Set default output directory to match GUI mode
 	home, _ := os.UserHomeDir()
-	defaultOutputDir := filepath.Join(home, "Downloads")
+	defaultOutputDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 
 	// Global flags
 	cmd.PersistentFlags().StringVar(&flags.CfgFile, "config", "", "config file (default is $HOME/.totalrecall.yaml)")
@@ -56,7 +55,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.DeckName, "deck-name", flags.DeckName, "Deck name for APKG export")
 	cmd.Flags().BoolVar(&flags.ListModels, "list-models", false, "List available OpenAI models for the current API key")
 	cmd.Flags().BoolVar(&flags.AllVoices, "all-voices", false, "Generate audio in all available voices (creates multiple files)")
-	cmd.Flags().BoolVar(&flags.GUIMode, "gui", false, "Launch interactive GUI mode")
+	cmd.Flags().BoolVar(&flags.NoAutoPlay, "no-auto-play", false, "Disable automatic audio playback in GUI mode (auto-play is enabled by default)")
 
 	// OpenAI flags
 	cmd.Flags().StringVar(&flags.OpenAIModel, "openai-model", flags.OpenAIModel, "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")

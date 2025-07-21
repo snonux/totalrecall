@@ -15,7 +15,7 @@ type Flags struct {
 	DeckName     string
 	ListModels   bool
 	AllVoices    bool
-	GUIMode      bool
+	NoAutoPlay   bool
 
 	// OpenAI flags
 	OpenAIModel       string
@@ -38,8 +38,8 @@ func NewFlags() *Flags {
 		DeckName:           "Bulgarian Vocabulary",
 		OpenAIModel:        "gpt-4o-mini-tts",
 		OpenAISpeed:        0.9,
-		OpenAIImageModel:   "dall-e-3",
-		OpenAIImageSize:    "1024x1024",
+		OpenAIImageModel:   "dall-e-2",
+		OpenAIImageSize:    "512x512",
 		OpenAIImageQuality: "standard",
 		OpenAIImageStyle:   "natural",
 	}

@@ -100,6 +100,7 @@ type Config struct {
 	AudioFormat   string
 	ImageProvider string
 	OpenAIKey     string
+	AutoPlay      bool // Whether to automatically play audio when generated or navigated to
 }
 
 // DefaultConfig returns default GUI configuration
@@ -112,6 +113,7 @@ func DefaultConfig() *Config {
 		OutputDir:     outputDir,
 		AudioFormat:   "mp3",
 		ImageProvider: "openai",
+		AutoPlay:      true, // Auto-play enabled by default
 	}
 }
 
@@ -131,6 +133,8 @@ func New(config *Config) *Application {
 		if config.ImageProvider == "" {
 			config.ImageProvider = defaults.ImageProvider
 		}
+		// Don't override AutoPlay if it's explicitly set to false
+		// (since bool zero value is false, we can't distinguish between unset and false)
 	}
 
 	// Ensure output directory exists
@@ -148,7 +152,7 @@ func New(config *Config) *Application {
 		cancel:          cancel,
 		savedCards:      make([]anki.Card, 0),
 		cardContexts:    make(map[string]context.CancelFunc),
-		autoPlayEnabled: true, // Auto-play enabled by default
+		autoPlayEnabled: config.AutoPlay, // Use config setting
 	}
 
 	// Initialize the word processing queue

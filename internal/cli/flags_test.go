@@ -19,8 +19,8 @@ func TestNewFlags(t *testing.T) {
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},
-		{"OpenAIImageModel", flags.OpenAIImageModel, "dall-e-3"},
-		{"OpenAIImageSize", flags.OpenAIImageSize, "1024x1024"},
+		{"OpenAIImageModel", flags.OpenAIImageModel, "dall-e-2"},
+		{"OpenAIImageSize", flags.OpenAIImageSize, "512x512"},
 		{"OpenAIImageQuality", flags.OpenAIImageQuality, "standard"},
 		{"OpenAIImageStyle", flags.OpenAIImageStyle, "natural"},
 	}
@@ -44,7 +44,7 @@ func TestNewFlags(t *testing.T) {
 		{"AnkiCSV", flags.AnkiCSV},
 		{"ListModels", flags.ListModels},
 		{"AllVoices", flags.AllVoices},
-		{"GUIMode", flags.GUIMode},
+		{"NoAutoPlay", flags.NoAutoPlay},
 	}
 
 	for _, tt := range boolTests {
@@ -84,7 +84,7 @@ func TestFlagsStructure(t *testing.T) {
 	expectedFields := []string{
 		"CfgFile", "OutputDir", "AudioFormat", "ImageAPI", "BatchFile",
 		"SkipAudio", "SkipImages", "GenerateAnki", "AnkiCSV", "DeckName",
-		"ListModels", "AllVoices", "GUIMode",
+		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",
 		"OpenAIImageModel", "OpenAIImageSize", "OpenAIImageQuality", "OpenAIImageStyle",
 	}
