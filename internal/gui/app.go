@@ -673,6 +673,26 @@ func (a *Application) generateMaterials(word string) {
 			a.savePhoneticInfoForWord(word, phoneticInfo)
 		}
 
+		// Update UI immediately with phonetic info if this is still the current word
+		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
+			a.mu.Lock()
+			shouldUpdate := a.currentWord == word
+			if shouldUpdate {
+				a.currentPhonetic = phoneticInfo
+			}
+			a.mu.Unlock()
+
+			if shouldUpdate {
+				fmt.Printf("Updating phonetic display immediately for word '%s': %s\n", word, phoneticInfo)
+				fyne.Do(func() {
+					// Display the IPA directly
+					a.audioPlayer.SetPhonetic(phoneticInfo)
+				})
+			} else {
+				fmt.Printf("Not updating phonetic display immediately - word mismatch (current: %s, this: %s)\n", a.currentWord, word)
+			}
+		}
+
 		a.decrementProcessing() // Phonetic processing ends
 		phoneticChan <- phoneticResult{info: phoneticInfo, err: nil}
 	}()
@@ -718,27 +738,9 @@ func (a *Application) generateMaterials(word string) {
 		a.mu.Unlock()
 	}
 
-	// Collect phonetic result
-	phoneticRes := <-phoneticChan
-	if phoneticRes.info != "" {
-		// Update UI with phonetic info if this is still the current word
-		a.mu.Lock()
-		shouldUpdate := a.currentWord == word
-		if shouldUpdate {
-			a.currentPhonetic = phoneticRes.info
-		}
-		a.mu.Unlock()
-
-		if shouldUpdate {
-			fmt.Printf("Updating phonetic display in UI for word '%s': %s\n", word, phoneticRes.info)
-			fyne.Do(func() {
-				// Display the IPA directly
-				a.audioPlayer.SetPhonetic(phoneticRes.info)
-			})
-		} else {
-			fmt.Printf("Not updating phonetic display - word mismatch (current: %s, this: %s)\n", a.currentWord, word)
-		}
-	}
+	// Collect phonetic result (UI already updated in the goroutine)
+	<-phoneticChan
+	// The phonetic info has already been displayed in the UI immediately when fetched
 
 	// If any critical operation failed, re-enable UI
 	if hasError {
@@ -1734,6 +1736,26 @@ func (a *Application) processWordJob(job *WordJob) {
 			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
 		}
 
+		// Update UI immediately with phonetic info if this is still the current job
+		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
+			a.mu.Lock()
+			shouldUpdate := a.currentJobID == job.ID
+			if shouldUpdate {
+				a.currentPhonetic = phoneticInfo
+			}
+			a.mu.Unlock()
+
+			if shouldUpdate {
+				fmt.Printf("Updating phonetic display immediately for job %d: %s\n", job.ID, phoneticInfo)
+				fyne.Do(func() {
+					// Display the IPA directly
+					a.audioPlayer.SetPhonetic(phoneticInfo)
+				})
+			} else {
+				fmt.Printf("Not updating phonetic display immediately - job mismatch (current job: %d, this job: %d)\n", a.currentJobID, job.ID)
+			}
+		}
+
 		a.decrementProcessing() // Phonetic processing ends
 		phoneticChan <- phoneticResult{info: phoneticInfo, err: nil}
 	}()
@@ -1777,27 +1799,9 @@ func (a *Application) processWordJob(job *WordJob) {
 		imageFile = imageRes.file
 	}
 
-	// Collect phonetic result
+	// Collect phonetic result (UI already updated in the goroutine)
 	phoneticRes := <-phoneticChan
 	phoneticInfo = phoneticRes.info
-
-	// Update UI with phonetic info if this is still the current job
-	a.mu.Lock()
-	shouldUpdate := a.currentJobID == job.ID && phoneticInfo != ""
-	if shouldUpdate {
-		a.currentPhonetic = phoneticInfo
-	}
-	a.mu.Unlock()
-
-	if shouldUpdate {
-		fmt.Printf("Updating phonetic display in UI for job %d: %s\n", job.ID, phoneticInfo)
-		fyne.Do(func() {
-			// Display the IPA directly
-			a.audioPlayer.SetPhonetic(phoneticInfo)
-		})
-	} else {
-		fmt.Printf("Not updating phonetic display - job mismatch or empty info (current job: %d, this job: %d, info: %s)\n", a.currentJobID, job.ID, phoneticInfo)
-	}
 
 	// If any critical operation failed, finish the job and return
 	if hasError {
