@@ -13,11 +13,7 @@ It has mainly been vibe coded using Claude Code CLI.
 </p>
 
 <p align="center">
-  <strong>Computer / Компютър</strong><br>
-  <audio controls>
-    <source src="assets/audio.mp3" type="audio/mpeg">
-    Your browser does not support the audio element.
-  </audio>
+  <a href="assets/audio.mp3">🔊 Computer / Компютър</a>
 </p>
 
 
