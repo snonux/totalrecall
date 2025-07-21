@@ -12,7 +12,6 @@ It has mainly been vibe coded using Claude Code CLI.
 
 ## Features
 
-### Core Features
 - Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
   - Random voice selection by default for variety
   - Option to generate in all 11 available voices
@@ -20,15 +19,12 @@ It has mainly been vibe coded using Claude Code CLI.
   - Fetches IPA (International Phonetic Alphabet) for each word
 - Automatic Bulgarian to English translation
   - Saves translations to separate text files
-  - Includes translations in Anki CSV export
 - Image generation:
   - **OpenAI DALL-E**: AI-generated educational images with contextual scenes and random art styles
   - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
-- Anki-compatible CSV export with translations
+- Anki-compatible export
 - Random voice variants and speech speed
-- Audio caching to save API costs
-- **Default output directory**: `~/.local/state/totalrecall/` (configurable)
 
 ## Installation
 
@@ -95,13 +91,23 @@ After installation, you may need to log out and log back in for the icon to appe
 export OPENAI_API_KEY="sk-..."
 ```
 
-### GUI Mode (Default)
-When launched without arguments, totalrecall opens an interactive graphical interface:
+### GUI Mode
+
+Launch the interactive graphical interface:
 ```bash
-totalrecall
+totalrecall                 # GUI mode is now the default
 ```
 
+The GUI is best navigated using keyboard shortcuts for efficient workflow. Press **`h`** at any time to display a complete list of all available keyboard shortcuts.
+
+Key features:
+- Fast keyboard-driven interface
+- Real-time audio playback
+- Batch processing support
+- Visual feedback for all operations
+
 ### CLI Mode
+
 1. Generate materials for a single word (uses OpenAI by default):
    ```bash
    totalrecall ябълка
@@ -125,78 +131,25 @@ totalrecall
    молив = pencil
    ```
 
+   Have a look further below for more info about the batch file format!
+
 4. Generate with Anki package:
    ```bash
-   totalrecall ябълка --anki                    # Creates APKG file (recommended)
-   totalrecall ябълка --anki --anki-csv        # Creates CSV file (legacy)
+   totalrecall ябълка --anki                                   # Creates APKG file (recommended)
+   totalrecall ябълка --anki --anki-csv                        # Creates CSV file (legacy and untested)
    totalrecall ябълка --anki --deck-name "My Bulgarian Words"  # Custom deck name
    ```
 
-### GUI Mode
-Launch the interactive graphical interface:
-```bash
-totalrecall                 # GUI mode is now the default
-# or explicitly:
-totalrecall --gui
-```
+5. Archive existing cards directory:
+   ```bash
+   totalrecall --archive                        # Archives cards to ~/.local/state/totalrecall/archive/cards-TIMESTAMP
+   ```
 
-The GUI is best navigated using keyboard shortcuts for efficient workflow. Press **`h`** at any time to display a complete list of all available keyboard shortcuts.
+#### Batch file format
 
-Key features:
-- Fast keyboard-driven interface
-- Real-time audio playback
-- Batch processing support
-- Visual feedback for all operations
+Create a text file with Bulgarian words, optionally with English translations. The tool supports three flexible formats:
 
-## Configuration
-
-Create a `.totalrecall.yaml` file in your home directory or project folder:
-
-```yaml
-audio:
-  format: mp3           # Audio format (wav or mp3)
-  
-  # OpenAI settings
-  openai_key: "sk-..."  # Your OpenAI API key
-  openai_model: "gpt-4o-mini-tts" # Model: tts-1, tts-1-hd, or gpt-4o-mini-tts
-  openai_speed: 0.8     # Speed: 0.25 to 4.0 (may be ignored by gpt-4o-mini models)
-  openai_instruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian." # For gpt-4o-mini models only
-  
-  # Caching
-  enable_cache: true
-  cache_dir: "./.audio_cache"
-
-image:
-  provider: openai       # Image provider (currently only openai is supported)
-  
-  # OpenAI DALL-E settings
-  openai_model: "dall-e-2"  # Model: dall-e-2 or dall-e-3
-  openai_size: "512x512"    # Size: 256x256, 512x512, 1024x1024
-  openai_quality: "standard" # Quality: standard or hd (dall-e-3 only)
-  openai_style: "natural"    # Style: natural or vivid (dall-e-3 only)
-
-output:
-  directory: ~/.local/state/totalrecall  # Default location (can be overridden)
-  naming: "{word}_{type}"
-```
-
-## Usage
-
-### CLI Mode
-```bash
-totalrecall [word] [flags]
-```
-
-### GUI Mode
-```bash
-totalrecall           # Default mode when no arguments provided
-```
-
-### Batch file format
-
-Create a text file with Bulgarian words, optionally with English translations:
-
-**Format 1: Bulgarian words only**
+**Format 1: Bulgarian words only (will be translated to English)**
 ```
 ябълка
 котка
@@ -205,7 +158,7 @@ Create a text file with Bulgarian words, optionally with English translations:
 вода
 ```
 
-**Format 2: Bulgarian words with translations**
+**Format 2: Bulgarian words with translations (no translation needed)**
 ```
 книга = book
 стол = table
@@ -214,18 +167,32 @@ Create a text file with Bulgarian words, optionally with English translations:
 молив = pencil
 ```
 
-**Format 3: Mixed format**
+**Format 3: English words only (will be translated to Bulgarian)**
+```
+= apple
+= cat
+= dog
+= bread
+= water
+```
+
+**Format 4: Mixed format (all three types can be combined)**
 ```
 книга = book
 котка
-стол = table
+= table
 куче
 молив = pencil
+= window
 ```
 
-When translations are provided, they are used directly without calling the translation API, saving time and API quota. Spaces around the words and translations are automatically trimmed.
+When translations are provided, they are used directly without calling the translation API, saving time and API quota. When only English is provided (format starting with `=`), the tool will automatically translate it to Bulgarian. Spaces around the words and translations are automatically trimmed.
 
-### Output Files
+## Configuration
+
+Create an optional `~/config/totalrecall/config.yaml` file. You can copy the example file provided.
+
+## Output Files
 
 By default, all files are saved to `~/.local/state/totalrecall/`. You can override this with the `-o` flag or the `output.directory` config option.
 
@@ -242,13 +209,15 @@ With `--all-voices` flag:
 ## Anki Import
 
 ### Method 1: APKG Format (Recommended)
+
 1. Generate materials with the `--anki` flag
 2. In Anki, go to File → Import
 3. Select the generated `.apkg` file
 4. All media files are included automatically
 5. Cards are ready to use with custom styling
 
-### Method 2: CSV Format (Legacy)
+### Method 2: CSV Format (Legacy - and untested)
+
 1. Generate materials with `--anki --anki-csv` flags
 2. In Anki, go to File → Import
 3. Select the generated `anki_import.csv`
@@ -256,6 +225,7 @@ With `--all-voices` flag:
 5. Map fields appropriately during import
 
 ### GUI Export
+
 The GUI mode offers an export dialog where you can:
 - Choose between APKG and CSV formats
 - Set a custom deck name
