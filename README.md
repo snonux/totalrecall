@@ -8,6 +8,11 @@
 
 It has mainly been vibe coded using Claude Code CLI.
 
+<p align="center">
+  <img src="assets/screenshots/totalrecall.png" alt="TotalRecall screens hot">
+</p>
+
+
 ⚠️ **Important:** This tool uses OpenAI services for audio and image generation, which requires an API key. See [Quick Start](#quick-start) for setup instructions.
 
 ## Features
