@@ -8,8 +8,8 @@
 
 It has mainly been vibe coded using Claude Code CLI.
 
-[<img src="assets/totalrecall.png" alt="TotalRecall screens hot">](assets/totalrecall.png)
-[🔊 Computer / Компютър](assets/audio.mp3)
+[<img src="assets/totalrecall.png" alt="TotalRecall screenshot">](assets/totalrecall.png)
+[🔊 Computer / Компютър audio example](assets/audio.mp3) (Download raw file, and then play locally)
 
 ⚠️ **Important:** This tool uses OpenAI services for audio and image generation, which requires an API key. See [Quick Start](#quick-start) for setup instructions.
 
