@@ -123,6 +123,16 @@ func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string)
 		}
 	}
 
+	// Fetch phonetic information
+	fmt.Printf("  Fetching phonetic information...\n")
+	wordDir := p.findOrCreateWordDirectory(word)
+	if err := p.phoneticFetcher.FetchAndSave(word, wordDir); err != nil {
+		// Don't fail the whole process if phonetic info fails
+		fmt.Printf("  Warning: Failed to fetch phonetic info: %v\n", err)
+	} else {
+		fmt.Printf("  Saved phonetic information\n")
+	}
+
 	// Generate audio
 	if !p.flags.SkipAudio {
 		fmt.Printf("  Generating audio...\n")
@@ -136,18 +146,6 @@ func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string)
 		fmt.Printf("  Downloading images...\n")
 		if err := p.downloadImagesWithTranslation(word, translationText); err != nil {
 			return fmt.Errorf("image download failed: %w", err)
-		}
-	}
-
-	// Fetch phonetic information
-	fmt.Printf("  Fetching phonetic information...\n")
-	wordDir := p.findCardDirectory(word)
-	if wordDir != "" {
-		if err := p.phoneticFetcher.FetchAndSave(word, wordDir); err != nil {
-			// Don't fail the whole process if phonetic info fails
-			fmt.Printf("  Warning: Failed to fetch phonetic info: %v\n", err)
-		} else {
-			fmt.Printf("  Saved phonetic information\n")
 		}
 	}
 
