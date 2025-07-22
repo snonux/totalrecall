@@ -2202,6 +2202,8 @@ func (a *Application) setupKeyboardShortcuts() {
 			}
 		case 'ж', 'Ж': // ж = x
 			a.onExportToAnki()
+		case 'в', 'В': // в = v
+			a.onArchive()
 		case '?':
 			a.onShowHotkeys()
 		case 'h', 'H', 'х', 'Х': // h/х = previous (vim-style)
