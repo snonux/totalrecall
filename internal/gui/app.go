@@ -185,7 +185,7 @@ func New(config *Config) *Application {
 
 // setupUI creates the main user interface
 func (a *Application) setupUI() {
-	a.window = a.app.NewWindow(fmt.Sprintf("TotalRecall v%s - Bulgarian Flashcard Generator", internal.Version))
+	a.window = a.app.NewWindow("TotalRecall")
 	a.window.SetIcon(GetAppIcon())
 	a.window.Resize(fyne.NewSize(880, 770))
 
@@ -372,8 +372,13 @@ func (a *Application) setupUI() {
 	a.queueStatusLabel = widget.NewLabel("Queue: Empty")
 	a.queueStatusLabel.TextStyle = fyne.TextStyle{Italic: true}
 
+	// Create version label
+	versionLabel := widget.NewLabel(fmt.Sprintf("v%s", internal.Version))
+	versionLabel.TextStyle = fyne.TextStyle{Italic: true}
+	versionLabel.Alignment = fyne.TextAlignTrailing
+
 	statusSection := container.NewBorder(
-		nil, nil, nil, nil,
+		nil, nil, nil, versionLabel,
 		container.NewVBox(
 			a.statusLabel,
 			widget.NewSeparator(),

@@ -51,7 +51,7 @@ else
 fi
 
 # Create desktop file with proper exec path
-sed "s|Exec=totalrecall|Exec=$TOTALRECALL_PATH|g" totalrecall.desktop > "$APP_DIR/totalrecall.desktop"
+sed "s|Exec=totalrecall|Exec=$TOTALRECALL_PATH|g" assets/totalrecall.desktop > "$APP_DIR/totalrecall.desktop"
 
 # Update caches
 if command -v gtk-update-icon-cache &> /dev/null; then

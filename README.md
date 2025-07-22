@@ -76,13 +76,13 @@ TotalRecall includes a desktop icon for GNOME integration. To install:
 **For current user only:**
 ```bash
 cd totalrecall
-./install-icon.sh
+./assets/install-icon.sh
 ```
 
 **System-wide installation:**
 ```bash
 cd totalrecall
-sudo ./install-icon.sh
+sudo ./assets/install-icon.sh
 ```
 
 After installation, you may need to log out and log back in for the icon to appear in GNOME's application menu. The icon will show up as "TotalRecall" in the Education category.
@@ -193,7 +193,11 @@ When translations are provided, they are used directly without calling the trans
 
 ## Configuration
 
-Create an optional `~/config/totalrecall/config.yaml` file. You can copy the example file provided.
+Create an optional `~/config/totalrecall/config.yaml` file. You can copy the example file provided:
+
+```bash
+cp assets/config.yaml.example ~/.config/totalrecall/config.yaml
+```
 
 ## Output Files
 

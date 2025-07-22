@@ -58,13 +58,18 @@ golangci-lint run
 ### Package Structure
 ```
 totalrecall/
-├── cmd/totalrecall/          # CLI entry point
+├── cmd/totalrecall/   # CLI entry point
 ├── internal/          # Private packages
 │   ├── audio/        # Audio generation (OpenAI TTS)
 │   ├── image/        # Image generation functionality
 │   ├── anki/         # Anki format generation
 │   ├── config/       # Configuration management
 │   └── version.go    # Version information
+├── assets/           # Static assets and configuration
+│   ├── icons/        # Application icons
+│   ├── config.yaml.example  # Example configuration
+│   ├── totalrecall.desktop  # Desktop entry file
+│   └── install-icon.sh      # Icon installation script
 ```
 
 ### Key Design Decisions
@@ -102,3 +107,12 @@ package main  // NOT package bulg
 - Input should be in Cyrillic script
 - Common test words: ябълка (apple), котка (cat), куче (dog)
 - OpenAI voices: nova, alloy, echo, shimmer (work well for Bulgarian)
+
+## Code Guidelines
+- Whenever updating code, also update the comments in the code to reflect the reality and the reasoning.
+- When a function reaches 50 lines of code or more, try to refactor it into several functions of about 30 lines each. In case of a go project, when main.go becomes too large, move code into the ./internal package.
+
+## File Organization
+- Configuration examples, desktop files, and installation scripts should be placed in the `assets/` directory
+- Icons and images go in `assets/icons/`
+- Keep the root directory clean by moving non-essential files to appropriate subdirectories
