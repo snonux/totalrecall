@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/sashabaranov/go-openai"
 
-	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
@@ -84,12 +83,11 @@ func (a *Application) translateEnglishToBulgarian(word string) (string, error) {
 }
 
 // generateAudio generates audio for a word
-func (a *Application) generateAudio(ctx context.Context, word string) (string, error) {
+func (a *Application) generateAudio(ctx context.Context, word string, cardDir string) (string, error) {
 	// Check if this is a regeneration by looking for existing audio file
-	wordDir := a.findCardDirectory(word)
 	isRegeneration := false
-	if wordDir != "" {
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+	if cardDir != "" {
+		audioFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			isRegeneration = true
 		}
@@ -124,25 +122,13 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 		return "", err
 	}
 
-	// Find existing card directory or create new one again after provider creation
-	wordDir = a.findCardDirectory(word)
-	if wordDir == "" {
-		// No existing directory, create new one with card ID
-		cardID := internal.GenerateCardID(word)
-		wordDir = filepath.Join(a.config.OutputDir, cardID)
-		if err := os.MkdirAll(wordDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create word directory: %w", err)
-		}
-
-		// Save the original Bulgarian word in a metadata file
-		metadataFile := filepath.Join(wordDir, "word.txt")
-		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-			return "", fmt.Errorf("failed to save word metadata: %w", err)
-		}
+	// Use the provided card directory
+	if cardDir == "" {
+		return "", fmt.Errorf("card directory not provided")
 	}
 
 	// Generate filename in subdirectory
-	outputFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+	outputFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 
 	// Generate audio
 	err = provider.GenerateAudio(ctx, word, outputFile)
@@ -157,7 +143,7 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 	}
 
 	// Save voice metadata for GUI display
-	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
+	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
 	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\n", voice, speed)
 	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
@@ -167,12 +153,12 @@ func (a *Application) generateAudio(ctx context.Context, word string) (string, e
 }
 
 // generateImages downloads images for a word
-func (a *Application) generateImages(ctx context.Context, word string) (string, error) {
-	return a.generateImagesWithPrompt(ctx, word, "", "")
+func (a *Application) generateImages(ctx context.Context, word string, cardDir string) (string, error) {
+	return a.generateImagesWithPrompt(ctx, word, "", "", cardDir)
 }
 
 // generateImagesWithPrompt downloads a single image for a word with optional custom prompt and translation
-func (a *Application) generateImagesWithPrompt(ctx context.Context, word string, customPrompt string, translation string) (string, error) {
+func (a *Application) generateImagesWithPrompt(ctx context.Context, word string, customPrompt string, translation string, cardDir string) (string, error) {
 	// Create image searcher based on provider
 	var searcher image.ImageSearcher
 	var err error
@@ -196,26 +182,14 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}
 
-	// Find existing card directory or create new one
-	wordDir := a.findCardDirectory(word)
-	if wordDir == "" {
-		// No existing directory, create new one with card ID
-		cardID := internal.GenerateCardID(word)
-		wordDir = filepath.Join(a.config.OutputDir, cardID)
-		if err := os.MkdirAll(wordDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create word directory: %w", err)
-		}
-
-		// Save the original Bulgarian word in a metadata file
-		metadataFile := filepath.Join(wordDir, "word.txt")
-		if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-			return "", fmt.Errorf("failed to save word metadata: %w", err)
-		}
+	// Use the provided card directory
+	if cardDir == "" {
+		return "", fmt.Errorf("card directory not provided")
 	}
 
 	// Create downloader
 	downloadOpts := &image.DownloadOptions{
-		OutputDir:         wordDir,
+		OutputDir:         cardDir,
 		OverwriteExisting: true,
 		CreateDir:         true,
 		FileNamePattern:   "image",
@@ -229,7 +203,7 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
 			openaiClient.SetPromptCallback(func(prompt string) {
 				// Save the prompt to disk immediately for this word
-				promptFile := filepath.Join(wordDir, "image_prompt.txt")
+				promptFile := filepath.Join(cardDir, "image_prompt.txt")
 				os.WriteFile(promptFile, []byte(prompt), 0644)
 
 				// Only update UI if this word is still the current word

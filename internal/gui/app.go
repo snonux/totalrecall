@@ -93,6 +93,10 @@ type Application struct {
 	// Per-card cancellation tracking
 	cardContexts map[string]context.CancelFunc // Map of word -> cancel function
 	cardMu       sync.Mutex                    // Mutex for cardContexts map
+
+	// Active operations tracking
+	activeOperations map[string]int // Map of word -> count of active operations
+	activeOpMu       sync.Mutex     // Mutex for activeOperations map
 }
 
 // Config holds GUI application configuration
@@ -147,13 +151,14 @@ func New(config *Config) *Application {
 	myApp.SetIcon(GetAppIcon())
 
 	app := &Application{
-		app:             myApp,
-		config:          config,
-		ctx:             ctx,
-		cancel:          cancel,
-		savedCards:      make([]anki.Card, 0),
-		cardContexts:    make(map[string]context.CancelFunc),
-		autoPlayEnabled: config.AutoPlay, // Use config setting
+		app:              myApp,
+		config:           config,
+		ctx:              ctx,
+		cancel:           cancel,
+		savedCards:       make([]anki.Card, 0),
+		cardContexts:     make(map[string]context.CancelFunc),
+		activeOperations: make(map[string]int),
+		autoPlayEnabled:  config.AutoPlay, // Use config setting
 	}
 
 	// Initialize the word processing queue
@@ -556,6 +561,16 @@ func (a *Application) onSubmit() {
 func (a *Application) generateMaterials(word string) {
 	// Get or create context for this card
 	cardCtx, _ := a.getOrCreateCardContext(word)
+
+	// Ensure card directory exists
+	cardDir, err := a.ensureCardDirectory(word)
+	if err != nil {
+		fyne.Do(func() {
+			a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			a.setUIEnabled(true)
+		})
+		return
+	}
 	// Check if we already have a translation
 	if a.currentTranslation == "" {
 		// Translate word
@@ -580,25 +595,13 @@ func (a *Application) generateMaterials(word string) {
 		}
 		a.mu.Unlock()
 
-		// Save translation to disk regardless
+		// Save translation to disk using the pre-determined directory
 		if translation != "" {
-			// Find existing card directory first
-			wordDir := a.findCardDirectory(word)
-			if wordDir == "" {
-				// No existing directory, create new one with card ID
-				cardID := internal.GenerateCardID(word)
-				wordDir = filepath.Join(a.config.OutputDir, cardID)
-				os.MkdirAll(wordDir, 0755) // Ensure directory exists
-				// Save word metadata
-				metadataFile := filepath.Join(wordDir, "word.txt")
-				os.WriteFile(metadataFile, []byte(word), 0644)
-			}
-			translationFile := filepath.Join(wordDir, "translation.txt")
+			translationFile := filepath.Join(cardDir, "translation.txt")
 			content := fmt.Sprintf("%s = %s\n", word, translation)
 			os.WriteFile(translationFile, []byte(content), 0644)
 		}
 	}
-
 	// Create channels for parallel operations
 	type audioResult struct {
 		file string
@@ -634,11 +637,14 @@ func (a *Application) generateMaterials(word string) {
 
 	// 1. Audio generation
 	go func() {
+		a.startOperation(word)     // Track operation start
+		defer a.endOperation(word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Audio processing starts
 		})
 
-		audioFile, err := a.generateAudio(cardCtx, word)
+		audioFile, err := a.generateAudio(cardCtx, word, cardDir)
 		a.decrementProcessing() // Audio processing ends
 
 		audioChan <- audioResult{file: audioFile, err: err}
@@ -646,6 +652,9 @@ func (a *Application) generateMaterials(word string) {
 
 	// 2. Image generation
 	go func() {
+		a.startOperation(word)     // Track operation start
+		defer a.endOperation(word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Image processing starts
 			// Show generating status if this is still the current word
@@ -656,7 +665,7 @@ func (a *Application) generateMaterials(word string) {
 			a.mu.Unlock()
 		})
 
-		imageFile, err := a.generateImagesWithPrompt(cardCtx, word, customPrompt, translation)
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, word, customPrompt, translation, cardDir)
 		a.decrementProcessing() // Image processing ends
 
 		imageChan <- imageResult{file: imageFile, err: err}
@@ -664,6 +673,9 @@ func (a *Application) generateMaterials(word string) {
 
 	// 3. Phonetic information fetching
 	go func() {
+		a.startOperation(word)     // Track operation start
+		defer a.endOperation(word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Phonetic processing starts
 		})
@@ -677,11 +689,11 @@ func (a *Application) generateMaterials(word string) {
 			fmt.Printf("Successfully fetched phonetic info for '%s': %s\n", word, phoneticInfo)
 		}
 
-		// Save phonetic info to disk
+		// Save phonetic info to disk using the pre-determined directory
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
-			a.savePhoneticInfoForWord(word, phoneticInfo)
+			phoneticFile := filepath.Join(cardDir, "phonetic.txt")
+			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
 		}
-
 		// Update UI immediately with phonetic info if this is still the current word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
 			a.mu.Lock()
@@ -879,7 +891,16 @@ func (a *Application) onRegenerateImage() {
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
 
-		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
+		// Ensure card directory exists
+		cardDir, err := a.ensureCardDirectory(wordForGeneration)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			})
+			return
+		}
+
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation, cardDir)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
@@ -943,7 +964,16 @@ func (a *Application) onRegenerateRandomImage() {
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
 
-		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation)
+		// Ensure card directory exists
+		cardDir, err := a.ensureCardDirectory(wordForGeneration)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			})
+			return
+		}
+
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation, cardDir)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Random image generation failed: %w", err))
@@ -986,15 +1016,33 @@ func (a *Application) onRegenerateAudio() {
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		defer a.decrementProcessing() // Audio processing ends
+		defer a.decrementProcessing() // Image processing ends
 
+		// Use the current translation to avoid re-translating
+		translation := a.currentTranslation
+		if translation == "" {
+			// Use the text from translationEntry if currentTranslation is not set
+			translation = strings.TrimSpace(a.translationEntry.Text)
+		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
+
+		a.startOperation(wordForGeneration)     // Track operation start
+		defer a.endOperation(wordForGeneration) // Track operation end
 
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
 
-		audioFile, err := a.generateAudio(cardCtx, wordForGeneration)
+		// Ensure card directory exists
+		cardDir, err := a.ensureCardDirectory(wordForGeneration)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			})
+			return
+		}
+
+		audioFile, err := a.generateAudio(cardCtx, wordForGeneration, cardDir)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
@@ -1725,6 +1773,30 @@ func (a *Application) getOrCreateCardContext(word string) (context.Context, cont
 	return ctx, cancel
 }
 
+// ensureCardDirectory ensures a card directory exists for the given word and returns its path
+func (a *Application) ensureCardDirectory(word string) (string, error) {
+	// First check if directory already exists
+	wordDir := a.findCardDirectory(word)
+	if wordDir != "" {
+		return wordDir, nil
+	}
+
+	// Create new directory with card ID
+	cardID := internal.GenerateCardID(word)
+	wordDir = filepath.Join(a.config.OutputDir, cardID)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create word directory: %w", err)
+	}
+
+	// Save the original Bulgarian word in a metadata file
+	metadataFile := filepath.Join(wordDir, "word.txt")
+	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
+		return "", fmt.Errorf("failed to save word metadata: %w", err)
+	}
+
+	return wordDir, nil
+}
+
 // cancelCardOperations cancels all ongoing operations for a specific word
 func (a *Application) cancelCardOperations(word string) {
 	a.cardMu.Lock()
@@ -1734,6 +1806,36 @@ func (a *Application) cancelCardOperations(word string) {
 		cancel()
 		delete(a.cardContexts, word)
 	}
+}
+
+// startOperation marks the start of an operation for a word
+func (a *Application) startOperation(word string) {
+	a.activeOpMu.Lock()
+	defer a.activeOpMu.Unlock()
+	a.activeOperations[word]++
+}
+
+// endOperation marks the end of an operation for a word
+func (a *Application) endOperation(word string) {
+	a.activeOpMu.Lock()
+	defer a.activeOpMu.Unlock()
+
+	if count, exists := a.activeOperations[word]; exists {
+		if count > 1 {
+			a.activeOperations[word]--
+		} else {
+			delete(a.activeOperations, word)
+		}
+	}
+}
+
+// hasActiveOperations checks if a word has any active operations
+func (a *Application) hasActiveOperations(word string) bool {
+	a.activeOpMu.Lock()
+	defer a.activeOpMu.Unlock()
+
+	count, exists := a.activeOperations[word]
+	return exists && count > 0
 }
 
 // processWordJob processes a single word job
@@ -1749,6 +1851,15 @@ func (a *Application) processWordJob(job *WordJob) {
 		return
 	default:
 	}
+
+	// Ensure card directory exists upfront
+	cardDir, dirErr := a.ensureCardDirectory(job.Word)
+	if dirErr != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("failed to create card directory: %w", dirErr))
+		a.finishCurrentJob()
+		return
+	}
+
 	// Handle translation
 	var translation string
 	var err error
@@ -1772,18 +1883,7 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// Save translation to disk immediately for this specific word
 	if translation != "" {
-		// Find existing card directory first
-		wordDir := a.findCardDirectory(job.Word)
-		if wordDir == "" {
-			// No existing directory, create new one with card ID
-			cardID := internal.GenerateCardID(job.Word)
-			wordDir = filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
-			// Save word metadata
-			metadataFile := filepath.Join(wordDir, "word.txt")
-			os.WriteFile(metadataFile, []byte(job.Word), 0644)
-		}
-		translationFile := filepath.Join(wordDir, "translation.txt")
+		translationFile := filepath.Join(cardDir, "translation.txt")
 		content := fmt.Sprintf("%s = %s\n", job.Word, translation)
 		os.WriteFile(translationFile, []byte(content), 0644)
 	}
@@ -1825,11 +1925,14 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// 1. Audio generation
 	go func() {
+		a.startOperation(job.Word)     // Track operation start
+		defer a.endOperation(job.Word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Audio processing starts
 		})
 
-		audioFile, err := a.generateAudio(cardCtx, job.Word)
+		audioFile, err := a.generateAudio(cardCtx, job.Word, cardDir)
 		a.decrementProcessing() // Audio processing ends
 
 		audioChan <- audioResult{file: audioFile, err: err}
@@ -1837,6 +1940,9 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// 2. Image generation (includes scene description)
 	go func() {
+		a.startOperation(job.Word)     // Track operation start
+		defer a.endOperation(job.Word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Image processing starts
 			// Show generating status if this is still the current job
@@ -1849,7 +1955,7 @@ func (a *Application) processWordJob(job *WordJob) {
 
 		// Use the custom prompt from the job
 		// The translation variable already contains the correct translation (either from job or translated)
-		imageFile, err := a.generateImagesWithPrompt(cardCtx, job.Word, job.CustomPrompt, translation)
+		imageFile, err := a.generateImagesWithPrompt(cardCtx, job.Word, job.CustomPrompt, translation, cardDir)
 		a.decrementProcessing() // Image processing ends
 
 		imageChan <- imageResult{file: imageFile, err: err}
@@ -1857,6 +1963,9 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// 3. Phonetic information fetching
 	go func() {
+		a.startOperation(job.Word)     // Track operation start
+		defer a.endOperation(job.Word) // Track operation end
+
 		fyne.Do(func() {
 			a.incrementProcessing() // Phonetic processing starts
 		})
@@ -1872,18 +1981,7 @@ func (a *Application) processWordJob(job *WordJob) {
 
 		// Save phonetic info to disk immediately for this specific word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
-			// Find existing card directory first
-			wordDir := a.findCardDirectory(job.Word)
-			if wordDir == "" {
-				// No existing directory, create new one with card ID
-				cardID := internal.GenerateCardID(job.Word)
-				wordDir = filepath.Join(a.config.OutputDir, cardID)
-				os.MkdirAll(wordDir, 0755) // Ensure directory exists
-				// Save word metadata
-				metadataFile := filepath.Join(wordDir, "word.txt")
-				os.WriteFile(metadataFile, []byte(job.Word), 0644)
-			}
-			phoneticFile := filepath.Join(wordDir, "phonetic.txt")
+			phoneticFile := filepath.Join(cardDir, "phonetic.txt")
 			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
 		}
 

@@ -580,6 +580,18 @@ func (a *Application) onDelete() {
 		return
 	}
 
+	// Check if this word has active operations
+	if a.hasActiveOperations(a.currentWord) {
+		dialog.ShowError(fmt.Errorf("Cannot delete '%s' while content is being generated.\nPlease wait for generation to complete.", a.currentWord), a.window)
+		return
+	}
+
+	// Also check if word is in the processing queue
+	if a.queue.IsWordProcessing(a.currentWord) {
+		dialog.ShowError(fmt.Errorf("Cannot delete '%s' while it is in the processing queue.\nPlease wait for processing to complete.", a.currentWord), a.window)
+		return
+	}
+
 	// Create custom confirmation dialog with keyboard support
 	message := fmt.Sprintf("Move all files for '%s' to trash?\n\nPress y to confirm or n to cancel", a.currentWord)
 	confirmDialog := dialog.NewConfirm("Move to Trash", message, func(confirm bool) {

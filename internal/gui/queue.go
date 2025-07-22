@@ -53,14 +53,14 @@ type WordQueue struct {
 	results    map[int]*WordJob
 	processing map[int]*WordJob
 	completed  []*WordJob
-	
-	nextID     int
-	mu         sync.RWMutex
-	
+
+	nextID int
+	mu     sync.RWMutex
+
 	// Callbacks for UI updates
 	onStatusUpdate func(job *WordJob)
 	onJobComplete  func(job *WordJob)
-	
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -69,7 +69,7 @@ type WordQueue struct {
 // NewWordQueue creates a new word processing queue
 func NewWordQueue(ctx context.Context) *WordQueue {
 	queueCtx, cancel := context.WithCancel(ctx)
-	
+
 	q := &WordQueue{
 		jobs:       make(chan *WordJob, 100),
 		results:    make(map[int]*WordJob),
@@ -79,9 +79,9 @@ func NewWordQueue(ctx context.Context) *WordQueue {
 		ctx:        queueCtx,
 		cancel:     cancel,
 	}
-	
+
 	// Don't start a worker - the GUI will pull jobs
-	
+
 	return q
 }
 
@@ -110,7 +110,7 @@ func (q *WordQueue) AddWordWithPrompt(word, customPrompt string) *WordJob {
 	q.nextID++
 	q.results[job.ID] = job
 	q.mu.Unlock()
-	
+
 	// Try to add to queue
 	select {
 	case q.jobs <- job:
@@ -134,7 +134,7 @@ func (q *WordQueue) GetJob(id int) *WordJob {
 func (q *WordQueue) GetQueueStatus() (queued, processing, completed, failed int) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	
+
 	// Count based on job statuses for accuracy
 	for _, job := range q.results {
 		switch job.Status {
@@ -148,7 +148,7 @@ func (q *WordQueue) GetQueueStatus() (queued, processing, completed, failed int)
 			failed++
 		}
 	}
-	
+
 	return
 }
 
@@ -156,14 +156,14 @@ func (q *WordQueue) GetQueueStatus() (queued, processing, completed, failed int)
 func (q *WordQueue) GetActiveJobs() []*WordJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	
+
 	var jobs []*WordJob
-	
+
 	// Add processing jobs
 	for _, job := range q.processing {
 		jobs = append(jobs, job)
 	}
-	
+
 	// Add queued jobs from channel (non-blocking)
 	queuedJobs := make([]*WordJob, 0)
 	for {
@@ -198,17 +198,17 @@ func (q *WordQueue) Stop() {
 func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, imageFile string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	if job, exists := q.results[jobID]; exists {
 		job.Status = StatusCompleted
 		job.Translation = translation
 		job.AudioFile = audioFile
 		job.ImageFile = imageFile
 		job.CompletedAt = time.Now()
-		
+
 		delete(q.processing, jobID)
 		q.completed = append(q.completed, job)
-		
+
 		if q.onJobComplete != nil {
 			q.onJobComplete(job)
 		}
@@ -219,14 +219,14 @@ func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, imageFile str
 func (q *WordQueue) FailJob(jobID int, err error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	if job, exists := q.results[jobID]; exists {
 		job.Status = StatusFailed
 		job.Error = err
 		job.CompletedAt = time.Now()
-		
+
 		delete(q.processing, jobID)
-		
+
 		if q.onJobComplete != nil {
 			q.onJobComplete(job)
 		}
@@ -250,14 +250,14 @@ func (q *WordQueue) ProcessNextJob() *WordJob {
 		job.Status = StatusProcessing
 		job.StartedAt = time.Now()
 		q.mu.Unlock()
-		
+
 		// Call the status update callback
 		if q.onStatusUpdate != nil {
 			q.onStatusUpdate(job)
 		}
-		
+
 		return job
-		
+
 	default:
 		return nil
 	}
@@ -267,7 +267,7 @@ func (q *WordQueue) ProcessNextJob() *WordJob {
 func (q *WordQueue) RemoveCompletedJobByWord(word string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	
+
 	// Remove from completed jobs list
 	newCompleted := make([]*WordJob, 0, len(q.completed))
 	for _, job := range q.completed {
@@ -276,11 +276,26 @@ func (q *WordQueue) RemoveCompletedJobByWord(word string) {
 		}
 	}
 	q.completed = newCompleted
-	
+
 	// Also remove from results map
 	for id, job := range q.results {
 		if job.Word == word && job.Status == StatusCompleted {
 			delete(q.results, id)
 		}
 	}
+}
+
+// IsWordProcessing checks if a word is currently being processed or queued
+func (q *WordQueue) IsWordProcessing(word string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	// Check all jobs in results
+	for _, job := range q.results {
+		if job.Word == word && (job.Status == StatusQueued || job.Status == StatusProcessing) {
+			return true
+		}
+	}
+
+	return false
 }
