@@ -22,10 +22,6 @@ audio:
   # openai_instruction: "Speak in Bulgarian (not Russian!). Use native Bulgarian pronunciation with clear articulation for each syllable."
   # openai_instruction: "You are a Bulgarian language teacher. Pronounce the Bulgarian words slowly with authentic Bulgarian accent and phonetics."
   # openai_instruction: "Speak Bulgarian text with proper Bulgarian pronunciation. Avoid Russian accent. Speak clearly at a pace suitable for beginners."
-  
-  # Caching
-  enable_cache: true
-  cache_dir: ./.audio_cache
 
 # Image configuration
 image:

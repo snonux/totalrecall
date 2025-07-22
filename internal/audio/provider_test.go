@@ -50,13 +50,6 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected OpenAI speed 1.0, got %f", config.OpenAISpeed)
 	}
 
-	if !config.EnableCache {
-		t.Error("Expected cache to be enabled by default")
-	}
-
-	if config.CacheDir != "./.audio_cache" {
-		t.Errorf("Expected cache dir './.audio_cache', got '%s'", config.CacheDir)
-	}
 }
 
 func TestNewProvider(t *testing.T) {

@@ -263,15 +263,6 @@ func (p *Processor) generateAudioWithVoice(word, voice string) error {
 		OpenAIVoice:       voice,
 		OpenAISpeed:       speed,
 		OpenAIInstruction: p.flags.OpenAIInstruction,
-
-		// Caching
-		EnableCache: viper.GetBool("audio.enable_cache"),
-		CacheDir:    viper.GetString("audio.cache_dir"),
-	}
-
-	// Set defaults
-	if providerConfig.CacheDir == "" {
-		providerConfig.CacheDir = "./.audio_cache"
 	}
 
 	// Use config file values if not overridden by flags

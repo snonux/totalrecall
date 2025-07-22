@@ -30,9 +30,6 @@ type Config struct {
 	OpenAISpeed       float64 // 0.25 to 4.0
 	OpenAIInstruction string  // Voice instructions for gpt-4o-mini-tts model
 
-	// Caching settings
-	EnableCache bool
-	CacheDir    string
 }
 
 // DefaultConfig returns default configuration
@@ -46,8 +43,6 @@ func DefaultProviderConfig() *Config {
 		OpenAISpeed:  1.0,
 		// OpenAISpeed:       0.98, // Default speed for clarity
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		EnableCache:       true,
-		CacheDir:          "./.audio_cache",
 	}
 }
 

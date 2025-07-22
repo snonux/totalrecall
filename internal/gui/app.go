@@ -170,8 +170,6 @@ func New(config *Config) *Application {
 		OpenAIVoice:       "nova",
 		OpenAISpeed:       0.9,
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		EnableCache:       true,
-		CacheDir:          "./.audio_cache",
 	}
 
 	app.setupUI()
