@@ -716,11 +716,19 @@ func (a *Application) generateMaterials(word string) {
 		a.mu.Lock()
 		if a.currentWord == word {
 			a.currentAudioFile = audioRes.file
+			audioFile := audioRes.file
+			a.mu.Unlock()
 			fyne.Do(func() {
-				a.audioPlayer.SetAudioFile(audioRes.file)
+				// Double-check inside the UI update that we're still on the same word
+				a.mu.Lock()
+				if a.currentWord == word {
+					a.audioPlayer.SetAudioFile(audioFile)
+				}
+				a.mu.Unlock()
 			})
+		} else {
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
 	}
 
 	// Collect image result
@@ -735,11 +743,19 @@ func (a *Application) generateMaterials(word string) {
 		a.mu.Lock()
 		if a.currentWord == word {
 			a.currentImage = imageRes.file
+			imageFile := imageRes.file
+			a.mu.Unlock()
 			fyne.Do(func() {
-				a.imageDisplay.SetImages([]string{imageRes.file})
+				// Double-check inside the UI update that we're still on the same word
+				a.mu.Lock()
+				if a.currentWord == word {
+					a.imageDisplay.SetImages([]string{imageFile})
+				}
+				a.mu.Unlock()
 			})
+		} else {
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
 	}
 
 	// Collect phonetic result (UI already updated in the goroutine)
@@ -967,19 +983,34 @@ func (a *Application) onRegenerateAudio() {
 		defer a.wg.Done()
 		defer a.decrementProcessing() // Audio processing ends
 
-		// Get or create context for this card
-		cardCtx, _ := a.getOrCreateCardContext(a.currentWord)
+		// Store the word we're generating for
+		wordForGeneration := a.currentWord
 
-		audioFile, err := a.generateAudio(cardCtx, a.currentWord)
+		// Get or create context for this card
+		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
+
+		audioFile, err := a.generateAudio(cardCtx, wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
 				a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
 			})
 		} else {
-			a.currentAudioFile = audioFile
-			fyne.Do(func() {
-				a.audioPlayer.SetAudioFile(audioFile)
-			})
+			// Only update if we're still on the same word
+			a.mu.Lock()
+			if a.currentWord == wordForGeneration {
+				a.currentAudioFile = audioFile
+				a.mu.Unlock()
+				fyne.Do(func() {
+					// Double-check inside the UI update that we're still on the same word
+					a.mu.Lock()
+					if a.currentWord == wordForGeneration {
+						a.audioPlayer.SetAudioFile(audioFile)
+					}
+					a.mu.Unlock()
+				})
+			} else {
+				a.mu.Unlock()
+			}
 		}
 
 		fyne.Do(func() {
@@ -1897,6 +1928,14 @@ func (a *Application) processWordJob(job *WordJob) {
 
 		if isCurrentJob {
 			fyne.Do(func() {
+				// Double-check that we're still on the same job before updating UI
+				a.mu.Lock()
+				if a.currentJobID != job.ID {
+					a.mu.Unlock()
+					return
+				}
+				a.mu.Unlock()
+
 				a.audioPlayer.SetAudioFile(audioFile)
 				// Enable audio-related actions
 				a.regenerateAudioBtn.Enable()
@@ -1948,6 +1987,14 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	if isCurrentJob {
 		fyne.Do(func() {
+			// Double-check that we're still on the same job before updating UI
+			a.mu.Lock()
+			if a.currentJobID != job.ID {
+				a.mu.Unlock()
+				return
+			}
+			a.mu.Unlock()
+
 			a.translationEntry.SetText(translation)
 			if imageFile != "" {
 				a.imageDisplay.SetImages([]string{imageFile})
@@ -2022,6 +2069,16 @@ func (a *Application) onJobComplete(job *WordJob) {
 			} else {
 				// This is a background job that completed
 				a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
+
+				// Check if user has navigated back to this word
+				a.mu.Lock()
+				currentWord := a.currentWord
+				a.mu.Unlock()
+
+				if currentWord == job.Word {
+					// User is currently viewing this word, reload the files
+					a.loadExistingFiles(job.Word)
+				}
 			}
 		}
 	})

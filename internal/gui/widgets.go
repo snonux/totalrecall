@@ -73,7 +73,20 @@ func (d *ImageDisplay) SetImage(imagePath string) {
 	}
 	defer file.Close()
 
-	img, _, err := image.Decode(file)
+	// Get file info to ensure it's fully written
+	stat, err := file.Stat()
+	if err != nil {
+		d.imageLabel.SetText(fmt.Sprintf("Error getting file info: %v", err))
+		return
+	}
+
+	// If file size is 0, it might still be writing
+	if stat.Size() == 0 {
+		d.imageLabel.SetText("Image file is empty")
+		return
+	}
+
+	img, format, err := image.Decode(file)
 	if err != nil {
 		d.imageLabel.SetText(fmt.Sprintf("Error decoding image: %v", err))
 		return
@@ -83,8 +96,8 @@ func (d *ImageDisplay) SetImage(imagePath string) {
 	d.imageCanvas.Image = img
 	d.imageCanvas.Refresh()
 
-	// Update label
-	d.imageLabel.SetText(filepath.Base(imagePath))
+	// Update label with format info
+	d.imageLabel.SetText(fmt.Sprintf("%s (%s)", filepath.Base(imagePath), format))
 }
 
 // SetImages sets multiple images but only displays the first one

@@ -11,21 +11,21 @@ import (
 
 // DownloadOptions configures image download behavior
 type DownloadOptions struct {
-	OutputDir       string   // Directory to save images
+	OutputDir         string // Directory to save images
 	OverwriteExisting bool   // Whether to overwrite existing files
-	CreateDir       bool     // Create output directory if it doesn't exist
-	FileNamePattern string   // Pattern for file naming (e.g., "{word}_{source}")
-	MaxSizeBytes    int64    // Maximum file size to download (0 = no limit)
+	CreateDir         bool   // Create output directory if it doesn't exist
+	FileNamePattern   string // Pattern for file naming (e.g., "{word}_{source}")
+	MaxSizeBytes      int64  // Maximum file size to download (0 = no limit)
 }
 
 // DefaultDownloadOptions returns sensible defaults for image downloads
 func DefaultDownloadOptions() *DownloadOptions {
 	return &DownloadOptions{
-		OutputDir:       "./images",
+		OutputDir:         "./images",
 		OverwriteExisting: false,
-		CreateDir:       true,
-		FileNamePattern: "{word}_{source}",
-		MaxSizeBytes:    10 * 1024 * 1024, // 10MB
+		CreateDir:         true,
+		FileNamePattern:   "{word}_{source}",
+		MaxSizeBytes:      10 * 1024 * 1024, // 10MB
 	}
 }
 
@@ -55,28 +55,28 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
-	
+
 	// Check if file already exists
 	if !d.options.OverwriteExisting {
 		if _, err := os.Stat(outputPath); err == nil {
 			return fmt.Errorf("file already exists: %s", outputPath)
 		}
 	}
-	
+
 	// Download the image
 	reader, err := d.searcher.Download(ctx, result.URL)
 	if err != nil {
 		return fmt.Errorf("failed to download image: %w", err)
 	}
 	defer reader.Close()
-	
+
 	// Create output file
 	file, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
-	
+
 	// Copy with size limit if specified
 	var written int64
 	if d.options.MaxSizeBytes > 0 {
@@ -85,7 +85,7 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			os.Remove(outputPath) // Clean up on error
 			return fmt.Errorf("failed to write file: %w", err)
 		}
-		
+
 		// Check if we hit the size limit
 		if written == d.options.MaxSizeBytes {
 			// Try to read one more byte to see if file is larger
@@ -94,6 +94,11 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 				return fmt.Errorf("image exceeds maximum size of %d bytes", d.options.MaxSizeBytes)
 			}
 		}
+
+		// Ensure the file is fully written to disk before returning
+		if err := file.Sync(); err != nil {
+			return fmt.Errorf("failed to sync file to disk: %w", err)
+		}
 	} else {
 		written, err = io.Copy(file, reader)
 		if err != nil {
@@ -101,7 +106,12 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 	}
-	
+
+	// Ensure the file is fully written to disk before returning
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file to disk: %w", err)
+	}
+
 	// Save attribution if required
 	if attribution := d.searcher.GetAttribution(result); attribution != "" {
 		attrPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + "_attribution.txt"
@@ -110,7 +120,7 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			fmt.Fprintf(os.Stderr, "Warning: failed to save attribution: %v\n", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -119,32 +129,32 @@ func (d *Downloader) DownloadBestMatch(ctx context.Context, query string) (*Sear
 	// Search for images
 	opts := DefaultSearchOptions(query)
 	opts.PerPage = 5 // Get top 5 results
-	
+
 	results, err := d.searcher.Search(ctx, opts)
 	if err != nil {
 		return nil, "", fmt.Errorf("search failed: %w", err)
 	}
-	
+
 	if len(results) == 0 {
 		return nil, "", fmt.Errorf("no images found for query: %s", query)
 	}
-	
+
 	// Try to download the first available image
 	for i, result := range results {
 		// Generate filename
 		filename := d.generateFileName(query, &result, i)
 		outputPath := filepath.Join(d.options.OutputDir, filename)
-		
+
 		// Try to download
 		err := d.DownloadImage(ctx, &result, outputPath)
 		if err == nil {
 			return &result, outputPath, nil
 		}
-		
+
 		// Log error and try next
 		fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
 	}
-	
+
 	return nil, "", fmt.Errorf("failed to download any images for query: %s", query)
 }
 
@@ -152,24 +162,24 @@ func (d *Downloader) DownloadBestMatch(ctx context.Context, query string) (*Sear
 func (d *Downloader) generateFileName(word string, result *SearchResult, index int) string {
 	// Start with the pattern
 	filename := d.options.FileNamePattern
-	
+
 	// Replace placeholders
 	filename = strings.ReplaceAll(filename, "{word}", sanitizeFileName(word))
 	filename = strings.ReplaceAll(filename, "{source}", result.Source)
 	filename = strings.ReplaceAll(filename, "{id}", result.ID)
 	filename = strings.ReplaceAll(filename, "{index}", fmt.Sprintf("%d", index))
-	
+
 	// Determine extension from URL
 	ext := filepath.Ext(result.URL)
 	if ext == "" || len(ext) > 5 { // Probably not a real extension
 		ext = ".jpg" // Default to jpg
 	}
-	
+
 	// Add extension if not present
 	if filepath.Ext(filename) == "" {
 		filename += ext
 	}
-	
+
 	return filename
 }
 
@@ -189,49 +199,47 @@ func sanitizeFileName(name string) string {
 		" ", "_",
 		".", "_",
 	)
-	
+
 	sanitized := replacer.Replace(name)
-	
+
 	// Ensure the filename is not too long
 	if len(sanitized) > 50 {
 		sanitized = sanitized[:50]
 	}
-	
+
 	return sanitized
 }
-
 
 // DownloadBestMatchWithOptions downloads the best matching image for given search options
 func (d *Downloader) DownloadBestMatchWithOptions(ctx context.Context, opts *SearchOptions) (*SearchResult, string, error) {
 	// Search for images
-	searchOpts := *opts // Copy to avoid modifying original
+	searchOpts := *opts    // Copy to avoid modifying original
 	searchOpts.PerPage = 5 // Get top 5 results
-	
+
 	results, err := d.searcher.Search(ctx, &searchOpts)
 	if err != nil {
 		return nil, "", fmt.Errorf("search failed: %w", err)
 	}
-	
+
 	if len(results) == 0 {
 		return nil, "", fmt.Errorf("no images found for query: %s", opts.Query)
 	}
-	
+
 	// Try to download the first available image
 	for i, result := range results {
 		// Generate filename
 		filename := d.generateFileName(opts.Query, &result, i)
 		outputPath := filepath.Join(d.options.OutputDir, filename)
-		
+
 		// Try to download
 		err := d.DownloadImage(ctx, &result, outputPath)
 		if err == nil {
 			return &result, outputPath, nil
 		}
-		
+
 		// Log error and try next
 		fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
 	}
-	
+
 	return nil, "", fmt.Errorf("failed to download any images for query: %s", opts.Query)
 }
-
