@@ -328,9 +328,9 @@ func (a *Application) setupUI() {
 	// Create action buttons (tooltips will be set after tooltip layer is created)
 	a.keepButton = ttwidget.NewButtonWithIcon("", theme.DocumentCreateIcon(), a.onKeepAndContinue)
 
-	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.FileImageIcon(), a.onRegenerateImage)
+	a.regenerateImageBtn = ttwidget.NewButtonWithIcon("", theme.ColorPaletteIcon(), a.onRegenerateImage)
 
-	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.ColorPaletteIcon(), a.onRegenerateRandomImage)
+	a.regenerateRandomImageBtn = ttwidget.NewButtonWithIcon("", theme.ViewRefreshIcon(), a.onRegenerateRandomImage)
 
 	a.regenerateAudioBtn = ttwidget.NewButtonWithIcon("", theme.MediaRecordIcon(), a.onRegenerateAudio)
 
@@ -414,7 +414,7 @@ func (a *Application) setupUI() {
 				exportButton.SetToolTip("Export to Anki (x)")
 			}
 			if archiveButton != nil {
-				archiveButton.SetToolTip("Archive all cards")
+				archiveButton.SetToolTip("Archive all cards (v)")
 			}
 			if helpButton != nil {
 				helpButton.SetToolTip("Show hotkeys (?)")
@@ -1373,8 +1373,9 @@ func (a *Application) onShowHotkeys() {
 **p/п** Play audio  
 **u/у** Toggle auto-play  
 
-## Export
+## Export & Archive
 **x/ж** Export to Anki  
+**v/в** Archive all cards  
 
 ## Help
 **?** Show hotkeys  
@@ -2346,6 +2347,9 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 
 	case fyne.KeyX: // Export to APKG
 		a.onExportToAnki()
+
+	case fyne.KeyV: // Archive all cards
+		a.onArchive()
 
 	case fyne.KeyQ: // Quit application
 		a.onQuitConfirm()
