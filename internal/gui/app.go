@@ -293,7 +293,7 @@ func (a *Application) setupUI() {
 		a.window.Canvas().Unfocus()
 	}) // Create container for image and prompt with proper sizing
 	promptContainer := container.NewBorder(
-		widget.NewLabel("Image Prompt:"),
+		widget.NewLabel("Image prompt:"),
 		nil,
 		nil,
 		nil,

@@ -77,7 +77,7 @@ func NewLogViewer() *LogViewer {
 
 	// Create container with label
 	v.container = container.NewBorder(
-		widget.NewLabel("Log Messages (newest first):"),
+		widget.NewLabel("Log messages (newest first):"),
 		nil,
 		nil,
 		nil,
