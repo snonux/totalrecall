@@ -442,6 +442,9 @@ func (g *APKGGenerator) getBackTemplate() string {
 func (g *APKGGenerator) getReverseFrontTemplate() string {
 	return `<div class="front">
 <div class="bulgarian">{{Bulgarian}}</div>
+{{#Audio}}
+{{Audio}}
+{{/Audio}}
 </div>`
 }
 
@@ -458,9 +461,6 @@ func (g *APKGGenerator) getReverseBackTemplate() string {
 {{Image}}
 </div>
 {{/Image}}
-{{#Audio}}
-<div class="audio">{{Audio}}</div>
-{{/Audio}}
 {{#Notes}}
 <div class="notes">{{Notes}}</div>
 {{/Notes}}
