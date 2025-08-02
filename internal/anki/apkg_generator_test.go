@@ -106,13 +106,18 @@ func TestGenerateAPKG(t *testing.T) {
 		t.Fatalf("GenerateAPKG() error = %v", err)
 	}
 
-	// Verify file exists
-	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-		t.Fatal("APKG file was not created")
+	// Find the generated file
+	files, err := filepath.Glob(filepath.Join(tempDir, "*.apkg"))
+	if err != nil {
+		t.Fatalf("Error finding apkg file: %v", err)
 	}
+	if len(files) != 1 {
+		t.Fatalf("Expected 1 apkg file, found %d", len(files))
+	}
+	actualOutputPath := files[0]
 
 	// Verify it's a valid zip file
-	reader, err := zip.OpenReader(outputPath)
+	reader, err := zip.OpenReader(actualOutputPath)
 	if err != nil {
 		t.Fatalf("Failed to open APKG as zip: %v", err)
 	}

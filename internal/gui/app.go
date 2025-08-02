@@ -1203,7 +1203,7 @@ func (a *Application) onExportToAnki() {
 
 			// Update status bar instead of showing dialog
 			a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)",
-				total, outputPath, withAudio, withImages))
+				total, selectedDir, withAudio, withImages))
 		} else {
 			filename = "anki_import.csv"
 			outputPath = filepath.Join(selectedDir, filename)
@@ -1232,7 +1232,7 @@ func (a *Application) onExportToAnki() {
 
 			// Update status bar instead of showing dialog
 			a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)",
-				total, outputPath, withAudio, withImages))
+				total, selectedDir, withAudio, withImages))
 		}
 	}, a.window)
 

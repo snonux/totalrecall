@@ -68,8 +68,16 @@ func (g *APKGGenerator) GenerateAPKG(outputPath string) error {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 
-	// Create the .apkg zip file
-	if err := g.createZipPackage(tempDir, outputPath); err != nil {
+	// Create the .apkg zip file with a timestamped name
+	timestamp := time.Now().Format("2006-01-02-15:04:05")
+	safeDeckName := strings.ReplaceAll(g.deckName, " ", "_")
+	safeDeckName = strings.ReplaceAll(safeDeckName, "/", "-")
+	numberOfCards := len(g.cards)
+	outputDir := filepath.Dir(outputPath)
+	finalName := fmt.Sprintf("%s-%s-%d.apkg", safeDeckName, timestamp, numberOfCards)
+	finalPath := filepath.Join(outputDir, finalName)
+
+	if err := g.createZipPackage(tempDir, finalPath); err != nil {
 		return fmt.Errorf("failed to create zip package: %w", err)
 	}
 

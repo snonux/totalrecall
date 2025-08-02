@@ -252,11 +252,18 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 		t.Errorf("GenerateAnkiFile (APKG) failed: %v", err)
 	}
 
-	// Check APKG file was created in home directory
+	// Check that an .apkg file was created in the home directory
 	homeDir, _ := os.UserHomeDir()
-	apkgFile := filepath.Join(homeDir, "Test_Deck.apkg")
-	if _, err := os.Stat(apkgFile); os.IsNotExist(err) {
-		t.Error("APKG file was not created in home directory")
+	files, err := filepath.Glob(filepath.Join(homeDir, "*.apkg"))
+	if err != nil {
+		t.Fatalf("Error finding apkg file: %v", err)
 	}
-	os.Remove(apkgFile) // Clean up
+	if len(files) == 0 {
+		t.Fatal("No .apkg file found in home directory")
+	}
+
+	// Clean up the created file
+	for _, file := range files {
+		os.Remove(file)
+	}
 }
