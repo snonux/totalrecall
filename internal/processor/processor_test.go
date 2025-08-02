@@ -208,16 +208,22 @@ func TestGenerateAnkiFile(t *testing.T) {
 	p.translationCache.Add("ябълка", "apple")
 	p.translationCache.Add("котка", "cat")
 
+	// Create dummy word directories and files
+	p.findOrCreateWordDirectory("ябълка")
+	p.findOrCreateWordDirectory("котка")
+
 	_, err := p.GenerateAnkiFile()
 	if err != nil {
 		t.Errorf("GenerateAnkiFile failed: %v", err)
 	}
 
-	// Check CSV file was created
-	csvFile := filepath.Join(flags.OutputDir, "anki_import.csv")
+	// Check CSV file was created in home directory
+	homeDir, _ := os.UserHomeDir()
+	csvFile := filepath.Join(homeDir, "anki_import.csv")
 	if _, err := os.Stat(csvFile); os.IsNotExist(err) {
-		t.Error("CSV file was not created")
+		t.Error("CSV file was not created in home directory")
 	}
+	os.Remove(csvFile) // Clean up
 }
 
 func TestGenerateAnkiFile_APKG(t *testing.T) {
@@ -236,18 +242,21 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 	p.translationCache.Add("ябълка", "apple")
 	p.translationCache.Add("котка", "cat")
 
-	// Create dummy audio files
-	os.WriteFile(filepath.Join(word1Dir, "ябълка.mp3"), []byte("audio1"), 0644)
-	os.WriteFile(filepath.Join(word2Dir, "котка.mp3"), []byte("audio2"), 0644)
+	// Create dummy audio and image files
+	os.WriteFile(filepath.Join(word1Dir, "audio.mp3"), []byte("audio1"), 0644)
+	os.WriteFile(filepath.Join(word2Dir, "audio.mp3"), []byte("audio2"), 0644)
+	os.WriteFile(filepath.Join(word1Dir, "image.jpg"), []byte("image1"), 0644)
 
 	_, err := p.GenerateAnkiFile()
 	if err != nil {
 		t.Errorf("GenerateAnkiFile (APKG) failed: %v", err)
 	}
 
-	// Check APKG file was created
-	apkgFile := filepath.Join(flags.OutputDir, "Test_Deck.apkg")
+	// Check APKG file was created in home directory
+	homeDir, _ := os.UserHomeDir()
+	apkgFile := filepath.Join(homeDir, "Test_Deck.apkg")
 	if _, err := os.Stat(apkgFile); os.IsNotExist(err) {
-		t.Error("APKG file was not created")
+		t.Error("APKG file was not created in home directory")
 	}
+	os.Remove(apkgFile) // Clean up
 }

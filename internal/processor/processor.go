@@ -415,16 +415,45 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 		AudioFormat:    p.flags.AudioFormat,
 	})
 
-	// Generate cards from output directory
-	if err := gen.GenerateFromDirectory(p.flags.OutputDir); err != nil {
-		return "", fmt.Errorf("failed to generate cards: %w", err)
-	}
-
-	// Add translations to cards
+	// Use the translation cache as the source of truth for cards
 	translations := p.translationCache.GetAll()
-	for i := range gen.GetCards() {
-		if translation, ok := translations[gen.GetCards()[i].Bulgarian]; ok {
-			gen.GetCards()[i].Translation = translation
+	if len(translations) == 0 {
+		fmt.Println("  No translations found in cache, generating cards from directory...")
+		// Fallback to old method if cache is empty but files might exist
+		if err := gen.GenerateFromDirectory(p.flags.OutputDir); err != nil {
+			return "", fmt.Errorf("failed to generate cards from directory: %w", err)
+		}
+	} else {
+		fmt.Printf("  Generating cards from %d translations in cache...\n", len(translations))
+		for bulgarian, english := range translations {
+			card := anki.Card{
+				Bulgarian:   bulgarian,
+				Translation: english,
+			}
+
+			// Find associated media files in the output directory
+			wordDir := p.findCardDirectory(bulgarian)
+			if wordDir != "" {
+				// Look for audio file
+				audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+				if _, err := os.Stat(audioFile); err == nil {
+					card.AudioFile = audioFile
+				}
+
+				// Look for image file
+				imageFile := filepath.Join(wordDir, "image.jpg") // Assuming jpg, adjust if needed
+				if _, err := os.Stat(imageFile); err == nil {
+					card.ImageFile = imageFile
+				}
+
+				// Load phonetic information as notes
+				phoneticFile := filepath.Join(wordDir, "phonetic.txt")
+				if data, err := os.ReadFile(phoneticFile); err == nil {
+					notes := strings.TrimSpace(string(data))
+					card.Notes = strings.ReplaceAll(notes, "\n", "<br>")
+				}
+			}
+			gen.AddCard(card)
 		}
 	}
 

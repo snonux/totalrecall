@@ -321,13 +321,13 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"id":    g.modelID,
-		"name":  "Vocabulary from TotalRecall",
+		"name":  "Vocabulary from TotalRecall (Basic + Reverse)",
 		"type":  0,
 		"mod":   time.Now().Unix(),
 		"usn":   -1,
 		"sortf": 0,
 		"did":   g.deckID,
-		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}},
+		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}, []interface{}{1, "all", []int{1}}},
 		"vers":  []int{},
 		"tags":  []string{},
 		"latexPre": `\documentclass[12pt]{article}
@@ -387,10 +387,19 @@ func (g *APKGGenerator) createNoteTypeConfig() map[string]interface{} {
 		},
 		"tmpls": []map[string]interface{}{
 			{
-				"name":  "Card 1",
+				"name":  "Forward",
 				"ord":   0,
 				"qfmt":  g.getFrontTemplate(),
 				"afmt":  g.getBackTemplate(),
+				"did":   nil,
+				"bqfmt": "",
+				"bafmt": "",
+			},
+			{
+				"name":  "Reverse",
+				"ord":   1,
+				"qfmt":  g.getReverseFrontTemplate(),
+				"afmt":  g.getReverseBackTemplate(),
 				"did":   nil,
 				"bqfmt": "",
 				"bafmt": "",
@@ -420,6 +429,35 @@ func (g *APKGGenerator) getBackTemplate() string {
 
 <div class="back">
 <div class="bulgarian">{{Bulgarian}}</div>
+{{#Audio}}
+<div class="audio">{{Audio}}</div>
+{{/Audio}}
+{{#Notes}}
+<div class="notes">{{Notes}}</div>
+{{/Notes}}
+</div>`
+}
+
+// getReverseFrontTemplate returns the question template for the reverse card
+func (g *APKGGenerator) getReverseFrontTemplate() string {
+	return `<div class="front">
+<div class="bulgarian">{{Bulgarian}}</div>
+</div>`
+}
+
+// getReverseBackTemplate returns the answer template for the reverse card
+func (g *APKGGenerator) getReverseBackTemplate() string {
+	return `{{FrontSide}}
+
+<hr id="answer">
+
+<div class="back">
+<div class="english">{{English}}</div>
+{{#Image}}
+<div class="image-container">
+{{Image}}
+</div>
+{{/Image}}
 {{#Audio}}
 <div class="audio">{{Audio}}</div>
 {{/Audio}}
@@ -492,9 +530,10 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 	now := time.Now()
 
 	for i, card := range g.cards {
-		// Generate unique IDs
-		noteID := now.UnixMilli() + int64(i*2)
-		cardID := noteID + 1
+		// Generate unique IDs, leaving space for 2 cards per note
+		noteID := now.UnixMilli() + int64(i*3)
+		cardID1 := noteID + 1
+		cardID2 := noteID + 2
 
 		// Prepare field values
 		english := card.Translation
@@ -561,13 +600,13 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
 
-		// Insert card
+		// Insert card 1 (Forward)
 		cardQuery := `INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err = db.Exec(cardQuery,
-			cardID,     // id
+			cardID1,    // id
 			noteID,     // nid
 			g.deckID,   // did
-			0,          // ord
+			0,          // ord (template 0)
 			now.Unix(), // mod
 			-1,         // usn
 			0,          // type (0=new)
@@ -584,7 +623,32 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 			"",         // data
 		)
 		if err != nil {
-			return fmt.Errorf("failed to insert card: %w", err)
+			return fmt.Errorf("failed to insert forward card: %w", err)
+		}
+
+		// Insert card 2 (Reverse)
+		_, err = db.Exec(cardQuery,
+			cardID2,    // id
+			noteID,     // nid
+			g.deckID,   // did
+			1,          // ord (template 1)
+			now.Unix(), // mod
+			-1,         // usn
+			0,          // type (0=new)
+			0,          // queue (0=new)
+			noteID+1,   // due (for new cards, this is position, should be unique)
+			0,          // ivl
+			0,          // factor
+			0,          // reps
+			0,          // lapses
+			0,          // left
+			0,          // odue
+			0,          // odid
+			0,          // flags
+			"",         // data
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert reverse card: %w", err)
 		}
 	}
 
