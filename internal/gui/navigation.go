@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 
+	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
@@ -93,10 +94,21 @@ func (a *Application) scanExistingWords() {
 		// Look for at least one of: audio, image, or translation file
 		hasContent := false
 
-		// Check for audio file
+		// Check for audio file (both en-bg and bg-bg formats)
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			hasContent = true
+		}
+		
+		// Check for bg-bg audio files (audio_front and audio_back)
+		if !hasContent {
+			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+			if _, errFront := os.Stat(frontAudio); errFront == nil {
+				hasContent = true
+			} else if _, errBack := os.Stat(backAudio); errBack == nil {
+				hasContent = true
+			}
 		}
 
 		// Check for image files
@@ -398,12 +410,50 @@ func (a *Application) loadExistingFiles(word string) {
 		fmt.Printf("No phonetic file found at: %s (error: %v)\n", phoneticFile, err)
 	}
 
-	// Load audio file
-	audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
-	if _, err := os.Stat(audioFile); err == nil {
-		a.currentAudioFile = audioFile
+	// Load card type and audio files
+	cardType := internal.LoadCardType(wordDir)
+	a.currentCardType = string(cardType)
+
+	// Update UI card type selector
+	fyne.Do(func() {
+		if cardType.IsBgBg() {
+			a.cardTypeSelect.SetSelected("Bulgarian → Bulgarian")
+		} else {
+			a.cardTypeSelect.SetSelected("English → Bulgarian")
+		}
+	})
+
+	// Load audio file(s)
+	if cardType.IsBgBg() {
+		// For bg-bg cards, load both front and back audio
+		frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+
+		if _, err := os.Stat(frontAudio); err == nil {
+			a.currentAudioFile = frontAudio
+			fyne.Do(func() {
+				a.audioPlayer.SetAudioFile(frontAudio)
+			})
+		}
+		if _, err := os.Stat(backAudio); err == nil {
+			a.currentAudioFileBack = backAudio
+			fyne.Do(func() {
+				a.audioPlayer.SetBackAudioFile(backAudio)
+			})
+		}
+	} else {
+		// For en-bg cards, load standard audio file
+		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+		if _, err := os.Stat(audioFile); err == nil {
+			a.currentAudioFile = audioFile
+			fyne.Do(func() {
+				a.audioPlayer.SetAudioFile(audioFile)
+			})
+		}
+		// Hide back audio button for en-bg cards
+		a.currentAudioFileBack = ""
 		fyne.Do(func() {
-			a.audioPlayer.SetAudioFile(audioFile)
+			a.audioPlayer.SetBackAudioFile("")
 		})
 	}
 
@@ -497,12 +547,35 @@ func (a *Application) checkForMissingFiles(word string) {
 
 	// Check for missing audio file
 	if a.currentAudioFile == "" {
+		// First check for en-bg audio file
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			a.currentAudioFile = audioFile
 			fyne.Do(func() {
 				a.audioPlayer.SetAudioFile(audioFile)
 				a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
+			})
+		} else {
+			// Check for bg-bg audio_front file
+			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+			if _, err := os.Stat(frontAudio); err == nil {
+				a.currentAudioFile = frontAudio
+				fyne.Do(func() {
+					a.audioPlayer.SetAudioFile(frontAudio)
+					a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
+				})
+			}
+		}
+	}
+	
+	// Check for missing back audio file (bg-bg cards)
+	if a.currentAudioFileBack == "" {
+		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+		if _, err := os.Stat(backAudio); err == nil {
+			a.currentAudioFileBack = backAudio
+			fyne.Do(func() {
+				a.audioPlayer.SetBackAudioFile(backAudio)
+				a.updateStatus(fmt.Sprintf("Found back audio file for %s", word))
 			})
 		}
 	}
