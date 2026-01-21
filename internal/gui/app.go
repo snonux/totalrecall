@@ -1537,8 +1537,7 @@ func (a *Application) onShowHotkeys() {
 
 ## Playback
 **p/п** Play front audio (or audio for en-bg)  
-**Space** Play back audio (bg-bg only)  
-**P/П** Legacy: Play back audio (bg-bg only, use Space instead)  
+**P/П** Play back audio (bg-bg only)  
 **u/у** Toggle auto-play  
 
 ## Export & Archive
@@ -2592,16 +2591,6 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 			return
 		}
 		a.onNextWord()
-
-	case fyne.KeyP: // Play front audio
-		if a.currentAudioFile != "" {
-			a.audioPlayer.Play()
-		}
-
-	case fyne.KeySpace: // Play back audio (for bg-bg cards)
-		if a.currentAudioFileBack != "" {
-			a.audioPlayer.PlayBack()
-		}
 
 	case fyne.KeyX: // Export to APKG
 		a.onExportToAnki()
