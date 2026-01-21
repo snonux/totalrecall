@@ -5,9 +5,11 @@ go 1.24.4
 require (
 	fyne.io/fyne/v2 v2.6.1
 	github.com/dweymouth/fyne-tooltip v0.3.3
+	github.com/magefile/mage v1.15.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/sashabaranov/go-openai v1.40.5
 	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 )
 
@@ -41,7 +43,6 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
