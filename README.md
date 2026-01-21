@@ -154,7 +154,7 @@ Key features:
 
 #### Batch file format
 
-Create a text file with Bulgarian words, optionally with English translations. The tool supports three flexible formats:
+Create a text file with Bulgarian words, optionally with English translations or Bulgarian definitions. The tool supports five flexible formats:
 
 **Format 1: Bulgarian words only (will be translated to English)**
 ```
@@ -165,7 +165,7 @@ Create a text file with Bulgarian words, optionally with English translations. T
 вода
 ```
 
-**Format 2: Bulgarian words with translations (no translation needed)**
+**Format 2: Bulgarian words with English translations (single equals =)**
 ```
 книга = book
 стол = table
@@ -173,6 +173,8 @@ Create a text file with Bulgarian words, optionally with English translations. T
 компютър = computer
 молив = pencil
 ```
+
+Creates English→Bulgarian flashcards (front: English, back: Bulgarian).
 
 **Format 3: English words only (will be translated to Bulgarian)**
 ```
@@ -183,17 +185,28 @@ Create a text file with Bulgarian words, optionally with English translations. T
 = water
 ```
 
-**Format 4: Mixed format (all three types can be combined)**
+**Format 4: Bulgarian-Bulgarian (monolingual - double equals ==)**
+```
+ябълка == плод
+котка == домашно животно
+куче == млекопитающо
+```
+
+Creates Bulgarian→Bulgarian flashcards (front: Bulgarian word, back: Bulgarian definition). Useful for monolingual learning where both sides are in Bulgarian. Uses double equals (`==`) to distinguish from the English format.
+
+**Format 5: Mixed format (all four types can be combined)**
 ```
 книга = book
-котка
+котка == домашно животно
 = table
-куче
-молив = pencil
-= window
+куче = dog
+вода == течност
+молив
 ```
 
 When translations are provided, they are used directly without calling the translation API, saving time and API quota. When only English is provided (format starting with `=`), the tool will automatically translate it to Bulgarian. Spaces around the words and translations are automatically trimmed.
+
+Bulgarian-Bulgarian cards generate two separate audio files (front and back pronunciation).
 
 ## Configuration
 

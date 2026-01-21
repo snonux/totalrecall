@@ -29,7 +29,8 @@ Examples:
 
 Batch file formats:
   ябълка                          # Bulgarian word (will be translated to English)
-  ябълка = apple                  # Bulgarian with translation provided
+  ябълка = apple                  # English→Bulgarian card (single equals)
+  ябълка == определение           # Bulgarian→Bulgarian card (double equals)
   = apple                         # English only (will be translated to Bulgarian)`,
 		Args:    cobra.MaximumNArgs(1),
 		Version: internal.Version,
