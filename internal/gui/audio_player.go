@@ -96,8 +96,19 @@ func (p *AudioPlayer) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(p.container)
 }
 
-// SetAudioFile sets the audio file to play
+// SetAudioFile sets the audio file to play and optionally auto-plays it
 func (p *AudioPlayer) SetAudioFile(audioFile string) {
+	p.setAudioFileInternal(audioFile, true) // Enable auto-play
+}
+
+// SetAudioFileNoAutoPlay sets the audio file without auto-playing
+// Used when regenerating audio on bg-bg cards - we only want to play when explicitly requested
+func (p *AudioPlayer) SetAudioFileNoAutoPlay(audioFile string) {
+	p.setAudioFileInternal(audioFile, false) // Disable auto-play
+}
+
+// setAudioFileInternal is the internal implementation for setting audio files
+func (p *AudioPlayer) setAudioFileInternal(audioFile string, allowAutoPlay bool) {
 	p.audioFile = audioFile
 	p.isPlaying = false
 
@@ -139,8 +150,8 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
 		p.statusLabel.SetText(statusText)
 
-		// Auto-play if enabled
-		if p.autoPlayEnabled != nil && *p.autoPlayEnabled {
+		// Auto-play if enabled and allowed
+		if allowAutoPlay && p.autoPlayEnabled != nil && *p.autoPlayEnabled {
 			// Small delay to ensure UI is ready
 			go func() {
 				// Wait a tiny bit for UI to be ready
@@ -166,6 +177,9 @@ func (p *AudioPlayer) SetBackAudioFile(audioFile string) {
 		p.playBackLabel.Show()
 		// Update front label now that we know it's bg-bg
 		p.playButtonLabel.SetText("Front")
+		// NOTE: Do NOT auto-play back audio
+		// Back audio regeneration just prepares the file
+		// User should press 'P' to listen to it
 	} else {
 		p.isBgBg = false
 		p.playBackButton.Disable()
@@ -221,18 +235,28 @@ func (p *AudioPlayer) SetAutoPlayEnabled(autoPlayEnabled *bool) {
 
 // onPlay handles play button click
 func (p *AudioPlayer) onPlay() {
+	fmt.Printf("DEBUG (onPlay): Starting playback\n")
+	fmt.Printf("  - audioFile: %s\n", p.audioFile)
+	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
+	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
+	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
+	
 	if p.audioFile == "" {
+		fmt.Printf("DEBUG (onPlay): No audioFile set, returning\n")
 		return
 	}
 
 	if p.isPlaying {
 		// Pause functionality - just stop for now
+		fmt.Printf("DEBUG (onPlay): Already playing, stopping\n")
 		p.onStop()
 		return
 	}
 
 	// Start playing
+	fmt.Printf("DEBUG (onPlay): About to start playback for: %s\n", filepath.Base(p.audioFile))
 	if err := p.startPlayback(); err != nil {
+		fmt.Printf("DEBUG (onPlay): Error starting playback: %v\n", err)
 		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
 		return
 	}
@@ -241,35 +265,40 @@ func (p *AudioPlayer) onPlay() {
 	p.playButton.SetIcon(theme.MediaPauseIcon())
 	p.stopButton.Enable()
 	p.statusLabel.SetText(fmt.Sprintf("Playing: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
+	fmt.Printf("DEBUG (onPlay): Playback started successfully\n")
 }
 
 // onPlayBack handles back audio button click (for bg-bg cards)
 func (p *AudioPlayer) onPlayBack() {
+	fmt.Printf("DEBUG (onPlayBack): Starting back audio playback\n")
+	fmt.Printf("  - audioFile: %s\n", p.audioFile)
+	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
+	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
+	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
+	
 	if p.audioFileBack == "" {
+		fmt.Printf("DEBUG (onPlayBack): No audioFileBack set, returning\n")
 		return
 	}
 
 	if p.isPlaying {
+		fmt.Printf("DEBUG (onPlayBack): Already playing, stopping first\n")
 		p.onStop()
 	}
 
-	// Temporarily swap audio files to play the back audio
-	originalFile := p.audioFile
-	p.audioFile = p.audioFileBack
-
-	if err := p.startPlayback(); err != nil {
+	// Start playback using back audio file directly
+	fmt.Printf("DEBUG (onPlayBack): About to start playback for back audio: %s\n", filepath.Base(p.audioFileBack))
+	if err := p.startPlaybackForFile(p.audioFileBack); err != nil {
+		fmt.Printf("DEBUG (onPlayBack): Error starting playback: %v\n", err)
 		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
-		p.audioFile = originalFile
 		return
 	}
 
 	p.isPlaying = true
-	p.playButton.SetIcon(theme.MediaPauseIcon())
+	p.playBackButton.SetIcon(theme.MediaPauseIcon())  // Back button, not front
 	p.stopButton.Enable()
 	p.statusLabel.SetText(fmt.Sprintf("Playing back audio: %s", filepath.Base(p.audioFileBack)))
-
-	// Restore original file after playback starts
-	p.audioFile = originalFile
+	fmt.Printf("DEBUG (onPlayBack): Back audio playback started successfully\n")
 }
 
 // onStop handles stop button click
@@ -280,7 +309,12 @@ func (p *AudioPlayer) onStop() {
 	}
 
 	p.isPlaying = false
-	p.playButton.SetIcon(theme.MediaPlayIcon())
+	// Set correct button icon based on which audio was playing
+	if p.isBgBg && p.audioFileBack != "" {
+		p.playBackButton.SetIcon(theme.MediaPlayIcon())  // Back button if it was playing
+	} else {
+		p.playButton.SetIcon(theme.MediaPlayIcon())  // Front button otherwise
+	}
 	p.stopButton.Disable()
 	p.statusLabel.SetText(fmt.Sprintf("Stopped: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 }
@@ -304,32 +338,39 @@ func (p *AudioPlayer) PlayBack() {
 }
 
 // startPlayback starts audio playback using platform-specific commands
+// This plays the front audio file (p.audioFile)
 func (p *AudioPlayer) startPlayback() error {
+	return p.startPlaybackForFile(p.audioFile)
+}
+
+// startPlaybackForFile starts playback of a specific audio file
+// This allows playing either front or back audio without modifying state
+func (p *AudioPlayer) startPlaybackForFile(audioFile string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "darwin": // macOS
-		cmd = exec.Command("afplay", p.audioFile)
+		cmd = exec.Command("afplay", audioFile)
 	case "linux":
 		// Try multiple commands in order of preference
 		// mpg123 first since it handles MP3 files best
 		if _, err := exec.LookPath("mpg123"); err == nil {
-			cmd = exec.Command("mpg123", "-q", p.audioFile) // -q for quiet mode
+			cmd = exec.Command("mpg123", "-q", audioFile) // -q for quiet mode
 		} else if _, err := exec.LookPath("ffplay"); err == nil {
-			cmd = exec.Command("ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", p.audioFile)
+			cmd = exec.Command("ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audioFile)
 		} else if _, err := exec.LookPath("play"); err == nil {
 			// SoX play command
-			cmd = exec.Command("play", "-q", p.audioFile)
+			cmd = exec.Command("play", "-q", audioFile)
 		} else if _, err := exec.LookPath("paplay"); err == nil {
-			cmd = exec.Command("paplay", p.audioFile)
+			cmd = exec.Command("paplay", audioFile)
 		} else if _, err := exec.LookPath("aplay"); err == nil {
-			cmd = exec.Command("aplay", "-q", p.audioFile)
+			cmd = exec.Command("aplay", "-q", audioFile)
 		} else {
 			return fmt.Errorf("no audio player found. Install mpg123, ffplay, sox, paplay, or aplay")
 		}
 	case "windows":
 		// Use Windows Media Player
-		cmd = exec.Command("cmd", "/c", "start", "/min", p.audioFile)
+		cmd = exec.Command("cmd", "/c", "start", "/min", audioFile)
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
@@ -338,15 +379,23 @@ func (p *AudioPlayer) startPlayback() error {
 	p.playCmd = cmd
 
 	// Start playback in background
+	// Capture whether this is playing back audio or front audio for proper icon reset
+	isPlayingBack := audioFile == p.audioFileBack
 	go func() {
 		err := cmd.Run()
 		if err == nil {
 			// Playback finished normally
 			fyne.Do(func() {
 				p.isPlaying = false
-				p.playButton.SetIcon(theme.MediaPlayIcon())
+				// Reset correct button icon based on which audio was playing
+				if isPlayingBack {
+					p.playBackButton.SetIcon(theme.MediaPlayIcon())
+					p.statusLabel.SetText(fmt.Sprintf("Finished: %s", filepath.Base(p.audioFileBack)))
+				} else {
+					p.playButton.SetIcon(theme.MediaPlayIcon())
+					p.statusLabel.SetText(fmt.Sprintf("Finished: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
+				}
 				p.stopButton.Disable()
-				p.statusLabel.SetText(fmt.Sprintf("Finished: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 			})
 		}
 	}()

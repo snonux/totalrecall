@@ -1,0 +1,239 @@
+Loading files from directory: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (loadExistingFiles): Read translation.txt: котка = домашно животно
+
+DEBUG (loadExistingFiles): Split into 2 parts
+DEBUG (loadExistingFiles): Extracted translation (part 1, after '='): домашно животно
+DEBUG (loadExistingFiles): Set a.currentTranslation state variable to: домашно животно
+DEBUG (loadExistingFiles): Set translationEntry UI field to: домашно животно
+DEBUG (loadExistingFiles): After SetText, a.currentTranslation is: домашно животно
+Loaded prompt from file: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/image_prompt.txt
+Loaded phonetic info from file: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/phonetic.txt
+DEBUG (loadExistingFiles): Loaded card type: bg-bg (isBgBg: true)
+DEBUG (loadExistingFiles): Setting UI to bg-bg (Bulgarian → Bulgarian)
+DEBUG (loadExistingFiles): Loading audio files for bg-bg card
+DEBUG (loadExistingFiles): Found front audio: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+DEBUG (loadExistingFiles): Found back audio: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onPlay): Starting playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlay): About to start playback for: audio_front.mp3
+DEBUG (onPlay): Playback started successfully
+DEBUG: ╔════════════════════════════════════════════════════════════════
+DEBUG: ║ KEY PRESSED: 'a' (lowercase, regenerate FRONT audio)
+DEBUG: ╚════════════════════════════════════════════════════════════════
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - regenerateAudioBtn.Disabled(): false
+  - CALLING: onRegenerateAudio() for FRONT audio
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG: ████  ENTERED onRegenerateAudio() - REGENERATING FRONT AUDIO
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG (onRegenerateAudio): Starting front audio regeneration
+  - currentWord: котка
+  - currentCardType: bg-bg
+DEBUG (onRegenerateAudio): Card type is bg-bg, regenerating FRONT audio only
+DEBUG (onRegenerateAudio): In goroutine - wordForGeneration: котка
+DEBUG (generateAudioFront): Called with word: котка, cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioFront): Generating front audio for 'котка' with voice: onyx, speed: 0.92
+Generating front audio for 'котка' with voice: onyx, speed: 0.92
+DEBUG (generateAudioFront): Will write to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+OpenAI TTS: Using model 'gpt-4o-mini-tts' with voice 'onyx' at speed 0.92
+OpenAI TTS Instruction: 'You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.'
+OpenAI TTS Input: 'котка'
+DEBUG (generateAudioFront): Successfully wrote front audio to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+DEBUG (onPlay): Starting playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlay): About to start playback for: audio_front.mp3
+DEBUG (onPlay): Playback started successfully
+DEBUG: ╔════════════════════════════════════════════════════════════════
+DEBUG: ║ KEY PRESSED: 'A' (uppercase, regenerate BACK audio)
+DEBUG: ╚════════════════════════════════════════════════════════════════
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation: домашно животно
+  - translationEntry.Text: домашно животно
+  - regenerateAudioBtn.Disabled(): false
+  - CALLING: onRegenerateBackAudio() for BACK audio
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG: ████  ENTERED onRegenerateBackAudio() - REGENERATING BACK AUDIO
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG (onRegenerateBackAudio): Starting back audio regeneration
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation (state var): домашно животно
+  - translationEntry.Text (UI field): домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation from a.currentTranslation: домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation UI field: домашно животно
+DEBUG (onRegenerateBackAudio): Final decision - will generate back audio for: домашно животно
+DEBUG (onRegenerateBackAudio): (NOT for word: котка)
+DEBUG (onRegenerateBackAudio): Using main context (not creating new card context)
+DEBUG (onRegenerateBackAudio): This prevents cancelling ongoing front audio operation
+DEBUG (onRegenerateBackAudio): Calling generateAudioBack with:
+  - ctx: a.ctx (main app context)
+  - translation: домашно животно
+  - cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Called with text: домашно животно, cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Generating back audio for 'домашно животно' with voice: ash, speed: 1.00
+Generating back audio for 'домашно животно' with voice: ash, speed: 1.00
+DEBUG (generateAudioBack): Will write to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+OpenAI TTS: Using model 'gpt-4o-mini-tts' with voice 'ash' at speed 1.00
+OpenAI TTS Instruction: 'You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.'
+OpenAI TTS Input: 'домашно животно'
+DEBUG (generateAudioBack): Successfully wrote back audio to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onRegenerateBackAudio): generateAudioBack returned:
+  - err: <nil>
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onPlayBack): Starting back audio playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlayBack): About to start playback for back audio: audio_back.mp3
+DEBUG (onPlayBack): Back audio playback started successfully
+DEBUG: ╔════════════════════════════════════════════════════════════════
+DEBUG: ║ KEY PRESSED: 'A' (uppercase, regenerate BACK audio)
+DEBUG: ╚════════════════════════════════════════════════════════════════
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation: домашно животно
+  - translationEntry.Text: домашно животно
+  - regenerateAudioBtn.Disabled(): false
+  - CALLING: onRegenerateBackAudio() for BACK audio
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG: ████  ENTERED onRegenerateBackAudio() - REGENERATING BACK AUDIO
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG (onRegenerateBackAudio): Starting back audio regeneration
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation (state var): домашно животно
+  - translationEntry.Text (UI field): домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation from a.currentTranslation: домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation UI field: домашно животно
+DEBUG (onRegenerateBackAudio): Final decision - will generate back audio for: домашно животно
+DEBUG (onRegenerateBackAudio): (NOT for word: котка)
+DEBUG (onRegenerateBackAudio): Using main context (not creating new card context)
+DEBUG (onRegenerateBackAudio): This prevents cancelling ongoing front audio operation
+DEBUG (onRegenerateBackAudio): Calling generateAudioBack with:
+  - ctx: a.ctx (main app context)
+  - translation: домашно животно
+  - cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Called with text: домашно животно, cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Generating back audio for 'домашно животно' with voice: echo, speed: 0.93
+Generating back audio for 'домашно животно' with voice: echo, speed: 0.93
+DEBUG (generateAudioBack): Will write to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+OpenAI TTS: Using model 'gpt-4o-mini-tts' with voice 'echo' at speed 0.93
+OpenAI TTS Instruction: 'You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.'
+OpenAI TTS Input: 'домашно животно'
+DEBUG (generateAudioBack): Successfully wrote back audio to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onRegenerateBackAudio): generateAudioBack returned:
+  - err: <nil>
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onPlayBack): Starting back audio playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlayBack): About to start playback for back audio: audio_back.mp3
+DEBUG (onPlayBack): Back audio playback started successfully
+DEBUG: Key pressed 'p' (play front audio)
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentAudioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+DEBUG (onPlay): Starting playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlay): About to start playback for: audio_front.mp3
+DEBUG (onPlay): Playback started successfully
+DEBUG: ╔════════════════════════════════════════════════════════════════
+DEBUG: ║ KEY PRESSED: 'A' (uppercase, regenerate BACK audio)
+DEBUG: ╚════════════════════════════════════════════════════════════════
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation: домашно животно
+  - translationEntry.Text: домашно животно
+  - regenerateAudioBtn.Disabled(): false
+  - CALLING: onRegenerateBackAudio() for BACK audio
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG: ████  ENTERED onRegenerateBackAudio() - REGENERATING BACK AUDIO
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG (onRegenerateBackAudio): Starting back audio regeneration
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentTranslation (state var): домашно животно
+  - translationEntry.Text (UI field): домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation from a.currentTranslation: домашно животно
+DEBUG (onRegenerateBackAudio): In goroutine - translation UI field: домашно животно
+DEBUG (onRegenerateBackAudio): Final decision - will generate back audio for: домашно животно
+DEBUG (onRegenerateBackAudio): (NOT for word: котка)
+DEBUG (onRegenerateBackAudio): Using main context (not creating new card context)
+DEBUG (onRegenerateBackAudio): This prevents cancelling ongoing front audio operation
+DEBUG (onRegenerateBackAudio): Calling generateAudioBack with:
+  - ctx: a.ctx (main app context)
+  - translation: домашно животно
+  - cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Called with text: домашно животно, cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioBack): Generating back audio for 'домашно животно' with voice: shimmer, speed: 0.98
+Generating back audio for 'домашно животно' with voice: shimmer, speed: 0.98
+DEBUG (generateAudioBack): Will write to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+OpenAI TTS: Using model 'gpt-4o-mini-tts' with voice 'shimmer' at speed 0.98
+OpenAI TTS Instruction: 'You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.'
+OpenAI TTS Input: 'домашно животно'
+DEBUG (generateAudioBack): Successfully wrote back audio to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onRegenerateBackAudio): generateAudioBack returned:
+  - err: <nil>
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+DEBUG (onPlayBack): Starting back audio playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlayBack): About to start playback for back audio: audio_back.mp3
+DEBUG (onPlayBack): Back audio playback started successfully
+DEBUG: Key pressed 'p' (play front audio)
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - currentAudioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+DEBUG (onPlay): Starting playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlay): About to start playback for: audio_front.mp3
+DEBUG (onPlay): Playback started successfully
+DEBUG: ╔════════════════════════════════════════════════════════════════
+DEBUG: ║ KEY PRESSED: 'a' (lowercase, regenerate FRONT audio)
+DEBUG: ╚════════════════════════════════════════════════════════════════
+  - currentWord: котка
+  - currentCardType: bg-bg
+  - regenerateAudioBtn.Disabled(): false
+  - CALLING: onRegenerateAudio() for FRONT audio
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG: ████  ENTERED onRegenerateAudio() - REGENERATING FRONT AUDIO
+DEBUG: ████████████████████████████████████████████████████████████████
+DEBUG (onRegenerateAudio): Starting front audio regeneration
+  - currentWord: котка
+  - currentCardType: bg-bg
+DEBUG (onRegenerateAudio): Card type is bg-bg, regenerating FRONT audio only
+DEBUG (onRegenerateAudio): In goroutine - wordForGeneration: котка
+DEBUG (generateAudioFront): Called with word: котка, cardDir: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17
+DEBUG (generateAudioFront): Generating front audio for 'котка' with voice: coral, speed: 0.91
+Generating front audio for 'котка' with voice: coral, speed: 0.91
+DEBUG (generateAudioFront): Will write to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+OpenAI TTS: Using model 'gpt-4o-mini-tts' with voice 'coral' at speed 0.91
+OpenAI TTS Instruction: 'You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.'
+OpenAI TTS Input: 'котка'
+DEBUG (generateAudioFront): Successfully wrote front audio to: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+DEBUG (onPlay): Starting playback
+  - audioFile: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_front.mp3
+  - audioFileBack: /home/paul/.local/state/totalrecall/cards/1769025513854_d6abfb17/audio_back.mp3
+  - isBgBg: true
+  - isPlaying: false
+DEBUG (onPlay): About to start playback for: audio_front.mp3
+DEBUG (onPlay): Playback started successfully

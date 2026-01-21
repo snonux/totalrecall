@@ -377,13 +377,29 @@ func (a *Application) loadExistingFiles(word string) {
 	if data, err := os.ReadFile(translationFile); err == nil {
 		// Parse translation from "word = translation" format
 		content := string(data)
+		fmt.Printf("DEBUG (loadExistingFiles): Read translation.txt: %s\n", content)
 		parts := strings.Split(content, "=")
+		fmt.Printf("DEBUG (loadExistingFiles): Split into %d parts\n", len(parts))
 		if len(parts) >= 2 {
-			a.currentTranslation = strings.TrimSpace(parts[1])
+			translation := strings.TrimSpace(parts[1])
+			fmt.Printf("DEBUG (loadExistingFiles): Extracted translation (part 1, after '='): %s\n", translation)
+			
+			// CRITICAL: Set the state BEFORE SetText so it's available when needed
+			a.currentTranslation = translation
+			fmt.Printf("DEBUG (loadExistingFiles): Set a.currentTranslation state variable to: %s\n", a.currentTranslation)
+			
 			fyne.Do(func() {
-				a.translationEntry.SetText(a.currentTranslation)
+				a.translationEntry.SetText(translation)
+				fmt.Printf("DEBUG (loadExistingFiles): Set translationEntry UI field to: %s\n", translation)
+				
+				// CRITICAL: After SetText, verify the state is correct
+				fmt.Printf("DEBUG (loadExistingFiles): After SetText, a.currentTranslation is: %s\n", a.currentTranslation)
 			})
+		} else {
+			fmt.Printf("DEBUG (loadExistingFiles): Translation file did not have '=' separator\n")
 		}
+	} else {
+		fmt.Printf("DEBUG (loadExistingFiles): Could not read translation.txt: %v\n", err)
 	}
 
 	// Load image prompt file
@@ -413,46 +429,61 @@ func (a *Application) loadExistingFiles(word string) {
 	// Load card type and audio files
 	cardType := internal.LoadCardType(wordDir)
 	a.currentCardType = string(cardType)
+	fmt.Printf("DEBUG (loadExistingFiles): Loaded card type: %s (isBgBg: %v)\n", cardType, cardType.IsBgBg())
 
 	// Update UI card type selector
 	fyne.Do(func() {
 		if cardType.IsBgBg() {
+			fmt.Printf("DEBUG (loadExistingFiles): Setting UI to bg-bg (Bulgarian → Bulgarian)\n")
 			a.cardTypeSelect.SetSelected("Bulgarian → Bulgarian")
 		} else {
+			fmt.Printf("DEBUG (loadExistingFiles): Setting UI to en-bg (English → Bulgarian)\n")
 			a.cardTypeSelect.SetSelected("English → Bulgarian")
 		}
 	})
 
 	// Load audio file(s)
 	if cardType.IsBgBg() {
+		fmt.Printf("DEBUG (loadExistingFiles): Loading audio files for bg-bg card\n")
 		// For bg-bg cards, load both front and back audio
 		frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
 		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
 
 		if _, err := os.Stat(frontAudio); err == nil {
 			a.currentAudioFile = frontAudio
+			fmt.Printf("DEBUG (loadExistingFiles): Found front audio: %s\n", frontAudio)
 			fyne.Do(func() {
 				a.audioPlayer.SetAudioFile(frontAudio)
 			})
+		} else {
+			fmt.Printf("DEBUG (loadExistingFiles): Front audio not found: %s\n", frontAudio)
 		}
 		
 		if _, err := os.Stat(backAudio); err == nil {
 			a.currentAudioFileBack = backAudio
+			fmt.Printf("DEBUG (loadExistingFiles): Found back audio: %s\n", backAudio)
 			fyne.Do(func() {
 				a.audioPlayer.SetBackAudioFile(backAudio)
 			})
+		} else {
+			fmt.Printf("DEBUG (loadExistingFiles): Back audio not found: %s\n", backAudio)
 		}
 	} else {
+		fmt.Printf("DEBUG (loadExistingFiles): Loading audio files for en-bg card\n")
 		// For en-bg cards, load standard audio file
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
 		if _, err := os.Stat(audioFile); err == nil {
 			a.currentAudioFile = audioFile
+			fmt.Printf("DEBUG (loadExistingFiles): Found audio: %s\n", audioFile)
 			fyne.Do(func() {
 				a.audioPlayer.SetAudioFile(audioFile)
 			})
+		} else {
+			fmt.Printf("DEBUG (loadExistingFiles): Audio not found: %s\n", audioFile)
 		}
 		// Hide back audio button for en-bg cards
 		a.currentAudioFileBack = ""
+		fmt.Printf("DEBUG (loadExistingFiles): Clearing back audio for en-bg card\n")
 		fyne.Do(func() {
 			a.audioPlayer.SetBackAudioFile("")
 		})
