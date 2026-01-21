@@ -271,15 +271,19 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 	}
 	fmt.Printf("  Using voice: %s\n", voice)
 
+	// Find or create the word directory ONCE (for the front word)
+	// Both audio files will be saved to this same directory
+	wordDir := p.findOrCreateWordDirectory(front)
+
 	// Generate front audio
 	fmt.Printf("  Generating front audio for '%s'...\n", front)
-	if err := p.generateAudioWithVoiceAndFilename(front, voice, "audio_front"); err != nil {
+	if err := p.generateAudioWithVoiceAndFilenameInDir(front, voice, "audio_front", wordDir); err != nil {
 		return fmt.Errorf("failed to generate front audio: %w", err)
 	}
 
 	// Generate back audio
 	fmt.Printf("  Generating back audio for '%s'...\n", back)
-	if err := p.generateAudioWithVoiceAndFilename(back, voice, "audio_back"); err != nil {
+	if err := p.generateAudioWithVoiceAndFilenameInDir(back, voice, "audio_back", wordDir); err != nil {
 		return fmt.Errorf("failed to generate back audio: %w", err)
 	}
 
@@ -293,6 +297,12 @@ func (p *Processor) generateAudioWithVoice(word, voice string) error {
 
 // generateAudioWithVoiceAndFilename generates audio for a word with a specific voice and filename
 func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase string) error {
+	wordDir := p.findOrCreateWordDirectory(word)
+	return p.generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir)
+}
+
+// generateAudioWithVoiceAndFilenameInDir generates audio for a word and saves it to a specific directory
+func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir string) error {
 	// Generate random speed between 0.90 and 1.00 if not explicitly set
 	speed := p.flags.OpenAISpeed
 	if p.flags.OpenAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
@@ -333,9 +343,6 @@ func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase 
 
 	// Generate audio file
 	ctx := context.Background()
-
-	// Find existing card directory or create new one
-	wordDir := p.findOrCreateWordDirectory(word)
 
 	// Build filename using the provided base
 	var outputFile string
