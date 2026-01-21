@@ -13,6 +13,7 @@ type WordJob struct {
 	Word             string
 	Translation      string
 	AudioFile        string
+	AudioFileBack    string // Back audio file (only for bg-bg cards)
 	ImageFile        string // Changed from ImageFiles []string to single image
 	Status           JobStatus
 	Error            error
@@ -20,6 +21,7 @@ type WordJob struct {
 	CompletedAt      time.Time
 	CustomPrompt     string // Custom prompt for image generation
 	NeedsTranslation bool   // Whether translation is needed
+	CardType         string // Card type: "en-bg" or "bg-bg"
 }
 
 // JobStatus represents the current state of a job

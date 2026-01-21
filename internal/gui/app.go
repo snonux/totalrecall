@@ -39,6 +39,7 @@ type Application struct {
 	imageDisplay     *ImageDisplay
 	audioPlayer      *AudioPlayer
 	translationEntry *CustomEntry
+	cardTypeSelect   *widget.Select
 	statusLabel      *widget.Label
 	queueStatusLabel *widget.Label
 	imagePromptEntry *CustomMultiLineEntry
@@ -57,19 +58,21 @@ type Application struct {
 	deleteButton             *ttwidget.Button
 
 	// State management
-	currentWord        string
-	currentAudioFile   string
-	currentImage       string
-	currentTranslation string
-	currentPhonetic    string // Full phonetic information
-	currentJobID       int
-	savedCards         []anki.Card
-	existingWords      []string // Words already in anki_cards folder
-	currentWordIndex   int
-	deleteConfirming   bool         // Track if we're in delete confirmation mode
-	quitConfirming     bool         // Track if we're in quit confirmation mode
-	wordChangeTimer    *time.Timer  // Timer for detecting word changes
-	fileCheckTicker    *time.Ticker // Ticker for checking missing files
+	currentWord          string
+	currentAudioFile     string
+	currentAudioFileBack string // Back audio file for bg-bg cards
+	currentImage         string
+	currentTranslation   string
+	currentPhonetic      string // Full phonetic information
+	currentCardType      string // Card type: "en-bg" or "bg-bg"
+	currentJobID         int
+	savedCards           []anki.Card
+	existingWords        []string // Words already in anki_cards folder
+	currentWordIndex     int
+	deleteConfirming     bool         // Track if we're in delete confirmation mode
+	quitConfirming       bool         // Track if we're in quit confirmation mode
+	wordChangeTimer      *time.Timer  // Timer for detecting word changes
+	fileCheckTicker      *time.Ticker // Ticker for checking missing files
 
 	// Word processing queue
 	queue *WordQueue
@@ -257,6 +260,19 @@ func (a *Application) setupUI() {
 		a.window.Canvas().Unfocus()
 	})
 
+	// Create card type selector
+	a.cardTypeSelect = widget.NewSelect([]string{"English → Bulgarian", "Bulgarian → Bulgarian"}, func(selected string) {
+		if selected == "Bulgarian → Bulgarian" {
+			a.currentCardType = "bg-bg"
+			a.translationEntry.SetPlaceHolder("Bulgarian definition...")
+		} else {
+			a.currentCardType = "en-bg"
+			a.translationEntry.SetPlaceHolder("English translation...")
+		}
+	})
+	a.cardTypeSelect.SetSelected("English → Bulgarian")
+	a.currentCardType = "en-bg"
+
 	// Create navigation buttons (tooltips will be set after tooltip layer is created)
 	a.submitButton = ttwidget.NewButton("", a.onSubmit)
 	a.submitButton.Icon = theme.ConfirmIcon()
@@ -267,10 +283,11 @@ func (a *Application) setupUI() {
 	a.nextWordBtn = ttwidget.NewButton("", a.onNextWord)
 	a.nextWordBtn.Icon = theme.NavigateNextIcon()
 
-	// Create a grid layout for inputs
-	inputGrid := container.New(layout.NewGridLayout(2),
+	// Create a grid layout for inputs with card type selector
+	inputGrid := container.New(layout.NewGridLayout(3),
 		a.wordInput,
 		a.translationEntry,
+		a.cardTypeSelect,
 	)
 
 	inputSection := container.NewBorder(
@@ -468,51 +485,55 @@ func (a *Application) Run() {
 // onSubmit handles word submission
 func (a *Application) onSubmit() {
 	bulgarianText := strings.TrimSpace(a.wordInput.Text)
-	englishText := strings.TrimSpace(a.translationEntry.Text)
+	secondaryText := strings.TrimSpace(a.translationEntry.Text)
+	isBgBg := a.currentCardType == "bg-bg"
 
 	// Determine which word to process and if translation is needed
 	var wordToProcess string
 	var needsTranslation bool
 	var translationDirection string
 
-	if bulgarianText != "" && englishText != "" {
+	if isBgBg {
+		// Bulgarian-Bulgarian mode: both fields should be Bulgarian
+		if bulgarianText == "" {
+			return
+		}
+		wordToProcess = bulgarianText
+		needsTranslation = false
+		a.currentTranslation = secondaryText
+	} else if bulgarianText != "" && secondaryText != "" {
 		// Both provided - use Bulgarian as primary, no translation needed
 		wordToProcess = bulgarianText
 		needsTranslation = false
-		a.currentTranslation = englishText
-	} else if bulgarianText != "" && englishText == "" {
+		a.currentTranslation = secondaryText
+	} else if bulgarianText != "" && secondaryText == "" {
 		// Only Bulgarian provided - translate to English
 		wordToProcess = bulgarianText
 		needsTranslation = true
 		translationDirection = "bg-to-en"
-	} else if bulgarianText == "" && englishText != "" {
+	} else if bulgarianText == "" && secondaryText != "" {
 		// Only English provided - translate to Bulgarian
 		needsTranslation = true
 		translationDirection = "en-to-bg"
-		// We'll get the Bulgarian word after translation
 	} else {
-		// Both empty
 		return
 	}
 
 	// Handle English to Bulgarian translation first if needed
 	if translationDirection == "en-to-bg" {
-		a.updateStatus(fmt.Sprintf("Translating '%s' to Bulgarian...", englishText))
-		bulgarian, err := a.translateEnglishToBulgarian(englishText)
+		a.updateStatus(fmt.Sprintf("Translating '%s' to Bulgarian...", secondaryText))
+		bulgarian, err := a.translateEnglishToBulgarian(secondaryText)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("Translation failed: %w", err), a.window)
 			return
 		}
 		wordToProcess = bulgarian
 		a.wordInput.SetText(bulgarian)
-		a.currentTranslation = englishText
-		// Update current word for saving
+		a.currentTranslation = secondaryText
 		a.currentWord = bulgarian
-		// Save the translation immediately
 		a.saveTranslation()
-		needsTranslation = false // We've already done the translation, don't translate back
+		needsTranslation = false
 	} else if translationDirection == "bg-to-en" {
-		// Handle Bulgarian to English translation immediately
 		a.updateStatus(fmt.Sprintf("Translating '%s' to English...", bulgarianText))
 		english, err := a.translateWord(bulgarianText)
 		if err != nil {
@@ -521,8 +542,7 @@ func (a *Application) onSubmit() {
 		}
 		a.currentTranslation = english
 		a.translationEntry.SetText(english)
-		needsTranslation = false // We've already done the translation
-		// Save the translation immediately
+		needsTranslation = false
 		a.saveTranslation()
 	}
 
@@ -530,6 +550,14 @@ func (a *Application) onSubmit() {
 	if err := audio.ValidateBulgarianText(wordToProcess); err != nil {
 		dialog.ShowError(err, a.window)
 		return
+	}
+
+	// For bg-bg cards, also validate the back text
+	if isBgBg && secondaryText != "" {
+		if err := audio.ValidateBulgarianText(secondaryText); err != nil {
+			dialog.ShowError(fmt.Errorf("invalid back text: %w", err), a.window)
+			return
+		}
 	}
 
 	// Get custom prompt from the UI
@@ -540,12 +568,10 @@ func (a *Application) onSubmit() {
 
 	// Store whether translation is needed and the translation if already provided
 	job.NeedsTranslation = needsTranslation
+	job.CardType = a.currentCardType
 	if a.currentTranslation != "" {
 		job.Translation = a.currentTranslation
 	}
-
-	// Don't clear the input fields yet - they should stay populated
-	// until the user is ready to enter a new word
 
 	// Update status to show word was queued
 	a.updateStatus(fmt.Sprintf("Added '%s' to queue (Job #%d)", wordToProcess, job.ID))
@@ -1004,31 +1030,31 @@ func (a *Application) onRegenerateRandomImage() {
 	}()
 }
 
-// onRegenerateAudio regenerates audio with a different voice
+// onRegenerateAudio regenerates front audio (or single audio for en-bg cards)
 func (a *Application) onRegenerateAudio() {
 	// Only disable the audio-related buttons
 	a.regenerateAudioBtn.Disable()
 	a.regenerateAllBtn.Disable()
-	a.showProgress("Regenerating audio...")
+
+	isBgBg := a.currentCardType == "bg-bg"
+	if isBgBg {
+		a.showProgress("Regenerating front audio...")
+	} else {
+		a.showProgress("Regenerating audio...")
+	}
 
 	a.incrementProcessing() // Audio processing starts
 
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		defer a.decrementProcessing() // Image processing ends
+		defer a.decrementProcessing()
 
-		// Use the current translation to avoid re-translating
-		translation := a.currentTranslation
-		if translation == "" {
-			// Use the text from translationEntry if currentTranslation is not set
-			translation = strings.TrimSpace(a.translationEntry.Text)
-		}
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
 
-		a.startOperation(wordForGeneration)     // Track operation start
-		defer a.endOperation(wordForGeneration) // Track operation end
+		a.startOperation(wordForGeneration)
+		defer a.endOperation(wordForGeneration)
 
 		// Get or create context for this card
 		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
@@ -1042,22 +1068,112 @@ func (a *Application) onRegenerateAudio() {
 			return
 		}
 
-		audioFile, err := a.generateAudio(cardCtx, wordForGeneration, cardDir)
+		if isBgBg {
+			// For bg-bg cards, regenerate only front audio
+			audioFile, err := a.generateAudioFront(cardCtx, wordForGeneration, cardDir)
+			if err != nil {
+				fyne.Do(func() {
+					a.showError(fmt.Errorf("Front audio regeneration failed: %w", err))
+				})
+			} else {
+				a.mu.Lock()
+				if a.currentWord == wordForGeneration {
+					a.currentAudioFile = audioFile
+					a.mu.Unlock()
+					fyne.Do(func() {
+						a.mu.Lock()
+						if a.currentWord == wordForGeneration {
+							a.audioPlayer.SetAudioFile(audioFile)
+						}
+						a.mu.Unlock()
+					})
+				} else {
+					a.mu.Unlock()
+				}
+			}
+		} else {
+			// For en-bg cards, regenerate single audio file
+			audioFile, err := a.generateAudio(cardCtx, wordForGeneration, cardDir)
+			if err != nil {
+				fyne.Do(func() {
+					a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
+				})
+			} else {
+				a.mu.Lock()
+				if a.currentWord == wordForGeneration {
+					a.currentAudioFile = audioFile
+					a.mu.Unlock()
+					fyne.Do(func() {
+						a.mu.Lock()
+						if a.currentWord == wordForGeneration {
+							a.audioPlayer.SetAudioFile(audioFile)
+						}
+						a.mu.Unlock()
+					})
+				} else {
+					a.mu.Unlock()
+				}
+			}
+		}
+
+		fyne.Do(func() {
+			a.hideProgress()
+			a.regenerateAudioBtn.Enable()
+			a.regenerateAllBtn.Enable()
+		})
+	}()
+}
+
+// onRegenerateBackAudio regenerates back audio for bg-bg cards
+func (a *Application) onRegenerateBackAudio() {
+	if a.currentCardType != "bg-bg" {
+		return
+	}
+
+	a.regenerateAudioBtn.Disable()
+	a.regenerateAllBtn.Disable()
+	a.showProgress("Regenerating back audio...")
+
+	a.incrementProcessing()
+
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		defer a.decrementProcessing()
+
+		translation := a.currentTranslation
+		if translation == "" {
+			translation = strings.TrimSpace(a.translationEntry.Text)
+		}
+		wordForGeneration := a.currentWord
+
+		a.startOperation(wordForGeneration)
+		defer a.endOperation(wordForGeneration)
+
+		cardCtx, _ := a.getOrCreateCardContext(wordForGeneration)
+
+		cardDir, err := a.ensureCardDirectory(wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
+				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			})
+			return
+		}
+
+		audioFile, err := a.generateAudioBack(cardCtx, translation, cardDir)
+		if err != nil {
+			fyne.Do(func() {
+				a.showError(fmt.Errorf("Back audio regeneration failed: %w", err))
 			})
 		} else {
-			// Only update if we're still on the same word
 			a.mu.Lock()
 			if a.currentWord == wordForGeneration {
-				a.currentAudioFile = audioFile
+				a.currentAudioFileBack = audioFile
 				a.mu.Unlock()
 				fyne.Do(func() {
-					// Double-check inside the UI update that we're still on the same word
 					a.mu.Lock()
 					if a.currentWord == wordForGeneration {
-						a.audioPlayer.SetAudioFile(audioFile)
+						a.audioPlayer.SetBackAudioFile(audioFile)
 					}
 					a.mu.Unlock()
 				})
@@ -1068,7 +1184,6 @@ func (a *Application) onRegenerateAudio() {
 
 		fyne.Do(func() {
 			a.hideProgress()
-			// Re-enable audio-related buttons
 			a.regenerateAudioBtn.Enable()
 			a.regenerateAllBtn.Enable()
 		})
@@ -1416,9 +1531,13 @@ func (a *Application) onShowHotkeys() {
 ## Regeneration
 **i/и** Regenerate image  
 **m/м** Random image  
-**a/а** Regenerate audio  
+**a/а** Regenerate audio (front for bg-bg)  
+**A/А** Regenerate back audio (bg-bg only)  
 **r/р** Regenerate all  
-**p/п** Play audio  
+
+## Playback
+**p/п** Play audio (front for bg-bg)  
+**P/П** Play back audio (bg-bg only)  
 **u/у** Toggle auto-play  
 
 ## Export & Archive
@@ -1694,7 +1813,7 @@ func (a *Application) setupTooltips() {
 				a.regenerateRandomImageBtn.SetToolTip("Random image (m)")
 			}
 			if a.regenerateAudioBtn != nil {
-				a.regenerateAudioBtn.SetToolTip("Regenerate audio (a)")
+				a.regenerateAudioBtn.SetToolTip("Regenerate audio (a/A for back)")
 			}
 			if a.regenerateAllBtn != nil {
 				a.regenerateAllBtn.SetToolTip("Regenerate all (r)")
@@ -1708,7 +1827,10 @@ func (a *Application) setupTooltips() {
 
 			// Audio player tooltips
 			if a.audioPlayer != nil && a.audioPlayer.playButton != nil {
-				a.audioPlayer.playButton.SetToolTip("Play audio (p)")
+				a.audioPlayer.playButton.SetToolTip("Play audio (p/P for back)")
+			}
+			if a.audioPlayer != nil && a.audioPlayer.playBackButton != nil {
+				a.audioPlayer.playBackButton.SetToolTip("Play back audio (P)")
 			}
 			if a.audioPlayer != nil && a.audioPlayer.stopButton != nil {
 				a.audioPlayer.stopButton.SetToolTip("Stop audio")
@@ -1860,12 +1982,22 @@ func (a *Application) processWordJob(job *WordJob) {
 		return
 	}
 
+	// Determine if this is a bg-bg card
+	isBgBg := job.CardType == "bg-bg"
+
+	// Save card type
+	if isBgBg {
+		internal.SaveCardType(cardDir, internal.CardTypeBgBg)
+	} else {
+		internal.SaveCardType(cardDir, internal.CardTypeEnBg)
+	}
+
 	// Handle translation
 	var translation string
 	var err error
 
-	if job.NeedsTranslation {
-		// Translate word
+	if job.NeedsTranslation && !isBgBg {
+		// Translate word (only for en-bg cards)
 		fyne.Do(func() {
 			a.updateStatus(fmt.Sprintf("Translating '%s'...", job.Word))
 		})
@@ -1900,8 +2032,9 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// Create channels for parallel operations
 	type audioResult struct {
-		file string
-		err  error
+		file     string
+		fileBack string
+		err      error
 	}
 	type imageResult struct {
 		file string
@@ -1925,17 +2058,25 @@ func (a *Application) processWordJob(job *WordJob) {
 
 	// 1. Audio generation
 	go func() {
-		a.startOperation(job.Word)     // Track operation start
-		defer a.endOperation(job.Word) // Track operation end
+		a.startOperation(job.Word)
+		defer a.endOperation(job.Word)
 
 		fyne.Do(func() {
-			a.incrementProcessing() // Audio processing starts
+			a.incrementProcessing()
 		})
 
-		audioFile, err := a.generateAudio(cardCtx, job.Word, cardDir)
-		a.decrementProcessing() // Audio processing ends
+		var audioFile, audioFileBack string
+		var err error
 
-		audioChan <- audioResult{file: audioFile, err: err}
+		if isBgBg && translation != "" {
+			// Generate audio for both sides
+			audioFile, audioFileBack, err = a.generateAudioBgBg(cardCtx, job.Word, translation, cardDir)
+		} else {
+			audioFile, err = a.generateAudio(cardCtx, job.Word, cardDir)
+		}
+		a.decrementProcessing()
+
+		audioChan <- audioResult{file: audioFile, fileBack: audioFileBack, err: err}
 	}()
 
 	// 2. Image generation (includes scene description)
@@ -2010,7 +2151,7 @@ func (a *Application) processWordJob(job *WordJob) {
 	}()
 
 	// Wait for all operations to complete
-	var audioFile, imageFile string
+	var audioFile, audioFileBack, imageFile string
 	var phoneticInfo string
 	var hasError bool
 
@@ -2021,18 +2162,19 @@ func (a *Application) processWordJob(job *WordJob) {
 		hasError = true
 	} else {
 		audioFile = audioRes.file
+		audioFileBack = audioRes.fileBack
 
 		// Update UI with audio immediately if this is still the current job
 		a.mu.Lock()
 		isCurrentJob := a.currentJobID == job.ID
 		if isCurrentJob {
 			a.currentAudioFile = audioFile
+			a.currentAudioFileBack = audioFileBack
 		}
 		a.mu.Unlock()
 
 		if isCurrentJob {
 			fyne.Do(func() {
-				// Double-check that we're still on the same job before updating UI
 				a.mu.Lock()
 				if a.currentJobID != job.ID {
 					a.mu.Unlock()
@@ -2041,7 +2183,9 @@ func (a *Application) processWordJob(job *WordJob) {
 				a.mu.Unlock()
 
 				a.audioPlayer.SetAudioFile(audioFile)
-				// Enable audio-related actions
+				if isBgBg && audioFileBack != "" {
+					a.audioPlayer.SetBackAudioFile(audioFileBack)
+				}
 				a.regenerateAudioBtn.Enable()
 			})
 		}
@@ -2282,9 +2426,13 @@ func (a *Application) setupKeyboardShortcuts() {
 			if !a.regenerateRandomImageBtn.Disabled() {
 				a.onRegenerateRandomImage()
 			}
-		case 'а', 'А': // а = a
+		case 'a', 'а': // a = regenerate front audio
 			if !a.regenerateAudioBtn.Disabled() {
 				a.onRegenerateAudio()
+			}
+		case 'A', 'А': // A = regenerate back audio (for bg-bg cards)
+			if a.currentCardType == "bg-bg" && !a.regenerateAudioBtn.Disabled() {
+				a.onRegenerateBackAudio()
 			}
 		case 'р', 'Р': // р = r
 			if !a.regenerateAllBtn.Disabled() {
@@ -2294,9 +2442,13 @@ func (a *Application) setupKeyboardShortcuts() {
 			if !a.deleteButton.Disabled() {
 				a.onDelete()
 			}
-		case 'п', 'П': // п = p (play audio)
+		case 'p', 'п': // p = play front audio
 			if a.currentAudioFile != "" {
 				a.audioPlayer.Play()
+			}
+		case 'P', 'П': // P = play back audio (for bg-bg cards)
+			if a.currentAudioFileBack != "" {
+				a.audioPlayer.PlayBack()
 			}
 		case 'ж', 'Ж': // ж = x
 			a.onExportToAnki()

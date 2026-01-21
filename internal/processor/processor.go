@@ -103,10 +103,9 @@ func (p *Processor) ProcessBatch() error {
 			fmt.Printf("  [DEBUG] Word is not fully processed, will process it\n")
 		}
 
-		if err := p.ProcessWordWithTranslation(entry.Bulgarian, entry.Translation); err != nil {
+		if err := p.ProcessWordWithTranslationAndType(entry.Bulgarian, entry.Translation, entry.CardType); err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing '%s': %v\n", entry.Bulgarian, err)
 			errorCount++
-			// Continue with next word
 		} else {
 			processedCount++
 		}
@@ -141,38 +140,52 @@ func (p *Processor) ProcessSingleWord(word string) error {
 	return p.ProcessWordWithTranslation(word, "")
 }
 
-// ProcessWordWithTranslation processes a word with optional provided translation
+// ProcessWordWithTranslation processes a word with optional provided translation (en-bg mode)
 func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string) error {
+	return p.ProcessWordWithTranslationAndType(word, providedTranslation, internal.CardTypeEnBg)
+}
+
+// ProcessWordWithTranslationAndType processes a word with optional provided translation and card type
+func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation string, cardType internal.CardType) error {
 	var translationText string
 
-	// Use provided translation if available, otherwise translate
+	// For bg-bg cards, translation is the back side (Bulgarian definition)
+	// For en-bg cards, translation is the English word
 	if providedTranslation != "" {
 		translationText = providedTranslation
-		fmt.Printf("  Using provided translation: %s\n", translationText)
-	} else {
-		// Translate the word first
+		if cardType.IsBgBg() {
+			fmt.Printf("  Using provided definition: %s\n", translationText)
+		} else {
+			fmt.Printf("  Using provided translation: %s\n", translationText)
+		}
+	} else if !cardType.IsBgBg() {
+		// Only translate to English for en-bg cards
 		fmt.Printf("  Translating to English...\n")
 		var err error
 		translationText, err = p.translator.TranslateWord(word)
 		if err != nil {
 			fmt.Printf("  Warning: Translation failed: %v\n", err)
-			translationText = "" // Continue without translation
+			translationText = ""
 		} else {
 			fmt.Printf("  Translation: %s\n", translationText)
 		}
+	}
+
+	// Find or create word directory
+	wordDir := p.findOrCreateWordDirectory(word)
+
+	// Save card type
+	if err := internal.SaveCardType(wordDir, cardType); err != nil {
+		fmt.Printf("  Warning: Failed to save card type: %v\n", err)
 	}
 
 	// Store translation for Anki export
 	if translationText != "" {
 		p.translationCache.Add(word, translationText)
 
-		// Find or create word directory
-		wordDir := p.findOrCreateWordDirectory(word)
-
 		// Check if translation file already exists
 		translationFile := filepath.Join(wordDir, "translation.txt")
 		if _, err := os.Stat(translationFile); os.IsNotExist(err) {
-			// Save translation to file
 			if err := translation.SaveTranslation(wordDir, word, translationText); err != nil {
 				fmt.Printf("  Warning: Failed to save translation: %v\n", err)
 			}
@@ -183,9 +196,7 @@ func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string)
 
 	// Fetch phonetic information
 	fmt.Printf("  Fetching phonetic information...\n")
-	wordDir := p.findOrCreateWordDirectory(word)
 	if err := p.phoneticFetcher.FetchAndSave(word, wordDir); err != nil {
-		// Don't fail the whole process if phonetic info fails
 		fmt.Printf("  Warning: Failed to fetch phonetic info: %v\n", err)
 	} else {
 		fmt.Printf("  Saved phonetic information\n")
@@ -194,8 +205,15 @@ func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string)
 	// Generate audio
 	if !p.flags.SkipAudio {
 		fmt.Printf("  Generating audio...\n")
-		if err := p.generateAudio(word); err != nil {
-			return fmt.Errorf("audio generation failed: %w", err)
+		if cardType.IsBgBg() {
+			// Generate audio for both sides
+			if err := p.generateAudioBgBg(word, translationText); err != nil {
+				return fmt.Errorf("audio generation failed: %w", err)
+			}
+		} else {
+			if err := p.generateAudio(word); err != nil {
+				return fmt.Errorf("audio generation failed: %w", err)
+			}
 		}
 	}
 
@@ -242,8 +260,39 @@ func (p *Processor) generateAudio(word string) error {
 	return nil
 }
 
+// generateAudioBgBg generates audio files for both sides of a bg-bg card
+func (p *Processor) generateAudioBgBg(front, back string) error {
+	allVoicesList := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+
+	// Select a random voice (same voice for both sides for consistency)
+	voice := allVoicesList[rand.Intn(len(allVoicesList))]
+	if p.flags.OpenAIVoice != "" {
+		voice = p.flags.OpenAIVoice
+	}
+	fmt.Printf("  Using voice: %s\n", voice)
+
+	// Generate front audio
+	fmt.Printf("  Generating front audio for '%s'...\n", front)
+	if err := p.generateAudioWithVoiceAndFilename(front, voice, "audio_front"); err != nil {
+		return fmt.Errorf("failed to generate front audio: %w", err)
+	}
+
+	// Generate back audio
+	fmt.Printf("  Generating back audio for '%s'...\n", back)
+	if err := p.generateAudioWithVoiceAndFilename(back, voice, "audio_back"); err != nil {
+		return fmt.Errorf("failed to generate back audio: %w", err)
+	}
+
+	return nil
+}
+
 // generateAudioWithVoice generates audio for a word with a specific voice
 func (p *Processor) generateAudioWithVoice(word, voice string) error {
+	return p.generateAudioWithVoiceAndFilename(word, voice, "audio")
+}
+
+// generateAudioWithVoiceAndFilename generates audio for a word with a specific voice and filename
+func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase string) error {
 	// Generate random speed between 0.90 and 1.00 if not explicitly set
 	speed := p.flags.OpenAISpeed
 	if p.flags.OpenAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
@@ -288,12 +337,12 @@ func (p *Processor) generateAudioWithVoice(word, voice string) error {
 	// Find existing card directory or create new one
 	wordDir := p.findOrCreateWordDirectory(word)
 
-	// Add voice name to filename if generating multiple voices
+	// Build filename using the provided base
 	var outputFile string
-	if p.flags.AllVoices {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("audio_%s.%s", voice, p.flags.AudioFormat))
+	if p.flags.AllVoices && filenameBase == "audio" {
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filenameBase, voice, p.flags.AudioFormat))
 	} else {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s.%s", filenameBase, p.flags.AudioFormat))
 	}
 
 	// Generate the audio
@@ -581,23 +630,42 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 
 	// Check for audio-related files (unless skipped)
 	if !p.flags.SkipAudio {
-		// Add audio-related files to required list
-		requiredFiles = append(requiredFiles,
-			"audio_attribution.txt",
-			"audio_metadata.txt",
-		)
+		// Load card type to determine required audio files
+		cardType := internal.LoadCardType(wordDir)
 
-		// Check for audio file (without voice suffix for single voice mode)
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
-		if _, err := os.Stat(audioFile); os.IsNotExist(err) {
-			// Also check for audio files with voice suffix (for all-voices mode)
-			audioPattern := fmt.Sprintf("audio_*.%s", p.flags.AudioFormat)
-			matches, _ := filepath.Glob(filepath.Join(wordDir, audioPattern))
-			if len(matches) == 0 {
+		if cardType.IsBgBg() {
+			// For bg-bg cards, check for audio_front and audio_back
+			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", p.flags.AudioFormat))
+			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", p.flags.AudioFormat))
+			if _, err := os.Stat(frontAudio); os.IsNotExist(err) {
 				if os.Getenv("DEBUG_BATCH") != "" {
-					fmt.Printf("  [DEBUG] No audio file found: %s or pattern %s\n", audioFile, audioPattern)
+					fmt.Printf("  [DEBUG] No front audio file found: %s\n", frontAudio)
 				}
-				return false // No audio file found
+				return false
+			}
+			if _, err := os.Stat(backAudio); os.IsNotExist(err) {
+				if os.Getenv("DEBUG_BATCH") != "" {
+					fmt.Printf("  [DEBUG] No back audio file found: %s\n", backAudio)
+				}
+				return false
+			}
+		} else {
+			// For en-bg cards, check for standard audio file
+			requiredFiles = append(requiredFiles,
+				"audio_attribution.txt",
+				"audio_metadata.txt",
+			)
+
+			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+			if _, err := os.Stat(audioFile); os.IsNotExist(err) {
+				audioPattern := fmt.Sprintf("audio_*.%s", p.flags.AudioFormat)
+				matches, _ := filepath.Glob(filepath.Join(wordDir, audioPattern))
+				if len(matches) == 0 {
+					if os.Getenv("DEBUG_BATCH") != "" {
+						fmt.Printf("  [DEBUG] No audio file found: %s or pattern %s\n", audioFile, audioPattern)
+					}
+					return false
+				}
 			}
 		}
 	}

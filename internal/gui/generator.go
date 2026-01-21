@@ -152,6 +152,123 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	return outputFile, nil
 }
 
+// generateAudioFront generates front audio for a bg-bg card
+func (a *Application) generateAudioFront(ctx context.Context, word string, cardDir string) (string, error) {
+	if cardDir == "" {
+		return "", fmt.Errorf("card directory not provided")
+	}
+
+	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	rand.Seed(time.Now().UnixNano())
+	voice := allVoices[rand.Intn(len(allVoices))]
+	speed := 0.90 + rand.Float64()*0.10
+
+	audioConfig := *a.audioConfig
+	audioConfig.OpenAIVoice = voice
+	audioConfig.OpenAISpeed = speed
+	audioConfig.OutputDir = a.config.OutputDir
+
+	provider, err := audio.NewProvider(&audioConfig)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+	if err := provider.GenerateAudio(ctx, word, frontFile); err != nil {
+		return "", fmt.Errorf("failed to generate front audio: %w", err)
+	}
+
+	// Update metadata
+	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
+	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\ncardtype=bg-bg\n", voice, speed)
+	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
+	}
+
+	return frontFile, nil
+}
+
+// generateAudioBack generates back audio for a bg-bg card
+func (a *Application) generateAudioBack(ctx context.Context, text string, cardDir string) (string, error) {
+	if cardDir == "" {
+		return "", fmt.Errorf("card directory not provided")
+	}
+
+	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	rand.Seed(time.Now().UnixNano())
+	voice := allVoices[rand.Intn(len(allVoices))]
+	speed := 0.90 + rand.Float64()*0.10
+
+	audioConfig := *a.audioConfig
+	audioConfig.OpenAIVoice = voice
+	audioConfig.OpenAISpeed = speed
+	audioConfig.OutputDir = a.config.OutputDir
+
+	provider, err := audio.NewProvider(&audioConfig)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+	if err := provider.GenerateAudio(ctx, text, backFile); err != nil {
+		return "", fmt.Errorf("failed to generate back audio: %w", err)
+	}
+
+	return backFile, nil
+}
+
+// generateAudioBgBg generates audio for both sides of a bg-bg card
+func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDir string) (string, string, error) {
+	if cardDir == "" {
+		return "", "", fmt.Errorf("card directory not provided")
+	}
+
+	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
+	rand.Seed(time.Now().UnixNano())
+	voice := allVoices[rand.Intn(len(allVoices))]
+	speed := 0.90 + rand.Float64()*0.10
+
+	audioConfig := *a.audioConfig
+	audioConfig.OpenAIVoice = voice
+	audioConfig.OpenAISpeed = speed
+	audioConfig.OutputDir = a.config.OutputDir
+
+	provider, err := audio.NewProvider(&audioConfig)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Generate front audio
+	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", front, voice, speed)
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+	if err := provider.GenerateAudio(ctx, front, frontFile); err != nil {
+		return "", "", fmt.Errorf("failed to generate front audio: %w", err)
+	}
+
+	// Generate back audio
+	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", back, voice, speed)
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+	if err := provider.GenerateAudio(ctx, back, backFile); err != nil {
+		return frontFile, "", fmt.Errorf("failed to generate back audio: %w", err)
+	}
+
+	// Save audio attribution
+	if err := a.saveAudioAttribution(front, frontFile, voice, speed); err != nil {
+		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
+	}
+
+	// Save voice metadata
+	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
+	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\ncardtype=bg-bg\n", voice, speed)
+	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
+	}
+
+	return frontFile, backFile, nil
+}
+
 // generateImages downloads images for a word
 func (a *Application) generateImages(ctx context.Context, word string, cardDir string) (string, error) {
 	return a.generateImagesWithPrompt(ctx, word, "", "", cardDir)

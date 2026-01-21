@@ -6,15 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"codeberg.org/snonux/totalrecall/internal"
 )
 
 // Card represents a single Anki flashcard
 type Card struct {
-	Bulgarian   string   // The Bulgarian word/phrase
-	AudioFile   string   // Path to audio file
-	ImageFile   string   // Path to image file
-	Translation string   // Optional translation
-	Notes       string   // Optional notes
+	Bulgarian      string // The Bulgarian word/phrase
+	AudioFile      string // Path to audio file (for en-bg: Bulgarian audio, for bg-bg: front audio)
+	AudioFileBack  string // Path to back audio file (only for bg-bg cards)
+	ImageFile      string // Path to image file
+	Translation    string // Translation (English for en-bg, Bulgarian definition for bg-bg)
+	Notes          string // Optional notes
+	CardType       string // Card type: "en-bg" or "bg-bg"
 }
 
 // GeneratorOptions configures the Anki export
@@ -143,23 +147,27 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read directory: %w", err)
 	}
-	
+
 	// Process each subdirectory as a word
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		
+
 		// Skip hidden directories like .trashbin
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		
+
 		wordDir := filepath.Join(dir, entry.Name())
-		
+
 		// Create card for this word
 		card := Card{}
-		
+
+		// Load card type (defaults to en-bg for backwards compatibility)
+		cardType := internal.LoadCardType(wordDir)
+		card.CardType = string(cardType)
+
 		// Read the original Bulgarian word from word.txt
 		wordFile := filepath.Join(wordDir, "word.txt")
 		if data, err := os.ReadFile(wordFile); err == nil {
@@ -174,7 +182,7 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 				continue
 			}
 		}
-		
+
 		// Try to load translation
 		translationFile := filepath.Join(wordDir, "translation.txt")
 		if data, err := os.ReadFile(translationFile); err == nil {
@@ -183,17 +191,32 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 				card.Translation = strings.TrimSpace(parts[1])
 			}
 		}
-		
-		// Look for audio file
+
+		// Look for audio file(s)
 		audioFormats := []string{"mp3", "wav"}
 		for _, format := range audioFormats {
+			// For bg-bg cards, look for audio_front and audio_back
+			if cardType.IsBgBg() {
+				frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", format))
+				backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", format))
+				if _, err := os.Stat(frontAudio); err == nil {
+					card.AudioFile = frontAudio
+				}
+				if _, err := os.Stat(backAudio); err == nil {
+					card.AudioFileBack = backAudio
+				}
+				if card.AudioFile != "" {
+					break
+				}
+			}
+			// For en-bg cards (or fallback), look for standard audio file
 			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", format))
 			if _, err := os.Stat(audioFile); err == nil {
 				card.AudioFile = audioFile
 				break
 			}
 		}
-		
+
 		// Look for image files
 		imagePatterns := []string{
 			"image.jpg",
@@ -206,7 +229,7 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 				break
 			}
 		}
-		
+
 		// Load phonetic information as notes
 		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
 		if data, err := os.ReadFile(phoneticFile); err == nil {
@@ -214,13 +237,13 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 			notes := strings.TrimSpace(string(data))
 			card.Notes = strings.ReplaceAll(notes, "\n", "<br>")
 		}
-		
+
 		// Only add card if it has at least some content
 		if card.AudioFile != "" || card.ImageFile != "" || card.Translation != "" {
 			g.AddCard(card)
 		}
 	}
-	
+
 	return nil
 }
 

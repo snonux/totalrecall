@@ -21,13 +21,18 @@ import (
 type AudioPlayer struct {
 	widget.BaseWidget
 
-	container     *fyne.Container
-	playButton    *ttwidget.Button
-	stopButton    *ttwidget.Button
-	statusLabel   *widget.Label
-	phoneticLabel *widget.Label
+	container       *fyne.Container
+	playButton      *ttwidget.Button
+	playButtonLabel *widget.Label        // Label for front audio button
+	playBackButton  *ttwidget.Button     // Play back audio for bg-bg cards
+	playBackLabel   *widget.Label        // Label for back audio button
+	stopButton      *ttwidget.Button
+	statusLabel     *widget.Label
+	phoneticLabel   *widget.Label
 
 	audioFile       string
+	audioFileBack   string // Back audio file for bg-bg cards
+	isBgBg          bool   // Track if this is a bg-bg card
 	isPlaying       bool
 	playCmd         *exec.Cmd
 	voiceInfo       string // Stores voice and speed info
@@ -41,6 +46,15 @@ func NewAudioPlayer() *AudioPlayer {
 	// Create controls (tooltips will be set later after tooltip layer is created)
 	p.playButton = ttwidget.NewButton("", p.onPlay)
 	p.playButton.Icon = theme.MediaPlayIcon()
+	
+	p.playButtonLabel = widget.NewLabel("")
+	p.playButtonLabel.TextStyle = fyne.TextStyle{Bold: true}
+
+	p.playBackButton = ttwidget.NewButton("", p.onPlayBack)
+	p.playBackButton.Icon = theme.MediaSkipNextIcon()
+	
+	p.playBackLabel = widget.NewLabel("")
+	p.playBackLabel.TextStyle = fyne.TextStyle{Bold: true}
 
 	p.stopButton = ttwidget.NewButton("", p.onStop)
 	p.stopButton.Icon = theme.MediaStopIcon()
@@ -56,11 +70,17 @@ func NewAudioPlayer() *AudioPlayer {
 
 	// Initially disable controls
 	p.playButton.Disable()
+	p.playBackButton.Disable()
+	p.playBackButton.Hide() // Only show for bg-bg cards
+	p.playBackLabel.Hide()
 	p.stopButton.Disable()
 
 	// Create main container with phonetic display
 	p.container = container.NewHBox(
-		p.playButton,
+		container.NewVBox(
+			container.NewHBox(p.playButton, p.playButtonLabel),
+			container.NewHBox(p.playBackButton, p.playBackLabel),
+		),
 		p.stopButton,
 		p.phoneticLabel,
 		layout.NewSpacer(),
@@ -108,6 +128,13 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 			p.voiceInfo = ""
 		}
 
+		// Update button label based on whether this is bg-bg
+		if p.isBgBg {
+			p.playButtonLabel.SetText("Front")
+		} else {
+			p.playButtonLabel.SetText("")
+		}
+
 		// Format status text with voice and speed info
 		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
 		p.statusLabel.SetText(statusText)
@@ -128,16 +155,53 @@ func (p *AudioPlayer) SetAudioFile(audioFile string) {
 	}
 }
 
+// SetBackAudioFile sets the back audio file for bg-bg cards
+func (p *AudioPlayer) SetBackAudioFile(audioFile string) {
+	p.audioFileBack = audioFile
+	if audioFile != "" {
+		p.isBgBg = true
+		p.playBackButton.Enable()
+		p.playBackButton.Show()
+		p.playBackLabel.SetText("Back")
+		p.playBackLabel.Show()
+		// Update front label now that we know it's bg-bg
+		p.playButtonLabel.SetText("Front")
+	} else {
+		p.isBgBg = false
+		p.playBackButton.Disable()
+		p.playBackButton.Hide()
+		p.playBackLabel.SetText("")
+		p.playBackLabel.Hide()
+		// Clear front label if not bg-bg
+		p.playButtonLabel.SetText("")
+	}
+	// Refresh container to update layout after show/hide
+	if p.container != nil {
+		p.container.Refresh()
+	}
+}
+
 // Clear clears the audio player
 func (p *AudioPlayer) Clear() {
-	p.onStop() // Stop any playing audio
+	p.onStop()
 	p.audioFile = ""
+	p.audioFileBack = ""
+	p.isBgBg = false
 	p.isPlaying = false
 	p.voiceInfo = ""
 	p.playButton.Disable()
+	p.playBackButton.Disable()
+	p.playBackButton.Hide()
+	p.playButtonLabel.SetText("")
+	p.playBackLabel.SetText("")
+	p.playBackLabel.Hide()
 	p.stopButton.Disable()
 	p.statusLabel.SetText("No audio loaded")
 	p.phoneticLabel.SetText("")
+	// Refresh container to update layout after hiding back button
+	if p.container != nil {
+		p.container.Refresh()
+	}
 }
 
 // SetPhonetic sets the phonetic transcription text
@@ -179,6 +243,35 @@ func (p *AudioPlayer) onPlay() {
 	p.statusLabel.SetText(fmt.Sprintf("Playing: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
 }
 
+// onPlayBack handles back audio button click (for bg-bg cards)
+func (p *AudioPlayer) onPlayBack() {
+	if p.audioFileBack == "" {
+		return
+	}
+
+	if p.isPlaying {
+		p.onStop()
+	}
+
+	// Temporarily swap audio files to play the back audio
+	originalFile := p.audioFile
+	p.audioFile = p.audioFileBack
+
+	if err := p.startPlayback(); err != nil {
+		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
+		p.audioFile = originalFile
+		return
+	}
+
+	p.isPlaying = true
+	p.playButton.SetIcon(theme.MediaPauseIcon())
+	p.stopButton.Enable()
+	p.statusLabel.SetText(fmt.Sprintf("Playing back audio: %s", filepath.Base(p.audioFileBack)))
+
+	// Restore original file after playback starts
+	p.audioFile = originalFile
+}
+
 // onStop handles stop button click
 func (p *AudioPlayer) onStop() {
 	if p.playCmd != nil && p.playCmd.Process != nil {
@@ -197,6 +290,15 @@ func (p *AudioPlayer) Play() {
 	if !p.playButton.Disabled() {
 		fyne.Do(func() {
 			p.onPlay()
+		})
+	}
+}
+
+// PlayBack triggers back audio playback (for bg-bg cards)
+func (p *AudioPlayer) PlayBack() {
+	if !p.playBackButton.Disabled() {
+		fyne.Do(func() {
+			p.onPlayBack()
 		})
 	}
 }

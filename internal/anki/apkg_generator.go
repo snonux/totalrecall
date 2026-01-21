@@ -16,12 +16,13 @@ import (
 
 // APKGGenerator creates Anki package files (.apkg)
 type APKGGenerator struct {
-	deckName     string
-	deckID       int64
-	modelID      int64
-	cards        []Card
-	mediaFiles   map[string]int // maps original filename to media number
-	mediaCounter int
+	deckName      string
+	deckID        int64
+	modelID       int64
+	modelIDBgBg   int64 // Separate model for bg-bg cards
+	cards         []Card
+	mediaFiles    map[string]int // maps original filename to media number
+	mediaCounter  int
 }
 
 // NewAPKGGenerator creates a new APKG generator
@@ -32,6 +33,7 @@ func NewAPKGGenerator(deckName string) *APKGGenerator {
 		deckName:     deckName,
 		deckID:       now,
 		modelID:      now + 1,
+		modelIDBgBg:  now + 2,
 		cards:        make([]Card, 0),
 		mediaFiles:   make(map[string]int),
 		mediaCounter: 0,
@@ -242,7 +244,8 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 
 	// Create model (note type) configuration
 	models := map[string]interface{}{
-		fmt.Sprintf("%d", g.modelID): g.createNoteTypeConfig(),
+		fmt.Sprintf("%d", g.modelID):      g.createNoteTypeConfig(),
+		fmt.Sprintf("%d", g.modelIDBgBg):  g.createBgBgNoteTypeConfig(),
 	}
 	modelsJSON, _ := json.Marshal(models)
 
@@ -515,6 +518,20 @@ func (g *APKGGenerator) getCSS() string {
   margin: 20px 0;
 }
 
+.bulgarian-front {
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 20px 0;
+}
+
+.bulgarian-back {
+  font-size: 28px;
+  font-weight: bold;
+  color: #27ae60;
+  margin: 20px 0;
+}
+
 .audio {
   margin: 15px 0;
 }
@@ -533,6 +550,171 @@ hr#answer {
 }`
 }
 
+// createBgBgNoteTypeConfig creates the note type configuration for Bulgarian-Bulgarian cards
+func (g *APKGGenerator) createBgBgNoteTypeConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"id":    g.modelIDBgBg,
+		"name":  "Bulgarian-Bulgarian from TotalRecall",
+		"type":  0,
+		"mod":   time.Now().Unix(),
+		"usn":   -1,
+		"sortf": 0,
+		"did":   g.deckID,
+		"req":   [][]interface{}{[]interface{}{0, "all", []int{0}}, []interface{}{1, "all", []int{1}}},
+		"vers":  []int{},
+		"tags":  []string{},
+		"latexPre": `\documentclass[12pt]{article}
+\special{papersize=3in,5in}
+\usepackage[utf8]{inputenc}
+\usepackage{amssymb,amsmath}
+\pagestyle{empty}
+\setlength{\parindent}{0in}
+\begin{document}`,
+		"latexPost": `\end{document}`,
+		"flds": []map[string]interface{}{
+			{
+				"name":   "BulgarianFront",
+				"ord":    0,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   20,
+				"media":  []string{},
+			},
+			{
+				"name":   "BulgarianBack",
+				"ord":    1,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   20,
+				"media":  []string{},
+			},
+			{
+				"name":   "Image",
+				"ord":    2,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   20,
+				"media":  []string{},
+			},
+			{
+				"name":   "AudioFront",
+				"ord":    3,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   20,
+				"media":  []string{},
+			},
+			{
+				"name":   "AudioBack",
+				"ord":    4,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   20,
+				"media":  []string{},
+			},
+			{
+				"name":   "Notes",
+				"ord":    5,
+				"sticky": false,
+				"rtl":    false,
+				"font":   "Arial",
+				"size":   16,
+				"media":  []string{},
+			},
+		},
+		"tmpls": []map[string]interface{}{
+			{
+				"name":  "Forward",
+				"ord":   0,
+				"qfmt":  g.getBgBgFrontTemplate(),
+				"afmt":  g.getBgBgBackTemplate(),
+				"did":   nil,
+				"bqfmt": "",
+				"bafmt": "",
+			},
+			{
+				"name":  "Reverse",
+				"ord":   1,
+				"qfmt":  g.getBgBgReverseFrontTemplate(),
+				"afmt":  g.getBgBgReverseBackTemplate(),
+				"did":   nil,
+				"bqfmt": "",
+				"bafmt": "",
+			},
+		},
+		"css": g.getCSS(),
+	}
+}
+
+// getBgBgFrontTemplate returns the question template for bg-bg cards
+func (g *APKGGenerator) getBgBgFrontTemplate() string {
+	return `<div class="front">
+{{#Image}}
+<div class="image-container">
+{{Image}}
+</div>
+{{/Image}}
+<div class="bulgarian-front">{{BulgarianFront}}</div>
+{{#AudioFront}}
+<div class="audio">{{AudioFront}}</div>
+{{/AudioFront}}
+</div>`
+}
+
+// getBgBgBackTemplate returns the answer template for bg-bg cards
+func (g *APKGGenerator) getBgBgBackTemplate() string {
+	return `{{FrontSide}}
+
+<hr id="answer">
+
+<div class="back">
+<div class="bulgarian-back">{{BulgarianBack}}</div>
+{{#AudioBack}}
+<div class="audio">{{AudioBack}}</div>
+{{/AudioBack}}
+{{#Notes}}
+<div class="notes">{{Notes}}</div>
+{{/Notes}}
+</div>`
+}
+
+// getBgBgReverseFrontTemplate returns the question template for bg-bg reverse cards
+func (g *APKGGenerator) getBgBgReverseFrontTemplate() string {
+	return `<div class="front">
+<div class="bulgarian-back">{{BulgarianBack}}</div>
+{{#AudioBack}}
+{{AudioBack}}
+{{/AudioBack}}
+</div>`
+}
+
+// getBgBgReverseBackTemplate returns the answer template for bg-bg reverse cards
+func (g *APKGGenerator) getBgBgReverseBackTemplate() string {
+	return `{{FrontSide}}
+
+<hr id="answer">
+
+<div class="back">
+<div class="bulgarian-front">{{BulgarianFront}}</div>
+{{#AudioFront}}
+<div class="audio">{{AudioFront}}</div>
+{{/AudioFront}}
+{{#Image}}
+<div class="image-container">
+{{Image}}
+</div>
+{{/Image}}
+{{#Notes}}
+<div class="notes">{{Notes}}</div>
+{{/Notes}}
+</div>`
+}
+
 // insertNotesAndCards inserts all notes and cards into the database
 func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 	now := time.Now()
@@ -543,58 +725,78 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 		cardID1 := noteID + 1
 		cardID2 := noteID + 2
 
-		// Prepare field values
-		english := card.Translation
-		if english == "" {
-			english = "Translation needed"
-		}
+		// Determine if this is a bg-bg card
+		isBgBg := card.CardType == "bg-bg"
 
 		imageField := ""
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
-			// Get card ID from the source path (parent directory name)
-			cardID := filepath.Base(filepath.Dir(card.ImageFile))
+			cardDirID := filepath.Base(filepath.Dir(card.ImageFile))
 			originalFilename := filepath.Base(card.ImageFile)
-			// Create unique filename with card ID prefix
-			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
 			if _, ok := g.mediaFiles[uniqueFilename]; ok {
-				// Use the unique filename in the card content
 				imageField = fmt.Sprintf(`<img src="%s">`, uniqueFilename)
 			}
 		}
 
 		audioField := ""
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
-			// Get card ID from the source path (parent directory name)
-			cardID := filepath.Base(filepath.Dir(card.AudioFile))
+			cardDirID := filepath.Base(filepath.Dir(card.AudioFile))
 			originalFilename := filepath.Base(card.AudioFile)
-			// Create unique filename with card ID prefix
-			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
 			if _, ok := g.mediaFiles[uniqueFilename]; ok {
-				// Use the unique filename in the card content
 				audioField = fmt.Sprintf("[sound:%s]", uniqueFilename)
 			}
 		}
 
-		// Join fields with field separator (ASCII 31)
-		fields := strings.Join([]string{
-			english,
-			card.Bulgarian,
-			imageField,
-			audioField,
-			card.Notes,
-		}, "\x1f")
+		audioFieldBack := ""
+		if card.AudioFileBack != "" && fileExists(card.AudioFileBack) {
+			cardDirID := filepath.Base(filepath.Dir(card.AudioFileBack))
+			originalFilename := filepath.Base(card.AudioFileBack)
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
+			if _, ok := g.mediaFiles[uniqueFilename]; ok {
+				audioFieldBack = fmt.Sprintf("[sound:%s]", uniqueFilename)
+			}
+		}
 
-		// Generate GUID
-		guid := fmt.Sprintf("tr_%d_%s", now.Unix(), card.Bulgarian)
+		var fields string
+		var modelID int64
+		var guid string
+
+		if isBgBg {
+			// Bulgarian-Bulgarian card: BulgarianFront, BulgarianBack, Image, AudioFront, AudioBack, Notes
+			fields = strings.Join([]string{
+				card.Bulgarian,
+				card.Translation,
+				imageField,
+				audioField,
+				audioFieldBack,
+				card.Notes,
+			}, "\x1f")
+			modelID = g.modelIDBgBg
+			guid = fmt.Sprintf("tr_bgbg_%d_%s", now.Unix(), card.Bulgarian)
+		} else {
+			// English-Bulgarian card: English, Bulgarian, Image, Audio, Notes
+			english := card.Translation
+			if english == "" {
+				english = "Translation needed"
+			}
+			fields = strings.Join([]string{
+				english,
+				card.Bulgarian,
+				imageField,
+				audioField,
+				card.Notes,
+			}, "\x1f")
+			modelID = g.modelID
+			guid = fmt.Sprintf("tr_%d_%s", now.Unix(), card.Bulgarian)
+		}
 
 		// Insert note
 		noteQuery := `INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err := db.Exec(noteQuery,
 			noteID,         // id
 			guid,           // guid
-			g.modelID,      // mid
+			modelID,        // mid
 			now.Unix(),     // mod
 			-1,             // usn
 			"",             // tags
@@ -665,16 +867,12 @@ func (g *APKGGenerator) insertNotesAndCards(db *sql.DB) error {
 
 // copyMediaFiles copies media files and assigns them numbers
 func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
-	// Media files go directly in the temp directory with numeric names
-
 	for _, card := range g.cards {
-		// Copy audio file
+		// Copy audio file (front audio for bg-bg, only audio for en-bg)
 		if card.AudioFile != "" && fileExists(card.AudioFile) {
-			// Get card ID from the source path (parent directory name)
-			cardID := filepath.Base(filepath.Dir(card.AudioFile))
+			cardDirID := filepath.Base(filepath.Dir(card.AudioFile))
 			originalFilename := filepath.Base(card.AudioFile)
-			// Create unique filename with card ID prefix
-			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
 
 			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
@@ -686,13 +884,27 @@ func (g *APKGGenerator) copyMediaFiles(tempDir string) error {
 			}
 		}
 
+		// Copy back audio file (only for bg-bg cards)
+		if card.AudioFileBack != "" && fileExists(card.AudioFileBack) {
+			cardDirID := filepath.Base(filepath.Dir(card.AudioFileBack))
+			originalFilename := filepath.Base(card.AudioFileBack)
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
+
+			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
+				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))
+				if err := copyFile(card.AudioFileBack, targetPath); err != nil {
+					return fmt.Errorf("failed to copy back audio file %s: %w", card.AudioFileBack, err)
+				}
+				g.mediaFiles[uniqueFilename] = g.mediaCounter
+				g.mediaCounter++
+			}
+		}
+
 		// Copy image file
 		if card.ImageFile != "" && fileExists(card.ImageFile) {
-			// Get card ID from the source path (parent directory name)
-			cardID := filepath.Base(filepath.Dir(card.ImageFile))
+			cardDirID := filepath.Base(filepath.Dir(card.ImageFile))
 			originalFilename := filepath.Base(card.ImageFile)
-			// Create unique filename with card ID prefix
-			uniqueFilename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
 
 			if _, exists := g.mediaFiles[uniqueFilename]; !exists {
 				targetPath := filepath.Join(tempDir, fmt.Sprintf("%d", g.mediaCounter))

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"codeberg.org/snonux/totalrecall/internal"
 )
 
 func TestReadBatchFile(t *testing.T) {
@@ -30,9 +32,9 @@ func TestReadBatchFile(t *testing.T) {
 котка = cat
 куче = dog`,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "apple", NeedsTranslation: false},
-				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
-				{Bulgarian: "куче", Translation: "dog", NeedsTranslation: false},
+				{Bulgarian: "ябълка", Translation: "apple", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "куче", Translation: "dog", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
@@ -42,10 +44,10 @@ func TestReadBatchFile(t *testing.T) {
 куче
 хляб = bread`,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
-				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
-				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
-				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
@@ -59,25 +61,25 @@ func TestReadBatchFile(t *testing.T) {
 
 `,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
-				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
-				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
 			name:        "windows line endings",
 			fileContent: "ябълка\r\nкотка = cat\r\nкуче",
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
-				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
-				{Bulgarian: "куче", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "куче", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
 			name:        "multiple equals signs",
 			fileContent: `test = word = with = equals`,
 			want: []WordEntry{
-				{Bulgarian: "test", Translation: "word = with = equals", NeedsTranslation: false},
+				{Bulgarian: "test", Translation: "word = with = equals", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
@@ -86,9 +88,9 @@ func TestReadBatchFile(t *testing.T) {
 = cat
 = dog`,
 			want: []WordEntry{
-				{Bulgarian: "", Translation: "apple", NeedsTranslation: true},
-				{Bulgarian: "", Translation: "cat", NeedsTranslation: true},
-				{Bulgarian: "", Translation: "dog", NeedsTranslation: true},
+				{Bulgarian: "", Translation: "apple", NeedsTranslation: true, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "", Translation: "cat", NeedsTranslation: true, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "", Translation: "dog", NeedsTranslation: true, CardType: internal.CardTypeEnBg},
 			},
 		},
 		{
@@ -100,12 +102,34 @@ func TestReadBatchFile(t *testing.T) {
 = table
 стол`,
 			want: []WordEntry{
-				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false},
-				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false},
-				{Bulgarian: "", Translation: "dog", NeedsTranslation: true},
-				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false},
-				{Bulgarian: "", Translation: "table", NeedsTranslation: true},
-				{Bulgarian: "стол", Translation: "", NeedsTranslation: false},
+				{Bulgarian: "ябълка", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "cat", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "", Translation: "dog", NeedsTranslation: true, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "хляб", Translation: "bread", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "", Translation: "table", NeedsTranslation: true, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "стол", Translation: "", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+			},
+		},
+		{
+			name: "bulgarian-bulgarian format with double equals",
+			fileContent: `ябълка == плод
+котка == домашно животно`,
+			want: []WordEntry{
+				{Bulgarian: "ябълка", Translation: "плод", NeedsTranslation: false, CardType: internal.CardTypeBgBg},
+				{Bulgarian: "котка", Translation: "домашно животно", NeedsTranslation: false, CardType: internal.CardTypeBgBg},
+			},
+		},
+		{
+			name: "mixed en-bg and bg-bg formats",
+			fileContent: `ябълка = apple
+котка == домашно животно
+куче = dog
+вода == течност`,
+			want: []WordEntry{
+				{Bulgarian: "ябълка", Translation: "apple", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "котка", Translation: "домашно животно", NeedsTranslation: false, CardType: internal.CardTypeBgBg},
+				{Bulgarian: "куче", Translation: "dog", NeedsTranslation: false, CardType: internal.CardTypeEnBg},
+				{Bulgarian: "вода", Translation: "течност", NeedsTranslation: false, CardType: internal.CardTypeBgBg},
 			},
 		},
 	}
