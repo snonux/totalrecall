@@ -51,7 +51,7 @@ func NewAudioPlayer() *AudioPlayer {
 	p.playButtonLabel.TextStyle = fyne.TextStyle{Bold: true}
 
 	p.playBackButton = ttwidget.NewButton("", p.onPlayBack)
-	p.playBackButton.Icon = theme.MediaSkipNextIcon()
+	p.playBackButton.Icon = theme.MediaPlayIcon() // Same icon as front button
 	
 	p.playBackLabel = widget.NewLabel("")
 	p.playBackLabel.TextStyle = fyne.TextStyle{Bold: true}
