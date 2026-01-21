@@ -1052,7 +1052,6 @@ func (a *Application) onRegenerateAudio() {
 
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		fmt.Printf("DEBUG onRegenerateAudio: word='%s', isBgBg=%v\n", wordForGeneration, isBgBg)
 
 		a.startOperation(wordForGeneration)
 		defer a.endOperation(wordForGeneration)
@@ -1146,7 +1145,6 @@ func (a *Application) onRegenerateBackAudio() {
 		if translation == "" {
 			translation = strings.TrimSpace(a.translationEntry.Text)
 		}
-		fmt.Printf("DEBUG onRegenerateBackAudio: front='%s', back='%s'\n", a.currentWord, translation)
 		wordForGeneration := a.currentWord
 
 		a.startOperation(wordForGeneration)
