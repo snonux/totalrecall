@@ -429,40 +429,27 @@ func (a *Application) loadExistingFiles(word string) {
 		frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
 		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
 
-		fmt.Printf("Looking for front audio at: %s\n", frontAudio)
-		fmt.Printf("Looking for back audio at: %s\n", backAudio)
-		
 		if _, err := os.Stat(frontAudio); err == nil {
-			fmt.Printf("Found front audio file: %s\n", frontAudio)
 			a.currentAudioFile = frontAudio
 			fyne.Do(func() {
 				a.audioPlayer.SetAudioFile(frontAudio)
 			})
-		} else {
-			fmt.Printf("Front audio file not found (error: %v)\n", err)
 		}
 		
 		if _, err := os.Stat(backAudio); err == nil {
-			fmt.Printf("Found back audio file: %s\n", backAudio)
 			a.currentAudioFileBack = backAudio
 			fyne.Do(func() {
 				a.audioPlayer.SetBackAudioFile(backAudio)
 			})
-		} else {
-			fmt.Printf("Back audio file not found (error: %v)\n", err)
 		}
 	} else {
 		// For en-bg cards, load standard audio file
 		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
-		fmt.Printf("Looking for audio at: %s\n", audioFile)
 		if _, err := os.Stat(audioFile); err == nil {
-			fmt.Printf("Found audio file: %s\n", audioFile)
 			a.currentAudioFile = audioFile
 			fyne.Do(func() {
 				a.audioPlayer.SetAudioFile(audioFile)
 			})
-		} else {
-			fmt.Printf("Audio file not found (error: %v)\n", err)
 		}
 		// Hide back audio button for en-bg cards
 		a.currentAudioFileBack = ""
