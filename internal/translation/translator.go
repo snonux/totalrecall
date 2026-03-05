@@ -24,7 +24,16 @@ func NewTranslator(apiKey string) *Translator {
 	}
 }
 
-// TranslateWord translates a Bulgarian word to English
+// TranslateWord translates a Bulgarian word to English.
+//
+// Example:
+//
+//	translator := translation.NewTranslator(os.Getenv("OPENAI_API_KEY"))
+//	english, err := translator.TranslateWord("ябълка")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Println(english)
 func (t *Translator) TranslateWord(word string) (string, error) {
 	if t.apiKey == "" {
 		return "", fmt.Errorf("OpenAI API key not found")

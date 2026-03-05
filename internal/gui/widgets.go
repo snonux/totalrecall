@@ -30,25 +30,35 @@ type ImageDisplay struct {
 func NewImageDisplay() *ImageDisplay {
 	d := &ImageDisplay{}
 
-	// Create image canvas
-	d.imageCanvas = canvas.NewImageFromResource(nil)
-	d.imageCanvas.FillMode = canvas.ImageFillContain
-	d.imageCanvas.SetMinSize(fyne.NewSize(200, 150)) // Half the size
-
-	// Create label
-	d.imageLabel = widget.NewLabel("No image")
-	d.imageLabel.Alignment = fyne.TextAlignCenter
-
-	// Create main container - no navigation buttons here
-	d.container = container.NewBorder(
-		nil,
-		d.imageLabel,
-		nil, nil,
-		d.imageCanvas,
-	)
+	d.imageCanvas = newImageCanvas()
+	d.imageLabel = newImageLabel()
+	d.container = newImageContainer(d.imageCanvas, d.imageLabel)
 
 	d.ExtendBaseWidget(d)
 	return d
+}
+
+func newImageCanvas() *canvas.Image {
+	img := canvas.NewImageFromResource(nil)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(200, 150)) // Half the size
+	return img
+}
+
+func newImageLabel() *widget.Label {
+	label := widget.NewLabel("No image")
+	label.Alignment = fyne.TextAlignCenter
+	return label
+}
+
+func newImageContainer(img *canvas.Image, label *widget.Label) *fyne.Container {
+	// Create main container with the image centered and its label at the bottom.
+	return container.NewBorder(
+		nil,
+		label,
+		nil, nil,
+		img,
+	)
 }
 
 // CreateRenderer implements fyne.Widget

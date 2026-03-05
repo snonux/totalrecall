@@ -52,28 +52,28 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 	dir := filepath.Dir(outputPath)
 	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
+			return fmt.Errorf("create output dir %q: %w", dir, err)
 		}
 	}
 
 	// Check if file already exists
 	if !d.options.OverwriteExisting {
 		if _, err := os.Stat(outputPath); err == nil {
-			return fmt.Errorf("file already exists: %s", outputPath)
+			return fmt.Errorf("output file exists: %s", outputPath)
 		}
 	}
 
 	// Download the image
 	reader, err := d.searcher.Download(ctx, result.URL)
 	if err != nil {
-		return fmt.Errorf("failed to download image: %w", err)
+		return fmt.Errorf("download %q: %w", result.URL, err)
 	}
 	defer reader.Close()
 
 	// Create output file
 	file, err := os.Create(outputPath)
 	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
+		return fmt.Errorf("create output file %q: %w", outputPath, err)
 	}
 	defer file.Close()
 
@@ -83,7 +83,7 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 		written, err = io.CopyN(file, reader, d.options.MaxSizeBytes)
 		if err != nil && err != io.EOF {
 			os.Remove(outputPath) // Clean up on error
-			return fmt.Errorf("failed to write file: %w", err)
+			return fmt.Errorf("write output file %q: %w", outputPath, err)
 		}
 
 		// Check if we hit the size limit
@@ -91,25 +91,25 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			// Try to read one more byte to see if file is larger
 			if _, err := reader.Read(make([]byte, 1)); err != io.EOF {
 				os.Remove(outputPath) // Clean up
-				return fmt.Errorf("image exceeds maximum size of %d bytes", d.options.MaxSizeBytes)
+				return fmt.Errorf("image exceeds max size %d bytes", d.options.MaxSizeBytes)
 			}
 		}
 
 		// Ensure the file is fully written to disk before returning
 		if err := file.Sync(); err != nil {
-			return fmt.Errorf("failed to sync file to disk: %w", err)
+			return fmt.Errorf("sync output file %q: %w", outputPath, err)
 		}
 	} else {
 		written, err = io.Copy(file, reader)
 		if err != nil {
 			os.Remove(outputPath) // Clean up on error
-			return fmt.Errorf("failed to write file: %w", err)
+			return fmt.Errorf("write output file %q: %w", outputPath, err)
 		}
 	}
 
 	// Ensure the file is fully written to disk before returning
 	if err := file.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file to disk: %w", err)
+		return fmt.Errorf("sync output file %q: %w", outputPath, err)
 	}
 
 	// Save attribution if required
@@ -132,11 +132,11 @@ func (d *Downloader) DownloadBestMatch(ctx context.Context, query string) (*Sear
 
 	results, err := d.searcher.Search(ctx, opts)
 	if err != nil {
-		return nil, "", fmt.Errorf("search failed: %w", err)
+		return nil, "", fmt.Errorf("search images: %w", err)
 	}
 
 	if len(results) == 0 {
-		return nil, "", fmt.Errorf("no images found for query: %s", query)
+		return nil, "", fmt.Errorf("no images found for %q", query)
 	}
 
 	// Try to download the first available image
@@ -155,7 +155,7 @@ func (d *Downloader) DownloadBestMatch(ctx context.Context, query string) (*Sear
 		fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
 	}
 
-	return nil, "", fmt.Errorf("failed to download any images for query: %s", query)
+	return nil, "", fmt.Errorf("no downloadable images found for %q", query)
 }
 
 // generateFileName creates a filename based on the pattern
@@ -218,11 +218,11 @@ func (d *Downloader) DownloadBestMatchWithOptions(ctx context.Context, opts *Sea
 
 	results, err := d.searcher.Search(ctx, &searchOpts)
 	if err != nil {
-		return nil, "", fmt.Errorf("search failed: %w", err)
+		return nil, "", fmt.Errorf("search images: %w", err)
 	}
 
 	if len(results) == 0 {
-		return nil, "", fmt.Errorf("no images found for query: %s", opts.Query)
+		return nil, "", fmt.Errorf("no images found for %q", opts.Query)
 	}
 
 	// Try to download the first available image
@@ -241,5 +241,5 @@ func (d *Downloader) DownloadBestMatchWithOptions(ctx context.Context, opts *Sea
 		fmt.Fprintf(os.Stderr, "Warning: failed to download image %d: %v\n", i+1, err)
 	}
 
-	return nil, "", fmt.Errorf("failed to download any images for query: %s", opts.Query)
+	return nil, "", fmt.Errorf("no downloadable images found for %q", opts.Query)
 }

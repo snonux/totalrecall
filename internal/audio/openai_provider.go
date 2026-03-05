@@ -2,6 +2,7 @@ package audio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,7 @@ type OpenAIProvider struct {
 // NewOpenAIProvider creates a new OpenAI TTS provider
 func NewOpenAIProvider(config *Config) (Provider, error) {
 	if config.OpenAIKey == "" {
-		return nil, fmt.Errorf("OpenAI API key is required")
+		return nil, errors.New("OpenAI API key is required")
 	}
 
 	client := openai.NewClient(config.OpenAIKey)
@@ -91,7 +92,7 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 		if strings.Contains(errStr, "does not have access to model") && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
 			return fmt.Errorf("OpenAI TTS API error: %w\nNote: The %s model requires access. Try using --openai-model tts-1-hd instead", err, p.config.OpenAIModel)
 		}
-		return fmt.Errorf("OpenAI TTS API error: %w", err)
+		return err
 	}
 	defer response.Close()
 
@@ -117,7 +118,7 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 	}
 
 	if written == 0 {
-		return fmt.Errorf("no audio data received from OpenAI")
+		return errors.New("no audio data received from OpenAI")
 	}
 
 	return nil
@@ -131,7 +132,7 @@ func (p *OpenAIProvider) Name() string {
 // IsAvailable checks if the OpenAI API is accessible
 func (p *OpenAIProvider) IsAvailable() error {
 	if p.config.OpenAIKey == "" {
-		return fmt.Errorf("OpenAI API key not configured")
+		return errors.New("OpenAI API key not configured")
 	}
 
 	// We could make a test API call here, but that would use credits
