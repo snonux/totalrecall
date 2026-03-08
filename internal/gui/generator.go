@@ -327,7 +327,9 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 			openaiClient.SetPromptCallback(func(prompt string) {
 				// Save the prompt to disk immediately for this word
 				promptFile := filepath.Join(cardDir, "image_prompt.txt")
-				os.WriteFile(promptFile, []byte(prompt), 0644)
+				if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
+					fmt.Printf("Warning: Failed to save prompt for '%s': %v\n", word, err)
+				}
 
 				// Only update UI if this word is still the current word
 				a.mu.Lock()

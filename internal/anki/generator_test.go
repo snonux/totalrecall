@@ -207,7 +207,11 @@ func TestGenerateCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CSV file: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("Failed to close CSV file: %v", closeErr)
+		}
+	}()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
@@ -276,7 +280,11 @@ func TestGenerateCSVWithoutHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CSV file: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("Failed to close CSV file: %v", closeErr)
+		}
+	}()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
@@ -299,28 +307,50 @@ func TestGenerateFromDirectory(t *testing.T) {
 
 	// Create word directories
 	word1Dir := filepath.Join(tempDir, "ябълка")
-	os.MkdirAll(word1Dir, 0755)
+	if err := os.MkdirAll(word1Dir, 0755); err != nil {
+		t.Fatalf("Failed to create word1 dir: %v", err)
+	}
 
 	word2Dir := filepath.Join(tempDir, "котка")
-	os.MkdirAll(word2Dir, 0755)
+	if err := os.MkdirAll(word2Dir, 0755); err != nil {
+		t.Fatalf("Failed to create word2 dir: %v", err)
+	}
 
 	// Create hidden directory (should be skipped)
 	hiddenDir := filepath.Join(tempDir, ".hidden")
-	os.MkdirAll(hiddenDir, 0755)
+	if err := os.MkdirAll(hiddenDir, 0755); err != nil {
+		t.Fatalf("Failed to create hidden dir: %v", err)
+	}
 
 	// Create word files
-	os.WriteFile(filepath.Join(word1Dir, "word.txt"), []byte("ябълка"), 0644)
-	os.WriteFile(filepath.Join(word1Dir, "translation.txt"), []byte("ябълка = apple"), 0644)
-	os.WriteFile(filepath.Join(word1Dir, "audio.mp3"), []byte("audio data"), 0644)
-	os.WriteFile(filepath.Join(word1Dir, "image.jpg"), []byte("image data"), 0644)
-	os.WriteFile(filepath.Join(word1Dir, "phonetic.txt"), []byte("YA-bul-ka\nStress on first syllable"), 0644)
+	if err := os.WriteFile(filepath.Join(word1Dir, "word.txt"), []byte("ябълка"), 0644); err != nil {
+		t.Fatalf("Failed to write word1 word.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word1Dir, "translation.txt"), []byte("ябълка = apple"), 0644); err != nil {
+		t.Fatalf("Failed to write word1 translation.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word1Dir, "audio.mp3"), []byte("audio data"), 0644); err != nil {
+		t.Fatalf("Failed to write word1 audio.mp3: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word1Dir, "image.jpg"), []byte("image data"), 0644); err != nil {
+		t.Fatalf("Failed to write word1 image.jpg: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word1Dir, "phonetic.txt"), []byte("YA-bul-ka\nStress on first syllable"), 0644); err != nil {
+		t.Fatalf("Failed to write word1 phonetic.txt: %v", err)
+	}
 
 	// Word 2 with old format
-	os.WriteFile(filepath.Join(word2Dir, "_word.txt"), []byte("котка"), 0644)
-	os.WriteFile(filepath.Join(word2Dir, "audio.wav"), []byte("audio data"), 0644)
+	if err := os.WriteFile(filepath.Join(word2Dir, "_word.txt"), []byte("котка"), 0644); err != nil {
+		t.Fatalf("Failed to write word2 _word.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word2Dir, "audio.wav"), []byte("audio data"), 0644); err != nil {
+		t.Fatalf("Failed to write word2 audio.wav: %v", err)
+	}
 
 	// Hidden directory files (should be ignored)
-	os.WriteFile(filepath.Join(hiddenDir, "word.txt"), []byte("hidden"), 0644)
+	if err := os.WriteFile(filepath.Join(hiddenDir, "word.txt"), []byte("hidden"), 0644); err != nil {
+		t.Fatalf("Failed to write hidden word.txt: %v", err)
+	}
 
 	gen := NewGenerator(nil)
 	err := gen.GenerateFromDirectory(tempDir)
@@ -368,14 +398,20 @@ func TestCopyMediaFile(t *testing.T) {
 
 	// Create source file structure
 	srcDir := filepath.Join(tempDir, "src", "word123")
-	os.MkdirAll(srcDir, 0755)
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("Failed to create source directory: %v", err)
+	}
 
 	srcFile := filepath.Join(srcDir, "audio.mp3")
-	os.WriteFile(srcFile, []byte("test audio"), 0644)
+	if err := os.WriteFile(srcFile, []byte("test audio"), 0644); err != nil {
+		t.Fatalf("Failed to write source audio file: %v", err)
+	}
 
 	// Create destination directory
 	destDir := filepath.Join(tempDir, "dest")
-	os.MkdirAll(destDir, 0755)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("Failed to create destination directory: %v", err)
+	}
 
 	gen := NewGenerator(nil)
 
@@ -472,13 +508,19 @@ func TestGeneratePackage(t *testing.T) {
 
 	// Create source files
 	srcDir := filepath.Join(tempDir, "src", "word1")
-	os.MkdirAll(srcDir, 0755)
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("Failed to create package source directory: %v", err)
+	}
 
 	audioFile := filepath.Join(srcDir, "audio.mp3")
-	os.WriteFile(audioFile, []byte("audio data"), 0644)
+	if err := os.WriteFile(audioFile, []byte("audio data"), 0644); err != nil {
+		t.Fatalf("Failed to write package audio file: %v", err)
+	}
 
 	imageFile := filepath.Join(srcDir, "image.jpg")
-	os.WriteFile(imageFile, []byte("image data"), 0644)
+	if err := os.WriteFile(imageFile, []byte("image data"), 0644); err != nil {
+		t.Fatalf("Failed to write package image file: %v", err)
+	}
 
 	// Create generator with card
 	gen := NewGenerator(nil)

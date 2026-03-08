@@ -146,7 +146,9 @@ func New(config *Config) *Application {
 	}
 
 	// Ensure output directory exists
-	os.MkdirAll(config.OutputDir, 0755)
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create output directory %q: %v\n", config.OutputDir, err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -629,7 +631,9 @@ func (a *Application) generateMaterials(word string) {
 		if translation != "" {
 			translationFile := filepath.Join(cardDir, "translation.txt")
 			content := fmt.Sprintf("%s = %s\n", word, translation)
-			os.WriteFile(translationFile, []byte(content), 0644)
+			if err := os.WriteFile(translationFile, []byte(content), 0644); err != nil {
+				fmt.Printf("Warning: Failed to save translation for '%s': %v\n", word, err)
+			}
 		}
 	}
 	// Create channels for parallel operations
@@ -722,7 +726,9 @@ func (a *Application) generateMaterials(word string) {
 		// Save phonetic info to disk using the pre-determined directory
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
 			phoneticFile := filepath.Join(cardDir, "phonetic.txt")
-			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
+			if err := os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644); err != nil {
+				fmt.Printf("Warning: Failed to save phonetic info for '%s': %v\n", word, err)
+			}
 		}
 		// Update UI immediately with phonetic info if this is still the current word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
@@ -2161,7 +2167,9 @@ func (a *Application) processWordJob(job *WordJob) {
 		// Save phonetic info to disk immediately for this specific word
 		if phoneticInfo != "" && phoneticInfo != "Failed to fetch phonetic information" {
 			phoneticFile := filepath.Join(cardDir, "phonetic.txt")
-			os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644)
+			if err := os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644); err != nil {
+				fmt.Printf("Warning: Failed to save phonetic info for '%s': %v\n", job.Word, err)
+			}
 		}
 
 		// Update UI immediately with phonetic info if this is still the current job

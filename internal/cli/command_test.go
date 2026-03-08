@@ -151,8 +151,14 @@ output:
 			InitConfig(tt.cfgFile)
 
 			// Test environment variable prefix
-			os.Setenv("TOTALRECALL_TEST_VAR", "test-value")
-			defer os.Unsetenv("TOTALRECALL_TEST_VAR")
+			if err := os.Setenv("TOTALRECALL_TEST_VAR", "test-value"); err != nil {
+				t.Fatalf("Failed to set env var: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv("TOTALRECALL_TEST_VAR"); err != nil {
+					t.Errorf("Failed to unset env var: %v", err)
+				}
+			}()
 
 			if viper.GetString("test_var") != "test-value" {
 				t.Error("Environment variable not properly loaded")
@@ -204,10 +210,18 @@ func TestGetOpenAIKey(t *testing.T) {
 
 			// Set up environment
 			if tt.envKey != "" {
-				os.Setenv("OPENAI_API_KEY", tt.envKey)
-				defer os.Unsetenv("OPENAI_API_KEY")
+				if err := os.Setenv("OPENAI_API_KEY", tt.envKey); err != nil {
+					t.Fatalf("Failed to set OPENAI_API_KEY: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
+						t.Errorf("Failed to unset OPENAI_API_KEY: %v", err)
+					}
+				}()
 			} else {
-				os.Unsetenv("OPENAI_API_KEY")
+				if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
+					t.Fatalf("Failed to unset OPENAI_API_KEY: %v", err)
+				}
 			}
 
 			// Set up config
@@ -239,11 +253,19 @@ func TestBindFlagsToViper(t *testing.T) {
 	setupFlags(cmd, flags)
 
 	// Set some flag values
-	cmd.Flags().Set("output", "/test/output")
-	cmd.Flags().Set("format", "wav")
-	cmd.Flags().Set("openai-model", "tts-1-hd")
+	if err := cmd.Flags().Set("output", "/test/output"); err != nil {
+		t.Fatalf("Failed to set output flag: %v", err)
+	}
+	if err := cmd.Flags().Set("format", "wav"); err != nil {
+		t.Fatalf("Failed to set format flag: %v", err)
+	}
+	if err := cmd.Flags().Set("openai-model", "tts-1-hd"); err != nil {
+		t.Fatalf("Failed to set openai-model flag: %v", err)
+	}
 
-	bindFlagsToViper(cmd)
+	if err := bindFlagsToViper(cmd); err != nil {
+		t.Fatalf("bindFlagsToViper() failed: %v", err)
+	}
 
 	// Test that values are bound
 	if viper.GetString("output.directory") != "/test/output" {

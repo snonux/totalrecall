@@ -81,7 +81,11 @@ func (d *ImageDisplay) SetImage(imagePath string) {
 		d.imageLabel.SetText(fmt.Sprintf("Error loading image: %v", err))
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close image file %q: %v\n", imagePath, closeErr)
+		}
+	}()
 
 	// Get file info to ensure it's fully written
 	stat, err := file.Stat()
@@ -141,7 +145,11 @@ func ResourceFromPath(path string) (fyne.Resource, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close resource file %q: %v\n", path, closeErr)
+		}
+	}()
 
 	data, err := os.ReadFile(path)
 	if err != nil {

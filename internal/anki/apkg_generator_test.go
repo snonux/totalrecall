@@ -36,8 +36,12 @@ func TestAPKGAddCard(t *testing.T) {
 	audioFile := filepath.Join(tempDir, "audio.mp3")
 	imageFile := filepath.Join(tempDir, "image.jpg")
 
-	os.WriteFile(audioFile, []byte("audio data"), 0644)
-	os.WriteFile(imageFile, []byte("image data"), 0644)
+	if err := os.WriteFile(audioFile, []byte("audio data"), 0644); err != nil {
+		t.Fatalf("Failed to create test audio file: %v", err)
+	}
+	if err := os.WriteFile(imageFile, []byte("image data"), 0644); err != nil {
+		t.Fatalf("Failed to create test image file: %v", err)
+	}
 
 	card := Card{
 		Bulgarian:   "ябълка",
@@ -85,8 +89,12 @@ func TestGenerateAPKG(t *testing.T) {
 	audioFile := filepath.Join(tempDir, "audio.mp3")
 	imageFile := filepath.Join(tempDir, "image.jpg")
 
-	os.WriteFile(audioFile, []byte("test audio data"), 0644)
-	os.WriteFile(imageFile, []byte("test image data"), 0644)
+	if err := os.WriteFile(audioFile, []byte("test audio data"), 0644); err != nil {
+		t.Fatalf("Failed to create APKG test audio file: %v", err)
+	}
+	if err := os.WriteFile(imageFile, []byte("test image data"), 0644); err != nil {
+		t.Fatalf("Failed to create APKG test image file: %v", err)
+	}
 
 	gen := NewAPKGGenerator("Test Bulgarian Deck")
 
@@ -121,7 +129,11 @@ func TestGenerateAPKG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open APKG as zip: %v", err)
 	}
-	defer reader.Close()
+	defer func() {
+		if closeErr := reader.Close(); closeErr != nil {
+			t.Errorf("Failed to close APKG zip reader: %v", closeErr)
+		}
+	}()
 
 	// Check for required files
 	requiredFiles := map[string]bool{
@@ -172,7 +184,11 @@ func TestCreateDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Errorf("Failed to close database: %v", closeErr)
+		}
+	}()
 
 	// Check core tables exist
 	coreTables := []string{"col", "notes", "cards"}

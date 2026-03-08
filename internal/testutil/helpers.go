@@ -189,8 +189,14 @@ func CaptureOutput(t *testing.T, f func()) (stdout, stderr string) {
 	oldStderr := os.Stderr
 
 	// Create pipes
-	rOut, wOut, _ := os.Pipe()
-	rErr, wErr, _ := os.Pipe()
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stdout pipe: %v", err)
+	}
+	rErr, wErr, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
 
 	// Redirect stdout/stderr
 	os.Stdout = wOut
@@ -200,8 +206,12 @@ func CaptureOutput(t *testing.T, f func()) (stdout, stderr string) {
 	f()
 
 	// Close writers
-	wOut.Close()
-	wErr.Close()
+	if err := wOut.Close(); err != nil {
+		t.Fatalf("failed to close stdout writer: %v", err)
+	}
+	if err := wErr.Close(); err != nil {
+		t.Fatalf("failed to close stderr writer: %v", err)
+	}
 
 	// Read output
 	outBytes := make([]byte, 1024)

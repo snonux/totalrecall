@@ -10,8 +10,14 @@ import (
 
 func TestNewProcessor(t *testing.T) {
 	// Set up test environment
-	os.Setenv("OPENAI_API_KEY", "test-key")
-	defer os.Unsetenv("OPENAI_API_KEY")
+	if err := os.Setenv("OPENAI_API_KEY", "test-key"); err != nil {
+		t.Fatalf("Failed to set OPENAI_API_KEY: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
+			t.Errorf("Failed to unset OPENAI_API_KEY: %v", err)
+		}
+	}()
 
 	flags := cli.NewFlags()
 	p := NewProcessor(flags)
@@ -223,7 +229,9 @@ func TestGenerateAnkiFile(t *testing.T) {
 	if _, err := os.Stat(csvFile); os.IsNotExist(err) {
 		t.Error("CSV file was not created in home directory")
 	}
-	os.Remove(csvFile) // Clean up
+	if err := os.Remove(csvFile); err != nil && !os.IsNotExist(err) {
+		t.Errorf("Failed to remove CSV file: %v", err)
+	}
 }
 
 func TestGenerateAnkiFile_APKG(t *testing.T) {
@@ -243,9 +251,15 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 	p.translationCache.Add("котка", "cat")
 
 	// Create dummy audio and image files
-	os.WriteFile(filepath.Join(word1Dir, "audio.mp3"), []byte("audio1"), 0644)
-	os.WriteFile(filepath.Join(word2Dir, "audio.mp3"), []byte("audio2"), 0644)
-	os.WriteFile(filepath.Join(word1Dir, "image.jpg"), []byte("image1"), 0644)
+	if err := os.WriteFile(filepath.Join(word1Dir, "audio.mp3"), []byte("audio1"), 0644); err != nil {
+		t.Fatalf("Failed to create test audio1 file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word2Dir, "audio.mp3"), []byte("audio2"), 0644); err != nil {
+		t.Fatalf("Failed to create test audio2 file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(word1Dir, "image.jpg"), []byte("image1"), 0644); err != nil {
+		t.Fatalf("Failed to create test image file: %v", err)
+	}
 
 	_, err := p.GenerateAnkiFile()
 	if err != nil {
@@ -264,6 +278,8 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 
 	// Clean up the created file
 	for _, file := range files {
-		os.Remove(file)
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			t.Errorf("Failed to remove APKG file %s: %v", file, err)
+		}
 	}
 }
