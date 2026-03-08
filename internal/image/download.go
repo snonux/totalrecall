@@ -46,8 +46,8 @@ func NewDownloader(searcher ImageSearcher, options *DownloadOptions) *Downloader
 	}
 }
 
-// DownloadImage downloads a single image to the specified path
-func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, outputPath string) error {
+// DownloadImage downloads a single image to the specified path.
+func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, outputPath string) (err error) {
 	// Ensure directory exists
 	dir := filepath.Dir(outputPath)
 	if dir != "" && dir != "." {
@@ -77,7 +77,11 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 	if err != nil {
 		return fmt.Errorf("create output file %q: %w", outputPath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close output file %q: %w", outputPath, closeErr)
+		}
+	}()
 
 	// Copy with size limit if specified
 	var written int64

@@ -23,9 +23,9 @@ type AudioPlayer struct {
 
 	container       *fyne.Container
 	playButton      *ttwidget.Button
-	playButtonLabel *widget.Label        // Label for front audio button
-	playBackButton  *ttwidget.Button     // Play back audio for bg-bg cards
-	playBackLabel   *widget.Label        // Label for back audio button
+	playButtonLabel *widget.Label    // Label for front audio button
+	playBackButton  *ttwidget.Button // Play back audio for bg-bg cards
+	playBackLabel   *widget.Label    // Label for back audio button
 	stopButton      *ttwidget.Button
 	statusLabel     *widget.Label
 	phoneticLabel   *widget.Label
@@ -46,13 +46,13 @@ func NewAudioPlayer() *AudioPlayer {
 	// Create controls (tooltips will be set later after tooltip layer is created)
 	p.playButton = ttwidget.NewButton("", p.onPlay)
 	p.playButton.Icon = theme.MediaPlayIcon()
-	
+
 	p.playButtonLabel = widget.NewLabel("")
 	p.playButtonLabel.TextStyle = fyne.TextStyle{Bold: true}
 
 	p.playBackButton = ttwidget.NewButton("", p.onPlayBack)
 	p.playBackButton.Icon = theme.MediaPlayIcon() // Same icon as front button
-	
+
 	p.playBackLabel = widget.NewLabel("")
 	p.playBackLabel.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -240,7 +240,7 @@ func (p *AudioPlayer) onPlay() {
 	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
 	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
 	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
-	
+
 	if p.audioFile == "" {
 		fmt.Printf("DEBUG (onPlay): No audioFile set, returning\n")
 		return
@@ -275,7 +275,7 @@ func (p *AudioPlayer) onPlayBack() {
 	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
 	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
 	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
-	
+
 	if p.audioFileBack == "" {
 		fmt.Printf("DEBUG (onPlayBack): No audioFileBack set, returning\n")
 		return
@@ -295,7 +295,7 @@ func (p *AudioPlayer) onPlayBack() {
 	}
 
 	p.isPlaying = true
-	p.playBackButton.SetIcon(theme.MediaPauseIcon())  // Back button, not front
+	p.playBackButton.SetIcon(theme.MediaPauseIcon()) // Back button, not front
 	p.stopButton.Enable()
 	p.statusLabel.SetText(fmt.Sprintf("Playing back audio: %s", filepath.Base(p.audioFileBack)))
 	fmt.Printf("DEBUG (onPlayBack): Back audio playback started successfully\n")
@@ -304,16 +304,19 @@ func (p *AudioPlayer) onPlayBack() {
 // onStop handles stop button click
 func (p *AudioPlayer) onStop() {
 	if p.playCmd != nil && p.playCmd.Process != nil {
-		p.playCmd.Process.Kill()
+		if err := p.playCmd.Process.Kill(); err != nil {
+			fmt.Printf("DEBUG (onStop): Failed to kill playback process: %v\n", err)
+			p.statusLabel.SetText(fmt.Sprintf("failed to stop playback: %v", err))
+		}
 		p.playCmd = nil
 	}
 
 	p.isPlaying = false
 	// Set correct button icon based on which audio was playing
 	if p.isBgBg && p.audioFileBack != "" {
-		p.playBackButton.SetIcon(theme.MediaPlayIcon())  // Back button if it was playing
+		p.playBackButton.SetIcon(theme.MediaPlayIcon()) // Back button if it was playing
 	} else {
-		p.playButton.SetIcon(theme.MediaPlayIcon())  // Front button otherwise
+		p.playButton.SetIcon(theme.MediaPlayIcon()) // Front button otherwise
 	}
 	p.stopButton.Disable()
 	p.statusLabel.SetText(fmt.Sprintf("Stopped: %s%s", filepath.Base(p.audioFile), p.voiceInfo))

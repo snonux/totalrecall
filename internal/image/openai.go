@@ -197,7 +197,9 @@ func (c *OpenAIClient) Download(ctx context.Context, url string) (io.ReadCloser,
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, fmt.Errorf("HTTP %d: %s (failed to close response body: %v)", resp.StatusCode, resp.Status, closeErr)
+		}
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 

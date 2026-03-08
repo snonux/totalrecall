@@ -12,22 +12,22 @@ import (
 
 // Card represents a single Anki flashcard
 type Card struct {
-	Bulgarian      string // The Bulgarian word/phrase
-	AudioFile      string // Path to audio file (for en-bg: Bulgarian audio, for bg-bg: front audio)
-	AudioFileBack  string // Path to back audio file (only for bg-bg cards)
-	ImageFile      string // Path to image file
-	Translation    string // Translation (English for en-bg, Bulgarian definition for bg-bg)
-	Notes          string // Optional notes
-	CardType       string // Card type: "en-bg" or "bg-bg"
+	Bulgarian     string // The Bulgarian word/phrase
+	AudioFile     string // Path to audio file (for en-bg: Bulgarian audio, for bg-bg: front audio)
+	AudioFileBack string // Path to back audio file (only for bg-bg cards)
+	ImageFile     string // Path to image file
+	Translation   string // Translation (English for en-bg, Bulgarian definition for bg-bg)
+	Notes         string // Optional notes
+	CardType      string // Card type: "en-bg" or "bg-bg"
 }
 
 // GeneratorOptions configures the Anki export
 type GeneratorOptions struct {
-	OutputPath      string // Output CSV file path
-	MediaFolder     string // Folder containing media files
-	IncludeHeaders  bool   // Include CSV headers
-	AudioFormat     string // Audio file format (mp3, wav)
-	ImageFormat     string // Image file format (jpg, png)
+	OutputPath     string // Output CSV file path
+	MediaFolder    string // Folder containing media files
+	IncludeHeaders bool   // Include CSV headers
+	AudioFormat    string // Audio file format (mp3, wav)
+	ImageFormat    string // Image file format (jpg, png)
 }
 
 // DefaultGeneratorOptions returns sensible defaults
@@ -68,19 +68,28 @@ func (g *Generator) GetCards() []Card {
 	return g.cards
 }
 
-// GenerateCSV creates a CSV file for Anki import
-func (g *Generator) GenerateCSV() error {
+// GenerateCSV creates a CSV file for Anki import.
+func (g *Generator) GenerateCSV() (err error) {
 	// Create output file
 	file, err := os.Create(g.options.OutputPath)
 	if err != nil {
 		return fmt.Errorf("failed to create CSV file: %w", err)
 	}
-	defer file.Close()
-	
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close CSV file: %w", closeErr)
+		}
+	}()
+
 	// Create CSV writer
 	writer := csv.NewWriter(file)
-	defer writer.Flush()
-	
+	defer func() {
+		writer.Flush()
+		if flushErr := writer.Error(); err == nil && flushErr != nil {
+			err = fmt.Errorf("failed to flush CSV file: %w", flushErr)
+		}
+	}()
+
 	// Write headers if requested
 	if g.options.IncludeHeaders {
 		headers := []string{"Bulgarian", "Audio", "Image", "Translation", "Notes"}
@@ -88,7 +97,7 @@ func (g *Generator) GenerateCSV() error {
 			return fmt.Errorf("failed to write headers: %w", err)
 		}
 	}
-	
+
 	// Write cards
 	for _, card := range g.cards {
 		record := []string{
@@ -98,12 +107,12 @@ func (g *Generator) GenerateCSV() error {
 			card.Translation,
 			card.Notes,
 		}
-		
+
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write card: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -112,14 +121,14 @@ func (g *Generator) formatAudioField(audioFile string) string {
 	if audioFile == "" {
 		return ""
 	}
-	
+
 	// Get card ID from the source path (parent directory name)
 	cardID := filepath.Base(filepath.Dir(audioFile))
 	originalFilename := filepath.Base(audioFile)
-	
+
 	// Create filename with card ID prefix for uniqueness in Anki
 	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-	
+
 	// Anki audio format: [sound:filename.mp3]
 	return fmt.Sprintf("[sound:%s]", filename)
 }
@@ -129,14 +138,14 @@ func (g *Generator) formatImageField(imageFile string) string {
 	if imageFile == "" {
 		return ""
 	}
-	
+
 	// Get card ID from the source path (parent directory name)
 	cardID := filepath.Base(filepath.Dir(imageFile))
 	originalFilename := filepath.Base(imageFile)
-	
+
 	// Create filename with card ID prefix for uniqueness in Anki
 	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
-	
+
 	return fmt.Sprintf(`<img src="%s">`, filename)
 }
 
@@ -254,13 +263,13 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	// Create media directory
 	mediaDir := filepath.Join(outputDir, "collection.media")
 	if err := os.MkdirAll(mediaDir, 0755); err != nil {
 		return fmt.Errorf("failed to create media directory: %w", err)
 	}
-	
+
 	// Copy media files and update paths
 	for i, card := range g.cards {
 		// Copy audio file
@@ -271,7 +280,7 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 			}
 			g.cards[i].AudioFile = newPath
 		}
-		
+
 		// Copy image file
 		if card.ImageFile != "" {
 			newPath, err := g.copyMediaFile(card.ImageFile, mediaDir)
@@ -281,10 +290,10 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 			g.cards[i].ImageFile = newPath
 		}
 	}
-	
+
 	// Update output path to package directory
 	g.options.OutputPath = filepath.Join(outputDir, "import.csv")
-	
+
 	// Generate CSV
 	return g.GenerateCSV()
 }
@@ -293,32 +302,32 @@ func (g *Generator) GeneratePackage(outputDir string) error {
 func (g *Generator) GenerateAPKG(outputPath, deckName string) error {
 	// Create APKG generator
 	apkgGen := NewAPKGGenerator(deckName)
-	
+
 	// Add all cards
 	for _, card := range g.cards {
 		apkgGen.AddCard(card)
 	}
-	
+
 	// Generate the .apkg file
 	return apkgGen.GenerateAPKG(outputPath)
 }
 
-// copyMediaFile copies a media file to the destination directory
-func (g *Generator) copyMediaFile(src, destDir string) (string, error) {
+// copyMediaFile copies a media file to the destination directory.
+func (g *Generator) copyMediaFile(src, destDir string) (filename string, err error) {
 	// Get source file info
 	srcInfo, err := os.Stat(src)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Get the card ID from the source path (parent directory name)
 	cardID := filepath.Base(filepath.Dir(src))
-	
+
 	// Create destination filename with card ID prefix
 	originalFilename := filepath.Base(src)
-	filename := fmt.Sprintf("%s_%s", cardID, originalFilename)
+	filename = fmt.Sprintf("%s_%s", cardID, originalFilename)
 	destPath := filepath.Join(destDir, filename)
-	
+
 	// Check if file already exists
 	if _, err := os.Stat(destPath); err == nil {
 		// File exists, generate unique name
@@ -332,38 +341,46 @@ func (g *Generator) copyMediaFile(src, destDir string) (string, error) {
 			}
 		}
 	}
-	
+
 	// Open source file
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return "", err
 	}
-	defer srcFile.Close()
-	
+	defer func() {
+		if closeErr := srcFile.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close source media file: %w", closeErr)
+		}
+	}()
+
 	// Create destination file
 	destFile, err := os.Create(destPath)
 	if err != nil {
 		return "", err
 	}
-	defer destFile.Close()
-	
+	defer func() {
+		if closeErr := destFile.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close destination media file: %w", closeErr)
+		}
+	}()
+
 	// Copy content
 	if _, err := destFile.ReadFrom(srcFile); err != nil {
 		return "", err
 	}
-	
+
 	// Preserve file mode
 	if err := os.Chmod(destPath, srcInfo.Mode()); err != nil {
 		return "", err
 	}
-	
+
 	return filename, nil
 }
 
 // Stats returns statistics about the card collection
 func (g *Generator) Stats() (totalCards, withAudio, withImages int) {
 	totalCards = len(g.cards)
-	
+
 	for _, card := range g.cards {
 		if card.AudioFile != "" {
 			withAudio++
@@ -372,6 +389,6 @@ func (g *Generator) Stats() (totalCards, withAudio, withImages int) {
 			withImages++
 		}
 	}
-	
+
 	return
 }
