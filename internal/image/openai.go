@@ -110,7 +110,7 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		}
 		fmt.Printf("Using custom prompt: %s\n", prompt)
 	} else {
-		prompt = c.createEducationalPrompt(opts.Query, translatedWord)
+		prompt = c.createEducationalPrompt(ctx, opts.Query, translatedWord)
 		if prompt == "" {
 			return nil, &SearchError{
 				Provider: "openai",
@@ -234,9 +234,9 @@ func (c *OpenAIClient) SetPromptCallback(callback func(prompt string)) {
 }
 
 // createEducationalPrompt generates a prompt optimized for language learning
-func (c *OpenAIClient) createEducationalPrompt(bulgarianWord, englishTranslation string) string {
+func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWord, englishTranslation string) string {
 	// Generate a scene description for the word
-	scene, err := c.generateSceneDescription(context.Background(), bulgarianWord, englishTranslation)
+	scene, err := c.generateSceneDescription(ctx, bulgarianWord, englishTranslation)
 	if err != nil {
 		fmt.Printf("  Failed to generate scene: %v, using basic prompt\n", err)
 		scene = ""

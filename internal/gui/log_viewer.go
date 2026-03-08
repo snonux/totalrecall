@@ -23,7 +23,9 @@ type LogWriter struct {
 func (w *LogWriter) Write(p []byte) (n int, err error) {
 	// Write to original output
 	if w.original != nil {
-		w.original.Write(p)
+		if _, err := w.original.Write(p); err != nil {
+			return 0, err
+		}
 	}
 
 	// Send to log viewer
@@ -54,6 +56,10 @@ type LogViewer struct {
 	originalStderr *os.File
 	stdoutWriter   *LogWriter
 	stderrWriter   *LogWriter
+	stdoutR        *os.File
+	stdoutW        *os.File
+	stderrR        *os.File
+	stderrW        *os.File
 }
 
 // NewLogViewer creates a new log viewer widget
@@ -104,11 +110,32 @@ func (v *LogViewer) StartCapture() {
 	v.stderrWriter = &LogWriter{viewer: v, original: v.originalStderr}
 
 	// Create pipe for stdout
-	stdoutR, stdoutW, _ := os.Pipe()
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		if v.originalStderr != nil {
+			_, _ = fmt.Fprintf(v.originalStderr, "Warning: failed to create stdout capture pipe: %v\n", err)
+		}
+		return
+	}
+	v.stdoutR = stdoutR
+	v.stdoutW = stdoutW
 	os.Stdout = stdoutW
 
 	// Create pipe for stderr
-	stderrR, stderrW, _ := os.Pipe()
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		if v.originalStderr != nil {
+			_, _ = fmt.Fprintf(v.originalStderr, "Warning: failed to create stderr capture pipe: %v\n", err)
+		}
+		os.Stdout = v.originalStdout
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
+		v.stdoutR = nil
+		v.stdoutW = nil
+		return
+	}
+	v.stderrR = stderrR
+	v.stderrW = stderrW
 	os.Stderr = stderrW
 
 	// Also redirect log package output
@@ -121,11 +148,19 @@ func (v *LogViewer) StartCapture() {
 
 // pipeReader reads from a pipe and writes to a LogWriter
 func (v *LogViewer) pipeReader(pipe *os.File, writer *LogWriter) {
+	defer func() {
+		if pipe != nil {
+			_ = pipe.Close()
+		}
+	}()
+
 	buf := make([]byte, 1024)
 	for {
 		n, err := pipe.Read(buf)
 		if n > 0 {
-			writer.Write(buf[:n])
+			if _, writeErr := writer.Write(buf[:n]); writeErr != nil {
+				break
+			}
 		}
 		if err != nil {
 			break
@@ -146,6 +181,26 @@ func (v *LogViewer) StopCapture() {
 
 	// Reset log package output
 	log.SetOutput(os.Stderr)
+
+	// Close write ends to unblock reader goroutines.
+	if v.stdoutW != nil {
+		_ = v.stdoutW.Close()
+		v.stdoutW = nil
+	}
+	if v.stderrW != nil {
+		_ = v.stderrW.Close()
+		v.stderrW = nil
+	}
+
+	// Close read ends if still open.
+	if v.stdoutR != nil {
+		_ = v.stdoutR.Close()
+		v.stdoutR = nil
+	}
+	if v.stderrR != nil {
+		_ = v.stderrR.Close()
+		v.stderrR = nil
+	}
 }
 
 // AddMessage adds a message to the log

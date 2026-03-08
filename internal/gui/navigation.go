@@ -99,7 +99,7 @@ func (a *Application) scanExistingWords() {
 		if _, err := os.Stat(audioFile); err == nil {
 			hasContent = true
 		}
-		
+
 		// Check for bg-bg audio files (audio_front and audio_back)
 		if !hasContent {
 			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
@@ -383,15 +383,15 @@ func (a *Application) loadExistingFiles(word string) {
 		if len(parts) >= 2 {
 			translation := strings.TrimSpace(parts[1])
 			fmt.Printf("DEBUG (loadExistingFiles): Extracted translation (part 1, after '='): %s\n", translation)
-			
+
 			// CRITICAL: Set the state BEFORE SetText so it's available when needed
 			a.currentTranslation = translation
 			fmt.Printf("DEBUG (loadExistingFiles): Set a.currentTranslation state variable to: %s\n", a.currentTranslation)
-			
+
 			fyne.Do(func() {
 				a.translationEntry.SetText(translation)
 				fmt.Printf("DEBUG (loadExistingFiles): Set translationEntry UI field to: %s\n", translation)
-				
+
 				// CRITICAL: After SetText, verify the state is correct
 				fmt.Printf("DEBUG (loadExistingFiles): After SetText, a.currentTranslation is: %s\n", a.currentTranslation)
 			})
@@ -458,7 +458,7 @@ func (a *Application) loadExistingFiles(word string) {
 		} else {
 			fmt.Printf("DEBUG (loadExistingFiles): Front audio not found: %s\n", frontAudio)
 		}
-		
+
 		if _, err := os.Stat(backAudio); err == nil {
 			a.currentAudioFileBack = backAudio
 			fmt.Printf("DEBUG (loadExistingFiles): Found back audio: %s\n", backAudio)
@@ -599,7 +599,7 @@ func (a *Application) checkForMissingFiles(word string) {
 			}
 		}
 	}
-	
+
 	// Check for missing back audio file (bg-bg cards)
 	if a.currentAudioFileBack == "" {
 		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
@@ -687,13 +687,13 @@ func (a *Application) onDelete() {
 
 	// Check if this word has active operations
 	if a.hasActiveOperations(a.currentWord) {
-		dialog.ShowError(fmt.Errorf("Cannot delete '%s' while content is being generated.\nPlease wait for generation to complete.", a.currentWord), a.window)
+		dialog.ShowError(fmt.Errorf("cannot delete %q while content is being generated; please wait for generation to complete", a.currentWord), a.window)
 		return
 	}
 
 	// Also check if word is in the processing queue
 	if a.queue.IsWordProcessing(a.currentWord) {
-		dialog.ShowError(fmt.Errorf("Cannot delete '%s' while it is in the processing queue.\nPlease wait for processing to complete.", a.currentWord), a.window)
+		dialog.ShowError(fmt.Errorf("cannot delete %q while it is in the processing queue; please wait for processing to complete", a.currentWord), a.window)
 		return
 	}
 

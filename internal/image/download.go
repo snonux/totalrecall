@@ -68,7 +68,9 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 	if err != nil {
 		return fmt.Errorf("download %q: %w", result.URL, err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	// Create output file
 	file, err := os.Create(outputPath)
@@ -82,7 +84,7 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 	if d.options.MaxSizeBytes > 0 {
 		written, err = io.CopyN(file, reader, d.options.MaxSizeBytes)
 		if err != nil && err != io.EOF {
-			os.Remove(outputPath) // Clean up on error
+			_ = os.Remove(outputPath) // Clean up on error
 			return fmt.Errorf("write output file %q: %w", outputPath, err)
 		}
 
@@ -90,7 +92,7 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 		if written == d.options.MaxSizeBytes {
 			// Try to read one more byte to see if file is larger
 			if _, err := reader.Read(make([]byte, 1)); err != io.EOF {
-				os.Remove(outputPath) // Clean up
+				_ = os.Remove(outputPath) // Clean up
 				return fmt.Errorf("image exceeds max size %d bytes", d.options.MaxSizeBytes)
 			}
 		}
@@ -100,9 +102,9 @@ func (d *Downloader) DownloadImage(ctx context.Context, result *SearchResult, ou
 			return fmt.Errorf("sync output file %q: %w", outputPath, err)
 		}
 	} else {
-		written, err = io.Copy(file, reader)
+		_, err = io.Copy(file, reader)
 		if err != nil {
-			os.Remove(outputPath) // Clean up on error
+			_ = os.Remove(outputPath) // Clean up on error
 			return fmt.Errorf("write output file %q: %w", outputPath, err)
 		}
 	}

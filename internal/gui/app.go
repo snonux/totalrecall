@@ -449,6 +449,10 @@ func (a *Application) setupUI() {
 		if a.fileCheckTicker != nil {
 			a.fileCheckTicker.Stop()
 		}
+		// Restore stdio streams and close capture pipes.
+		if a.logViewer != nil {
+			a.logViewer.StopCapture()
+		}
 		// Cancel any ongoing operations
 		if a.cancel != nil {
 			a.cancel()
@@ -524,7 +528,7 @@ func (a *Application) onSubmit() {
 		a.updateStatus(fmt.Sprintf("Translating '%s' to Bulgarian...", secondaryText))
 		bulgarian, err := a.translateEnglishToBulgarian(secondaryText)
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Translation failed: %w", err), a.window)
+			dialog.ShowError(fmt.Errorf("translation failed: %w", err), a.window)
 			return
 		}
 		wordToProcess = bulgarian
@@ -537,7 +541,7 @@ func (a *Application) onSubmit() {
 		a.updateStatus(fmt.Sprintf("Translating '%s' to English...", bulgarianText))
 		english, err := a.translateWord(bulgarianText)
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Translation failed: %w", err), a.window)
+			dialog.ShowError(fmt.Errorf("translation failed: %w", err), a.window)
 			return
 		}
 		a.currentTranslation = english
@@ -592,7 +596,7 @@ func (a *Application) generateMaterials(word string) {
 	cardDir, err := a.ensureCardDirectory(word)
 	if err != nil {
 		fyne.Do(func() {
-			a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+			a.showError(fmt.Errorf("failed to create card directory: %w", err))
 			a.setUIEnabled(true)
 		})
 		return
@@ -606,7 +610,7 @@ func (a *Application) generateMaterials(word string) {
 		translation, err := a.translateWord(word)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Translation failed: %w", err))
+				a.showError(fmt.Errorf("translation failed: %w", err))
 				a.setUIEnabled(true)
 			})
 			return
@@ -751,7 +755,7 @@ func (a *Application) generateMaterials(word string) {
 	audioRes := <-audioChan
 	if audioRes.err != nil {
 		fyne.Do(func() {
-			a.showError(fmt.Errorf("Audio generation failed: %w", audioRes.err))
+			a.showError(fmt.Errorf("audio generation failed: %w", audioRes.err))
 		})
 		hasError = true
 	} else {
@@ -778,7 +782,7 @@ func (a *Application) generateMaterials(word string) {
 	imageRes := <-imageChan
 	if imageRes.err != nil {
 		fyne.Do(func() {
-			a.showError(fmt.Errorf("Image download failed: %w", imageRes.err))
+			a.showError(fmt.Errorf("image download failed: %w", imageRes.err))
 		})
 		hasError = true
 	} else if imageRes.file != "" {
@@ -921,7 +925,7 @@ func (a *Application) onRegenerateImage() {
 		cardDir, err := a.ensureCardDirectory(wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+				a.showError(fmt.Errorf("failed to create card directory: %w", err))
 			})
 			return
 		}
@@ -929,7 +933,7 @@ func (a *Application) onRegenerateImage() {
 		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation, cardDir)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Image regeneration failed: %w", err))
+				a.showError(fmt.Errorf("image regeneration failed: %w", err))
 			})
 		} else {
 			if imageFile != "" {
@@ -994,7 +998,7 @@ func (a *Application) onRegenerateRandomImage() {
 		cardDir, err := a.ensureCardDirectory(wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+				a.showError(fmt.Errorf("failed to create card directory: %w", err))
 			})
 			return
 		}
@@ -1002,7 +1006,7 @@ func (a *Application) onRegenerateRandomImage() {
 		imageFile, err := a.generateImagesWithPrompt(cardCtx, wordForGeneration, customPrompt, translation, cardDir)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Random image generation failed: %w", err))
+				a.showError(fmt.Errorf("random image generation failed: %w", err))
 			})
 		} else {
 			if imageFile != "" {
@@ -1038,7 +1042,7 @@ func (a *Application) onRegenerateAudio() {
 	fmt.Printf("DEBUG (onRegenerateAudio): Starting front audio regeneration\n")
 	fmt.Printf("  - currentWord: %s\n", a.currentWord)
 	fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-	
+
 	// Only disable the audio-related buttons
 	a.regenerateAudioBtn.Disable()
 	a.regenerateAllBtn.Disable()
@@ -1073,7 +1077,7 @@ func (a *Application) onRegenerateAudio() {
 		cardDir, err := a.ensureCardDirectory(wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+				a.showError(fmt.Errorf("failed to create card directory: %w", err))
 			})
 			return
 		}
@@ -1083,7 +1087,7 @@ func (a *Application) onRegenerateAudio() {
 			audioFile, err := a.generateAudioFront(cardCtx, wordForGeneration, cardDir)
 			if err != nil {
 				fyne.Do(func() {
-					a.showError(fmt.Errorf("Front audio regeneration failed: %w", err))
+					a.showError(fmt.Errorf("front audio regeneration failed: %w", err))
 				})
 			} else {
 				a.mu.Lock()
@@ -1109,7 +1113,7 @@ func (a *Application) onRegenerateAudio() {
 			audioFile, err := a.generateAudio(cardCtx, wordForGeneration, cardDir)
 			if err != nil {
 				fyne.Do(func() {
-					a.showError(fmt.Errorf("Audio regeneration failed: %w", err))
+					a.showError(fmt.Errorf("audio regeneration failed: %w", err))
 				})
 			} else {
 				a.mu.Lock()
@@ -1147,7 +1151,7 @@ func (a *Application) onRegenerateBackAudio() {
 	fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
 	fmt.Printf("  - currentTranslation (state var): %s\n", a.currentTranslation)
 	fmt.Printf("  - translationEntry.Text (UI field): %s\n", a.translationEntry.Text)
-	
+
 	if a.currentCardType != "bg-bg" {
 		fmt.Printf("DEBUG (onRegenerateBackAudio): Not a bg-bg card, returning\n")
 		return
@@ -1168,13 +1172,13 @@ func (a *Application) onRegenerateBackAudio() {
 		translation := a.currentTranslation
 		fmt.Printf("DEBUG (onRegenerateBackAudio): In goroutine - translation from a.currentTranslation: %s\n", translation)
 		fmt.Printf("DEBUG (onRegenerateBackAudio): In goroutine - translation UI field: %s\n", a.translationEntry.Text)
-		
+
 		if translation == "" {
 			fmt.Printf("DEBUG (onRegenerateBackAudio): WARNING - translation state was empty, falling back to UI field\n")
 			translation = strings.TrimSpace(a.translationEntry.Text)
 			fmt.Printf("DEBUG (onRegenerateBackAudio): Using UI field translation: %s\n", translation)
 		}
-		
+
 		wordForGeneration := a.currentWord
 		fmt.Printf("DEBUG (onRegenerateBackAudio): Final decision - will generate back audio for: %s\n", translation)
 		fmt.Printf("DEBUG (onRegenerateBackAudio): (NOT for word: %s)\n", wordForGeneration)
@@ -1184,14 +1188,14 @@ func (a *Application) onRegenerateBackAudio() {
 		// Creating a new context would cancel the front audio operation.
 		fmt.Printf("DEBUG (onRegenerateBackAudio): Using main context (not creating new card context)\n")
 		fmt.Printf("DEBUG (onRegenerateBackAudio): This prevents cancelling ongoing front audio operation\n")
-		
+
 		a.startOperation(wordForGeneration)
 		defer a.endOperation(wordForGeneration)
 
 		cardDir, err := a.ensureCardDirectory(wordForGeneration)
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Failed to create card directory: %w", err))
+				a.showError(fmt.Errorf("failed to create card directory: %w", err))
 			})
 			return
 		}
@@ -1200,16 +1204,16 @@ func (a *Application) onRegenerateBackAudio() {
 		fmt.Printf("  - ctx: a.ctx (main app context)\n")
 		fmt.Printf("  - translation: %s\n", translation)
 		fmt.Printf("  - cardDir: %s\n", cardDir)
-		
+
 		audioFile, err := a.generateAudioBack(a.ctx, translation, cardDir)
-		
+
 		fmt.Printf("DEBUG (onRegenerateBackAudio): generateAudioBack returned:\n")
 		fmt.Printf("  - err: %v\n", err)
 		fmt.Printf("  - audioFile: %s\n", audioFile)
-		
+
 		if err != nil {
 			fyne.Do(func() {
-				a.showError(fmt.Errorf("Back audio regeneration failed: %w", err))
+				a.showError(fmt.Errorf("back audio regeneration failed: %w", err))
 			})
 		} else {
 			a.mu.Lock()
@@ -1352,12 +1356,12 @@ func (a *Application) onExportToAnki() {
 
 			// Load all cards from the anki_cards directory
 			if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to load cards: %w", err), a.window)
+				dialog.ShowError(fmt.Errorf("failed to load cards: %w", err), a.window)
 				return
 			}
 
 			if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to generate APKG: %w", err), a.window)
+				dialog.ShowError(fmt.Errorf("failed to generate APKG: %w", err), a.window)
 				return
 			}
 
@@ -1381,12 +1385,12 @@ func (a *Application) onExportToAnki() {
 
 			// Load all cards from the anki_cards directory
 			if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to load cards: %w", err), a.window)
+				dialog.ShowError(fmt.Errorf("failed to load cards: %w", err), a.window)
 				return
 			}
 
 			if err := gen.GenerateCSV(); err != nil {
-				dialog.ShowError(fmt.Errorf("Failed to generate CSV: %w", err), a.window)
+				dialog.ShowError(fmt.Errorf("failed to generate CSV: %w", err), a.window)
 				return
 			}
 
@@ -1943,30 +1947,6 @@ func (a *Application) getOrCreateCardContext(word string) (context.Context, cont
 	return ctx, cancel
 }
 
-// ensureCardDirectory ensures a card directory exists for the given word and returns its path
-func (a *Application) ensureCardDirectory(word string) (string, error) {
-	// First check if directory already exists
-	wordDir := a.findCardDirectory(word)
-	if wordDir != "" {
-		return wordDir, nil
-	}
-
-	// Create new directory with card ID
-	cardID := internal.GenerateCardID(word)
-	wordDir = filepath.Join(a.config.OutputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create word directory: %w", err)
-	}
-
-	// Save the original Bulgarian word in a metadata file
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-		return "", fmt.Errorf("failed to save word metadata: %w", err)
-	}
-
-	return wordDir, nil
-}
-
 // cancelCardOperations cancels all ongoing operations for a specific word
 func (a *Application) cancelCardOperations(word string) {
 	a.cardMu.Lock()
@@ -2033,11 +2013,17 @@ func (a *Application) processWordJob(job *WordJob) {
 	// Determine if this is a bg-bg card
 	isBgBg := job.CardType == "bg-bg"
 
-	// Save card type
+	// Save card type; fail fast if persistence is unavailable.
+	var cardTypeErr error
 	if isBgBg {
-		internal.SaveCardType(cardDir, internal.CardTypeBgBg)
+		cardTypeErr = internal.SaveCardType(cardDir, internal.CardTypeBgBg)
 	} else {
-		internal.SaveCardType(cardDir, internal.CardTypeEnBg)
+		cardTypeErr = internal.SaveCardType(cardDir, internal.CardTypeEnBg)
+	}
+	if cardTypeErr != nil {
+		a.queue.FailJob(job.ID, fmt.Errorf("failed to save card type: %w", cardTypeErr))
+		a.finishCurrentJob()
+		return
 	}
 
 	// Handle translation
@@ -2065,7 +2051,11 @@ func (a *Application) processWordJob(job *WordJob) {
 	if translation != "" {
 		translationFile := filepath.Join(cardDir, "translation.txt")
 		content := fmt.Sprintf("%s = %s\n", job.Word, translation)
-		os.WriteFile(translationFile, []byte(content), 0644)
+		if err := os.WriteFile(translationFile, []byte(content), 0644); err != nil {
+			a.queue.FailJob(job.ID, fmt.Errorf("failed to save translation: %w", err))
+			a.finishCurrentJob()
+			return
+		}
 	}
 
 	// Update UI with translation immediately if this is still the current job
@@ -2681,33 +2671,6 @@ func (a *Application) handleShortcutKey(key fyne.KeyName) {
 	}
 }
 
-// saveTranslation saves the current translation to a file
-func (a *Application) saveTranslation() {
-	if a.currentWord != "" && a.currentTranslation != "" {
-		// Find existing card directory
-		wordDir := a.findCardDirectory(a.currentWord)
-		if wordDir == "" {
-			// No existing directory, create new one with card ID
-			cardID := internal.GenerateCardID(a.currentWord)
-			wordDir = filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
-			// Save word metadata
-			metadataFile := filepath.Join(wordDir, "word.txt")
-			os.WriteFile(metadataFile, []byte(a.currentWord), 0644)
-		}
-		translationFile := filepath.Join(wordDir, "translation.txt")
-		content := fmt.Sprintf("%s = %s\n", a.currentWord, a.currentTranslation)
-		os.WriteFile(translationFile, []byte(content), 0644)
-	}
-}
-
-// saveImagePrompt saves the current image prompt to a file
-func (a *Application) saveImagePrompt() {
-	// With timestamp-based card IDs, we can't update existing prompts
-	// The prompt is saved when the image is generated
-	// This function is kept for compatibility but does nothing
-}
-
 // handleWordChange is called when the Bulgarian word is changed
 func (a *Application) handleWordChange(oldWord, newWord string) {
 	// Update current word
@@ -2736,74 +2699,10 @@ func (a *Application) handleWordChange(oldWord, newWord string) {
 	}
 }
 
-// savePhoneticInfo saves the phonetic information to a file
-func (a *Application) savePhoneticInfo() {
-	phoneticText := a.currentPhonetic
-	if a.currentWord != "" && phoneticText != "" &&
-		phoneticText != "Failed to fetch phonetic information" {
-		// Find existing card directory
-		wordDir := a.findCardDirectory(a.currentWord)
-		if wordDir == "" {
-			// No existing directory, create new one with card ID
-			cardID := internal.GenerateCardID(a.currentWord)
-			wordDir = filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
-			// Save word metadata
-			metadataFile := filepath.Join(wordDir, "word.txt")
-			os.WriteFile(metadataFile, []byte(a.currentWord), 0644)
-		}
-		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
-		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
-	}
-}
-
-// savePhoneticInfoForWord saves the phonetic information for a specific word
-func (a *Application) savePhoneticInfoForWord(word, phoneticText string) {
-	if word != "" && phoneticText != "" &&
-		phoneticText != "Failed to fetch phonetic information" &&
-		phoneticText != "Phonetic information will appear here..." {
-		// Find existing card directory first
-		wordDir := a.findCardDirectory(word)
-		if wordDir == "" {
-			// No existing directory, create new one with card ID
-			cardID := internal.GenerateCardID(word)
-			wordDir = filepath.Join(a.config.OutputDir, cardID)
-			os.MkdirAll(wordDir, 0755) // Ensure directory exists
-			// Save word metadata
-			metadataFile := filepath.Join(wordDir, "word.txt")
-			os.WriteFile(metadataFile, []byte(word), 0644)
-		}
-		phoneticFile := filepath.Join(wordDir, "phonetic.txt")
-		os.WriteFile(phoneticFile, []byte(phoneticText), 0644)
-	}
-}
-
-// loadPhoneticInfo loads phonetic information from a file if it exists
-func (a *Application) loadPhoneticInfo(word string) {
-	wordDir := a.findCardDirectory(word)
-	if wordDir == "" {
-		return
-	}
-
-	phoneticFile := filepath.Join(wordDir, "phonetic.txt")
-	if data, err := os.ReadFile(phoneticFile); err == nil {
-		phoneticText := string(data)
-		a.currentPhonetic = phoneticText
-		fyne.Do(func() {
-			// Display the IPA in the audio player
-			if phoneticText != "" {
-				a.audioPlayer.SetPhonetic(phoneticText)
-			} else {
-				a.audioPlayer.SetPhonetic("")
-			}
-		})
-	}
-}
-
 // getPhoneticInfo fetches phonetic information for a Bulgarian word using OpenAI GPT-4o
 func (a *Application) getPhoneticInfo(word string) (string, error) {
 	if a.config.OpenAIKey == "" {
-		return "", fmt.Errorf("OpenAI API key not configured")
+		return "", fmt.Errorf("openai API key not configured")
 	}
 
 	client := openai.NewClient(a.config.OpenAIKey)

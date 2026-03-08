@@ -37,11 +37,6 @@ func main() {
 }
 
 func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
-	// Check if output directory was set in config file
-	if !cmd.Flags().Changed("output") && flags.OutputDir != "" {
-		// Output directory already set by flags
-	}
-
 	// Handle --archive flag
 	if flags.Archive {
 		home, _ := os.UserHomeDir()

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,27 +80,39 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.OpenAIImageStyle, "openai-image-style", flags.OpenAIImageStyle, "Image style: natural or vivid (dall-e-3 only)")
 
 	// Bind flags to viper
-	bindFlagsToViper(cmd)
+	if err := bindFlagsToViper(cmd); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to bind flags to config: %v\n", err)
+	}
 }
 
-func bindFlagsToViper(cmd *cobra.Command) {
-	viper.BindPFlag("audio.provider", cmd.Flags().Lookup("audio-provider"))
-	viper.BindPFlag("audio.voice", cmd.Flags().Lookup("voice"))
-	viper.BindPFlag("audio.format", cmd.Flags().Lookup("format"))
-	viper.BindPFlag("audio.pitch", cmd.Flags().Lookup("pitch"))
-	viper.BindPFlag("audio.amplitude", cmd.Flags().Lookup("amplitude"))
-	viper.BindPFlag("audio.word_gap", cmd.Flags().Lookup("word-gap"))
-	viper.BindPFlag("audio.openai_model", cmd.Flags().Lookup("openai-model"))
-	viper.BindPFlag("audio.openai_voice", cmd.Flags().Lookup("openai-voice"))
-	viper.BindPFlag("audio.openai_speed", cmd.Flags().Lookup("openai-speed"))
-	viper.BindPFlag("audio.openai_instruction", cmd.Flags().Lookup("openai-instruction"))
-	viper.BindPFlag("output.directory", cmd.Flags().Lookup("output"))
-	viper.BindPFlag("image.provider", cmd.Flags().Lookup("image-api"))
-	// Bind OpenAI image flags
-	viper.BindPFlag("image.openai_model", cmd.Flags().Lookup("openai-image-model"))
-	viper.BindPFlag("image.openai_size", cmd.Flags().Lookup("openai-image-size"))
-	viper.BindPFlag("image.openai_quality", cmd.Flags().Lookup("openai-image-quality"))
-	viper.BindPFlag("image.openai_style", cmd.Flags().Lookup("openai-image-style"))
+func bindFlagsToViper(cmd *cobra.Command) error {
+	bindings := map[string]string{
+		"audio.format":             "format",
+		"audio.openai_model":       "openai-model",
+		"audio.openai_voice":       "openai-voice",
+		"audio.openai_speed":       "openai-speed",
+		"audio.openai_instruction": "openai-instruction",
+		"output.directory":         "output",
+		"image.provider":           "image-api",
+		"image.openai_model":       "openai-image-model",
+		"image.openai_size":        "openai-image-size",
+		"image.openai_quality":     "openai-image-quality",
+		"image.openai_style":       "openai-image-style",
+	}
+
+	var errs []error
+	for key, flagName := range bindings {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			errs = append(errs, fmt.Errorf("flag %q not found for key %q", flagName, key))
+			continue
+		}
+		if err := viper.BindPFlag(key, flag); err != nil {
+			errs = append(errs, fmt.Errorf("bind %q to %q: %w", key, flagName, err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 // InitConfig initializes viper configuration

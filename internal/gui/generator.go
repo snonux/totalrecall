@@ -16,6 +16,13 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
+func randomVoiceAndSpeed(voices []string) (string, float64) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	voice := voices[rng.Intn(len(voices))]
+	speed := 0.90 + rng.Float64()*0.10
+	return voice, speed
+}
+
 // translateWord translates a Bulgarian word to English
 func (a *Application) translateWord(word string) (string, error) {
 	if a.config.OpenAIKey == "" {
@@ -97,11 +104,7 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
 
 	// Select a random voice
-	rand.Seed(time.Now().UnixNano())
-	voice := allVoices[rand.Intn(len(allVoices))]
-
-	// Generate random speed between 0.90 and 1.00
-	speed := 0.90 + rand.Float64()*0.10
+	voice, speed := randomVoiceAndSpeed(allVoices)
 
 	// Create a copy of audio config with selected voice and speed
 	audioConfig := *a.audioConfig
@@ -155,16 +158,14 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 // generateAudioFront generates front audio for a bg-bg card
 func (a *Application) generateAudioFront(ctx context.Context, word string, cardDir string) (string, error) {
 	fmt.Printf("DEBUG (generateAudioFront): Called with word: %s, cardDir: %s\n", word, cardDir)
-	
+
 	if cardDir == "" {
 		fmt.Printf("DEBUG (generateAudioFront): Card directory not provided, returning error\n")
 		return "", fmt.Errorf("card directory not provided")
 	}
 
 	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	rand.Seed(time.Now().UnixNano())
-	voice := allVoices[rand.Intn(len(allVoices))]
-	speed := 0.90 + rand.Float64()*0.10
+	voice, speed := randomVoiceAndSpeed(allVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
@@ -199,16 +200,14 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 // generateAudioBack generates back audio for a bg-bg card
 func (a *Application) generateAudioBack(ctx context.Context, text string, cardDir string) (string, error) {
 	fmt.Printf("DEBUG (generateAudioBack): Called with text: %s, cardDir: %s\n", text, cardDir)
-	
+
 	if cardDir == "" {
 		fmt.Printf("DEBUG (generateAudioBack): Card directory not provided, returning error\n")
 		return "", fmt.Errorf("card directory not provided")
 	}
 
 	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	rand.Seed(time.Now().UnixNano())
-	voice := allVoices[rand.Intn(len(allVoices))]
-	speed := 0.90 + rand.Float64()*0.10
+	voice, speed := randomVoiceAndSpeed(allVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
@@ -240,9 +239,7 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 	}
 
 	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	rand.Seed(time.Now().UnixNano())
-	voice := allVoices[rand.Intn(len(allVoices))]
-	speed := 0.90 + rand.Float64()*0.10
+	voice, speed := randomVoiceAndSpeed(allVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
@@ -281,11 +278,6 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 	}
 
 	return frontFile, backFile, nil
-}
-
-// generateImages downloads images for a word
-func (a *Application) generateImages(ctx context.Context, word string, cardDir string) (string, error) {
-	return a.generateImagesWithPrompt(ctx, word, "", "", cardDir)
 }
 
 // generateImagesWithPrompt downloads a single image for a word with optional custom prompt and translation

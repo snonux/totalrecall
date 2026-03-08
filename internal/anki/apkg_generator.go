@@ -16,13 +16,13 @@ import (
 
 // APKGGenerator creates Anki package files (.apkg)
 type APKGGenerator struct {
-	deckName      string
-	deckID        int64
-	modelID       int64
-	modelIDBgBg   int64 // Separate model for bg-bg cards
-	cards         []Card
-	mediaFiles    map[string]int // maps original filename to media number
-	mediaCounter  int
+	deckName     string
+	deckID       int64
+	modelID      int64
+	modelIDBgBg  int64 // Separate model for bg-bg cards
+	cards        []Card
+	mediaFiles   map[string]int // maps original filename to media number
+	mediaCounter int
 }
 
 // NewAPKGGenerator creates a new APKG generator
@@ -52,7 +52,9 @@ func (g *APKGGenerator) GenerateAPKG(outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
 
 	// Copy media files FIRST (this populates g.mediaFiles map)
 	if err := g.copyMediaFiles(tempDir); err != nil {
@@ -92,7 +94,9 @@ func (g *APKGGenerator) createDatabase(dbPath string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// Create tables
 	if err := g.createTables(db); err != nil {
@@ -244,8 +248,8 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 
 	// Create model (note type) configuration
 	models := map[string]interface{}{
-		fmt.Sprintf("%d", g.modelID):      g.createNoteTypeConfig(),
-		fmt.Sprintf("%d", g.modelIDBgBg):  g.createBgBgNoteTypeConfig(),
+		fmt.Sprintf("%d", g.modelID):     g.createNoteTypeConfig(),
+		fmt.Sprintf("%d", g.modelIDBgBg): g.createBgBgNoteTypeConfig(),
 	}
 	modelsJSON, _ := json.Marshal(models)
 
@@ -943,10 +947,14 @@ func (g *APKGGenerator) createZipPackage(tempDir, outputPath string) error {
 	if err != nil {
 		return err
 	}
-	defer zipFile.Close()
+	defer func() {
+		_ = zipFile.Close()
+	}()
 
 	archive := zip.NewWriter(zipFile)
-	defer archive.Close()
+	defer func() {
+		_ = archive.Close()
+	}()
 
 	// Walk the temp directory and add all files to the zip
 	return filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
@@ -976,7 +984,9 @@ func (g *APKGGenerator) createZipPackage(tempDir, outputPath string) error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 
 		_, err = io.Copy(writer, file)
 		return err
@@ -995,13 +1005,17 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() {
+		_ = srcFile.Close()
+	}()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() {
+		_ = dstFile.Close()
+	}()
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err

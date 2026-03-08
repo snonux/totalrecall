@@ -94,7 +94,9 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 		}
 		return err
 	}
-	defer response.Close()
+	defer func() {
+		_ = response.Close()
+	}()
 
 	// Ensure output directory exists
 	dir := filepath.Dir(outputFile)
@@ -109,7 +111,9 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer out.Close()
+	defer func() {
+		_ = out.Close()
+	}()
 
 	// Copy the audio data
 	written, err := io.Copy(out, response)

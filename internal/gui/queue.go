@@ -65,7 +65,6 @@ type WordQueue struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
 }
 
 // NewWordQueue creates a new word processing queue
