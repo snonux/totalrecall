@@ -54,10 +54,11 @@ func TestDefaultProviderConfig(t *testing.T) {
 
 func TestNewProvider(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  *Config
-		wantErr bool
-		errMsg  string
+		name         string
+		config       *Config
+		wantErr      bool
+		errMsg       string
+		wantProvider string
 	}{
 		{
 			name:    "nil config uses defaults",
@@ -81,16 +82,33 @@ func TestNewProvider(t *testing.T) {
 			wantErr: true,
 			errMsg:  "unknown audio provider: unknown",
 		},
+		{
+			name: "gemini provider with key",
+			config: &Config{
+				Provider:     "gemini",
+				GoogleAPIKey: "test-google-key",
+			},
+			wantErr:      false,
+			wantProvider: "gemini",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewProvider(tt.config)
+			provider, err := NewProvider(tt.config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewProvider() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr && err != nil && err.Error() != tt.errMsg {
 				t.Errorf("NewProvider() error = %v, want %v", err.Error(), tt.errMsg)
+			}
+			if !tt.wantErr && tt.wantProvider != "" {
+				if provider == nil {
+					t.Fatalf("NewProvider() returned nil provider")
+				}
+				if provider.Name() != tt.wantProvider {
+					t.Fatalf("NewProvider() Name() = %v, want %v", provider.Name(), tt.wantProvider)
+				}
 			}
 		})
 	}

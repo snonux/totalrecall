@@ -141,3 +141,21 @@ func TestWriteGeminiAudioFileWritesWAV(t *testing.T) {
 		t.Fatalf("len(output) = %d, want %d", got, want)
 	}
 }
+
+func TestWriteGeminiAudioFileRejectsUnsupportedFormats(t *testing.T) {
+	dir := t.TempDir()
+	outputFile := filepath.Join(dir, "output.mp3")
+
+	err := writeGeminiAudioFile(outputFile, []byte{0x11, 0x22}, "audio/pcm")
+	if err == nil {
+		t.Fatal("writeGeminiAudioFile() expected error for non-wav output")
+	}
+
+	if !strings.Contains(err.Error(), "only supports .wav output files") {
+		t.Fatalf("writeGeminiAudioFile() error = %v, want unsupported-format message", err)
+	}
+
+	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no output file to be written, statErr=%v", statErr)
+	}
+}

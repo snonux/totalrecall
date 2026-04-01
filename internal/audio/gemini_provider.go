@@ -206,20 +206,16 @@ func writeGeminiAudioFile(outputFile string, audioData []byte, mimeType string) 
 	}
 
 	ext := strings.ToLower(filepath.Ext(outputFile))
-	mimeType = strings.ToLower(mimeType)
-	if ext == ".wav" || (ext == "" && (mimeType == "" || strings.Contains(mimeType, "pcm"))) {
-		encoded, err := encodePCMAsWAV(audioData)
-		if err != nil {
-			return err
-		}
-
-		if err := os.WriteFile(outputFile, encoded, 0644); err != nil {
-			return fmt.Errorf("failed to write output file: %w", err)
-		}
-		return nil
+	if ext != ".wav" {
+		return fmt.Errorf("Gemini TTS only supports .wav output files, got %q", outputFile)
 	}
 
-	if err := os.WriteFile(outputFile, audioData, 0644); err != nil {
+	encoded, err := encodePCMAsWAV(audioData)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(outputFile, encoded, 0644); err != nil {
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
 

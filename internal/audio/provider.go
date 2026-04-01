@@ -65,6 +65,11 @@ func NewProvider(config *Config) (Provider, error) {
 			return nil, fmt.Errorf("OpenAI API key is required")
 		}
 		return NewOpenAIProvider(config)
+	case "gemini":
+		if config.GoogleAPIKey == "" {
+			return nil, fmt.Errorf("Google API key is required")
+		}
+		return NewGeminiProvider(config)
 
 	default:
 		return nil, fmt.Errorf("unknown audio provider: %s", config.Provider)
