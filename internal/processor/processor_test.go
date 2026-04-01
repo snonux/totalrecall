@@ -397,6 +397,55 @@ func TestNewImageSearcherConfiguredNanoBananaRequiresGoogleAPIKey(t *testing.T) 
 	}
 }
 
+func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.nanobanana_model", "config-image-model")
+	viper.Set("image.nanobanana_text_model", "config-text-model")
+
+	originalConstructor := newNanoBananaImageClient
+	capturedConfig := new(image.NanoBananaConfig)
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+		*capturedConfig = *config
+		return &stubImageSearcher{}
+	}
+	t.Cleanup(func() {
+		newNanoBananaImageClient = originalConstructor
+	})
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.ImageAPI = "nanobanana"
+	flags.ImageAPISpecified = true
+	flags.NanoBananaModel = image.DefaultNanoBananaModel
+	flags.NanoBananaModelSpecified = true
+	flags.NanoBananaTextModel = image.DefaultNanoBananaTextModel
+	flags.NanoBananaTextModelSpecified = true
+
+	p := NewProcessor(flags)
+	searcher, err := p.newNanoBananaImageSearcher()
+	if err != nil {
+		t.Fatalf("newNanoBananaImageSearcher() unexpected error: %v", err)
+	}
+	if searcher == nil {
+		t.Fatal("expected searcher")
+	}
+
+	if capturedConfig.Model != image.DefaultNanoBananaModel {
+		t.Fatalf("NanoBanana Model = %q, want explicit CLI default %q", capturedConfig.Model, image.DefaultNanoBananaModel)
+	}
+	if capturedConfig.TextModel != image.DefaultNanoBananaTextModel {
+		t.Fatalf("NanoBanana TextModel = %q, want explicit CLI default %q", capturedConfig.TextModel, image.DefaultNanoBananaTextModel)
+	}
+}
+
 func TestProcessSingleWord_InvalidWord(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()

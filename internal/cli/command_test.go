@@ -435,3 +435,31 @@ func TestBindFlagsToViper(t *testing.T) {
 		t.Errorf("Expected image.provider to be openai by default, got %s", viper.GetString("image.provider"))
 	}
 }
+
+func TestMarkExplicitFlagValues(t *testing.T) {
+	flags := NewFlags()
+	cmd := &cobra.Command{}
+	setupFlags(cmd, flags)
+
+	if err := cmd.Flags().Set("image-api", "nanobanana"); err != nil {
+		t.Fatalf("Failed to set image-api flag: %v", err)
+	}
+	if err := cmd.Flags().Set("nanobanana-model", defaultNanoBananaModel); err != nil {
+		t.Fatalf("Failed to set nanobanana-model flag: %v", err)
+	}
+	if err := cmd.Flags().Set("nanobanana-text-model", defaultNanoBananaTextModel); err != nil {
+		t.Fatalf("Failed to set nanobanana-text-model flag: %v", err)
+	}
+
+	MarkExplicitFlagValues(cmd, flags)
+
+	if !flags.ImageAPISpecified {
+		t.Error("Expected ImageAPISpecified to be true")
+	}
+	if !flags.NanoBananaModelSpecified {
+		t.Error("Expected NanoBananaModelSpecified to be true")
+	}
+	if !flags.NanoBananaTextModelSpecified {
+		t.Error("Expected NanoBananaTextModelSpecified to be true")
+	}
+}

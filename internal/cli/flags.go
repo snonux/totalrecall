@@ -38,8 +38,12 @@ type Flags struct {
 
 	// NanoBananaModel is the Gemini image model used for Nano Banana generation.
 	NanoBananaModel string
+	// NanoBananaModelSpecified records whether the Nano Banana image model was explicitly set on the CLI.
+	NanoBananaModelSpecified bool
 	// NanoBananaTextModel is the Gemini text model used for Nano Banana prompt generation.
 	NanoBananaTextModel string
+	// NanoBananaTextModelSpecified records whether the Nano Banana text model was explicitly set on the CLI.
+	NanoBananaTextModelSpecified bool
 }
 
 // NewFlags creates a new Flags instance with default values

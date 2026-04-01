@@ -17,6 +17,8 @@ func TestNewFlags(t *testing.T) {
 		{"AudioFormat", flags.AudioFormat, "mp3"},
 		{"ImageAPI", flags.ImageAPI, "openai"},
 		{"ImageAPISpecified", flags.ImageAPISpecified, false},
+		{"NanoBananaModelSpecified", flags.NanoBananaModelSpecified, false},
+		{"NanoBananaTextModelSpecified", flags.NanoBananaTextModelSpecified, false},
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},
@@ -90,7 +92,7 @@ func TestFlagsStructure(t *testing.T) {
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",
 		"OpenAIImageModel", "OpenAIImageSize", "OpenAIImageQuality", "OpenAIImageStyle",
-		"NanoBananaModel", "NanoBananaTextModel",
+		"NanoBananaModel", "NanoBananaModelSpecified", "NanoBananaTextModel", "NanoBananaTextModelSpecified",
 	}
 
 	for _, fieldName := range expectedFields {

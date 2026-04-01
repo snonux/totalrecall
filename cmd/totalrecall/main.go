@@ -27,6 +27,7 @@ func main() {
 
 	// Set the run function
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		cli.MarkExplicitFlagValues(cmd, flags)
 		return runCommand(cmd, args, flags)
 	}
 
@@ -59,8 +60,6 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		flags.OpenAIImageSize = "1024x1024"
 		fmt.Printf("Note: Using image size 1024x1024 for DALL-E 3 (use --openai-image-size to override)\n")
 	}
-
-	flags.ImageAPISpecified = cmd.Flags().Changed("image-api")
 
 	// Create processor
 	proc := processor.NewProcessor(flags)

@@ -606,10 +606,10 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageSearcher, error) {
 		TextModel: p.flags.NanoBananaTextModel,
 	}
 
-	if p.flags.NanoBananaModel == image.DefaultNanoBananaModel && viper.IsSet("image.nanobanana_model") {
+	if !p.flags.NanoBananaModelSpecified && viper.IsSet("image.nanobanana_model") {
 		nanoBananaConfig.Model = viper.GetString("image.nanobanana_model")
 	}
-	if p.flags.NanoBananaTextModel == image.DefaultNanoBananaTextModel && viper.IsSet("image.nanobanana_text_model") {
+	if !p.flags.NanoBananaTextModelSpecified && viper.IsSet("image.nanobanana_text_model") {
 		nanoBananaConfig.TextModel = viper.GetString("image.nanobanana_text_model")
 	}
 

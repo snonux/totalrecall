@@ -91,6 +91,13 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	}
 }
 
+// MarkExplicitFlagValues records which CLI flags were explicitly set by the user.
+func MarkExplicitFlagValues(cmd *cobra.Command, flags *Flags) {
+	flags.ImageAPISpecified = cmd.Flags().Changed("image-api")
+	flags.NanoBananaModelSpecified = cmd.Flags().Changed("nanobanana-model")
+	flags.NanoBananaTextModelSpecified = cmd.Flags().Changed("nanobanana-text-model")
+}
+
 func bindFlagsToViper(cmd *cobra.Command) error {
 	bindings := map[string]string{
 		"audio.format":                "format",
