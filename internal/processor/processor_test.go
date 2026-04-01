@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
@@ -54,6 +55,27 @@ func (s *stubImageSearcher) Name() string {
 
 func (s *stubImageSearcher) GetLastPrompt() string {
 	return s.lastPrompt
+}
+
+type fakeAudioProvider struct {
+	generateCalls  int
+	lastText       string
+	lastOutputFile string
+}
+
+func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile string) error {
+	f.generateCalls++
+	f.lastText = text
+	f.lastOutputFile = outputFile
+	return nil
+}
+
+func (f *fakeAudioProvider) Name() string {
+	return "fake-audio"
+}
+
+func (f *fakeAudioProvider) IsAvailable() error {
+	return nil
 }
 
 func TestNewProcessor(t *testing.T) {
@@ -228,6 +250,56 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	}
 	if guiConfig.GoogleAPIKey != "test-google-key" {
 		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")
+	}
+}
+
+func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-openai-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	flags := cli.NewFlags()
+	flags.OutputDir = tempDir
+	flags.AudioFormat = "mp3"
+	flags.AllVoices = true
+
+	p := NewProcessor(flags)
+
+	if err := p.generateAudio("ябълка"); err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-openai-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-openai-voice")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if fakeProvider.lastText != "ябълка" {
+		t.Fatalf("GenerateAudio() text = %q, want %q", fakeProvider.lastText, "ябълка")
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio_sentinel-openai-voice.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want shared voice name in filename", fakeProvider.lastOutputFile)
 	}
 }
 

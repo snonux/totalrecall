@@ -38,6 +38,8 @@ var newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageS
 	return image.NewNanoBananaClient(config)
 }
 
+var newAudioProvider = audio.NewProvider
+
 // NewProcessor creates a new word processor
 func NewProcessor(flags *cli.Flags) *Processor {
 	openAIKey := cli.GetOpenAIKey()
@@ -343,7 +345,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	}
 
 	// Create the audio provider
-	provider, err := audio.NewProvider(providerConfig)
+	provider, err := newAudioProvider(providerConfig)
 	if err != nil {
 		return err
 	}

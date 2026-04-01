@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
@@ -51,6 +52,27 @@ func (f *fakePromptAwareImageClient) Name() string {
 
 func (f *fakePromptAwareImageClient) SetPromptCallback(callback func(prompt string)) {
 	f.promptCallback = callback
+}
+
+type fakeAudioProvider struct {
+	generateCalls  int
+	lastText       string
+	lastOutputFile string
+}
+
+func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile string) error {
+	f.generateCalls++
+	f.lastText = text
+	f.lastOutputFile = outputFile
+	return nil
+}
+
+func (f *fakeAudioProvider) Name() string {
+	return "fake-audio"
+}
+
+func (f *fakeAudioProvider) IsAvailable() error {
+	return nil
 }
 
 func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
@@ -125,5 +147,70 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 	}
 	if !strings.HasSuffix(outputPath, ".png") {
 		t.Fatalf("outputPath = %q, want a PNG output file", outputPath)
+	}
+}
+
+func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-gui-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	cardDir := filepath.Join(tempDir, "card")
+	if err := os.MkdirAll(cardDir, 0755); err != nil {
+		t.Fatalf("failed to create card dir: %v", err)
+	}
+
+	app := &Application{
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "mp3",
+		},
+		audioConfig: &audio.Config{
+			Provider:          "openai",
+			OutputDir:         tempDir,
+			OpenAIModel:       "gpt-4o-mini-tts",
+			OpenAIInstruction: "Speak clearly.",
+		},
+	}
+
+	outputPath, err := app.generateAudio(context.Background(), "ябълка", cardDir)
+	if err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-gui-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-gui-voice")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if fakeProvider.lastText != "ябълка" {
+		t.Fatalf("GenerateAudio() text = %q, want %q", fakeProvider.lastText, "ябълка")
+	}
+	if fakeProvider.lastOutputFile != outputPath {
+		t.Fatalf("GenerateAudio() output file = %q, want %q", fakeProvider.lastOutputFile, outputPath)
+	}
+	if !strings.HasSuffix(outputPath, "audio.mp3") {
+		t.Fatalf("outputPath = %q, want shared audio filename", outputPath)
 	}
 }

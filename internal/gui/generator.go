@@ -27,6 +27,8 @@ var newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareI
 	return image.NewNanoBananaClient(config)
 }
 
+var newAudioProvider = audio.NewProvider
+
 func randomVoiceAndSpeed(voices []string) (string, float64) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	voice := voices[rng.Intn(len(voices))]
@@ -80,7 +82,7 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	}
 
 	// Create audio provider
-	provider, err := audio.NewProvider(&audioConfig)
+	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +133,7 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	audioConfig.OpenAISpeed = speed
 	audioConfig.OutputDir = a.config.OutputDir
 
-	provider, err := audio.NewProvider(&audioConfig)
+	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
 		fmt.Printf("DEBUG (generateAudioFront): Failed to create audio provider: %v\n", err)
 		return "", err
@@ -172,7 +174,7 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 	audioConfig.OpenAISpeed = speed
 	audioConfig.OutputDir = a.config.OutputDir
 
-	provider, err := audio.NewProvider(&audioConfig)
+	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
 		fmt.Printf("DEBUG (generateAudioBack): Failed to create audio provider: %v\n", err)
 		return "", err
