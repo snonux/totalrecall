@@ -131,10 +131,7 @@ func NewFetcher(config *Config) *Fetcher {
 
 // FetchAndSave fetches phonetic information for a word and saves it to the word directory.
 func (f *Fetcher) FetchAndSave(word, wordDir string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), phoneticTimeout)
-	defer cancel()
-
-	phoneticInfo, err := f.fetchPhoneticInfo(ctx, word)
+	phoneticInfo, err := f.Fetch(word)
 	if err != nil {
 		return err
 	}
@@ -145,6 +142,14 @@ func (f *Fetcher) FetchAndSave(word, wordDir string) error {
 	}
 
 	return nil
+}
+
+// Fetch fetches phonetic information for a word.
+func (f *Fetcher) Fetch(word string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), phoneticTimeout)
+	defer cancel()
+
+	return f.fetchPhoneticInfo(ctx, word)
 }
 
 // Provider reports the configured phonetic backend.

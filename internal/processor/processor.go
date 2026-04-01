@@ -543,10 +543,12 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 func (p *Processor) RunGUIMode() error {
 	// Create GUI configuration from command line flags and viper config
 	guiConfig := &gui.Config{
-		AudioFormat:   p.flags.AudioFormat,
-		ImageProvider: p.flags.ImageAPI,
-		OpenAIKey:     cli.GetOpenAIKey(),
-		AutoPlay:      !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
+		AudioFormat:      p.flags.AudioFormat,
+		ImageProvider:    p.flags.ImageAPI,
+		OpenAIKey:        cli.GetOpenAIKey(),
+		GoogleAPIKey:     cli.GetGoogleAPIKey(),
+		PhoneticProvider: phonetic.Provider(viper.GetString("phonetic.provider")),
+		AutoPlay:         !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
 	}
 
 	// Only set OutputDir if it was explicitly provided via flag

@@ -19,12 +19,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
-	"github.com/sashabaranov/go-openai"
 
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/phonetic"
 )
 
 // Application represents the main GUI application
@@ -84,8 +84,9 @@ type Application struct {
 	autoPlayEnabled bool // Whether to automatically play audio when generated or navigated to
 
 	// Configuration
-	config      *Config
-	audioConfig *audio.Config
+	config          *Config
+	audioConfig     *audio.Config
+	phoneticFetcher *phonetic.Fetcher
 
 	// Background processing
 	ctx    context.Context
@@ -104,11 +105,13 @@ type Application struct {
 
 // Config holds GUI application configuration
 type Config struct {
-	OutputDir     string
-	AudioFormat   string
-	ImageProvider string
-	OpenAIKey     string
-	AutoPlay      bool // Whether to automatically play audio when generated or navigated to
+	OutputDir        string
+	AudioFormat      string
+	ImageProvider    string
+	OpenAIKey        string
+	GoogleAPIKey     string
+	PhoneticProvider phonetic.Provider
+	AutoPlay         bool // Whether to automatically play audio when generated or navigated to
 }
 
 // DefaultConfig returns default GUI configuration
@@ -118,10 +121,11 @@ func DefaultConfig() *Config {
 	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
 
 	return &Config{
-		OutputDir:     outputDir,
-		AudioFormat:   "mp3",
-		ImageProvider: "openai",
-		AutoPlay:      true, // Auto-play enabled by default
+		OutputDir:        outputDir,
+		AudioFormat:      "mp3",
+		ImageProvider:    "openai",
+		PhoneticProvider: phonetic.ProviderOpenAI,
+		AutoPlay:         true, // Auto-play enabled by default
 	}
 }
 
@@ -181,6 +185,11 @@ func New(config *Config) *Application {
 		OpenAISpeed:       0.9,
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
 	}
+	app.phoneticFetcher = phonetic.NewFetcher(&phonetic.Config{
+		Provider:     config.PhoneticProvider,
+		OpenAIKey:    config.OpenAIKey,
+		GoogleAPIKey: config.GoogleAPIKey,
+	})
 
 	app.setupUI()
 
@@ -2707,41 +2716,16 @@ func (a *Application) handleWordChange(oldWord, newWord string) {
 	}
 }
 
-// getPhoneticInfo fetches phonetic information for a Bulgarian word using OpenAI GPT-4o
+// getPhoneticInfo fetches phonetic information for a Bulgarian word using the shared phonetic package.
 func (a *Application) getPhoneticInfo(word string) (string, error) {
-	if a.config.OpenAIKey == "" {
-		return "", fmt.Errorf("openai API key not configured")
+	if a.phoneticFetcher == nil {
+		return "", fmt.Errorf("phonetic fetcher not initialized")
 	}
 
-	client := openai.NewClient(a.config.OpenAIKey)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	req := openai.ChatCompletionRequest{
-		Model: openai.GPT4o,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: "You are a Bulgarian language expert. Provide only the IPA (International Phonetic Alphabet) transcription for Bulgarian words. Return ONLY the IPA transcription in square brackets, nothing else. No explanations, no word labels, just the IPA.",
-			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf(`%s`, word),
-			},
-		},
-		Temperature: 0.3,
-		MaxTokens:   50,
-	}
-
-	resp, err := client.CreateChatCompletion(ctx, req)
+	phoneticInfo, err := a.phoneticFetcher.Fetch(word)
 	if err != nil {
 		return "", fmt.Errorf("failed to get phonetic info: %w", err)
 	}
 
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no response from OpenAI")
-	}
-
-	return resp.Choices[0].Message.Content, nil
+	return phoneticInfo, nil
 }

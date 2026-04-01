@@ -64,6 +64,30 @@ func TestFetchAndSave_UnknownProvider(t *testing.T) {
 	}
 }
 
+func TestFetch_OpenAIProvider(t *testing.T) {
+	originalFetch := fetchOpenAIPhonetic
+	fetchOpenAIPhonetic = func(context.Context, *openai.Client, string) (string, error) {
+		return "[ˈjɤbɐlkɐ]", nil
+	}
+	t.Cleanup(func() {
+		fetchOpenAIPhonetic = originalFetch
+	})
+
+	fetcher := NewFetcher(&Config{
+		Provider:  ProviderOpenAI,
+		OpenAIKey: "test-openai-key",
+	})
+
+	got, err := fetcher.Fetch("ябълка")
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+
+	if got != "[ˈjɤbɐlkɐ]" {
+		t.Fatalf("unexpected phonetic content %q", got)
+	}
+}
+
 func TestFetchAndSave_OpenAIProvider_WritesFile(t *testing.T) {
 	originalFetch := fetchOpenAIPhonetic
 	fetchOpenAIPhonetic = func(context.Context, *openai.Client, string) (string, error) {
@@ -89,6 +113,38 @@ func TestFetchAndSave_OpenAIProvider_WritesFile(t *testing.T) {
 	}
 
 	if got := string(content); got != "[ˈjɤbɐlkɐ]" {
+		t.Fatalf("unexpected phonetic content %q", got)
+	}
+}
+
+func TestFetch_GeminiProvider(t *testing.T) {
+	originalFetch := fetchGeminiPhonetic
+	fetchGeminiPhonetic = func(context.Context, *genai.Client, string) (string, error) {
+		return "[ˈkotka]", nil
+	}
+	t.Cleanup(func() {
+		fetchGeminiPhonetic = originalFetch
+	})
+
+	originalNewGeminiClient := newGeminiClient
+	newGeminiClient = func(context.Context, *genai.ClientConfig) (*genai.Client, error) {
+		return &genai.Client{}, nil
+	}
+	t.Cleanup(func() {
+		newGeminiClient = originalNewGeminiClient
+	})
+
+	fetcher := NewFetcher(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
+	})
+
+	got, err := fetcher.Fetch("котка")
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+
+	if got != "[ˈkotka]" {
 		t.Fatalf("unexpected phonetic content %q", got)
 	}
 }
