@@ -1,7 +1,11 @@
 package image
 
-// ArtisticStyles contains the shared pool of artistic styles used for image prompts.
-var ArtisticStyles = []string{
+import "math/rand"
+
+const defaultArtisticStyle = "simple illustration"
+
+// artisticStyles contains the shared pool of artistic styles used for image prompts.
+var artisticStyles = []string{
 	"Photorealism", "Hyperrealism", "Surrealism", "Impressionism",
 	"Minimalism", "Pop Art", "Art Nouveau", "Digital Art",
 	"Watercolor", "Oil Painting", "Pencil Sketch", "Ink Drawing",
@@ -71,4 +75,28 @@ var ArtisticStyles = []string{
 	"Memphis Group", "Radical Design", "Anti-Design", "Superstudio",
 	"Archigram", "Metabolism", "Structuralism", "Postmodernism",
 	"Minimalist Photography", "Conceptual Photography", "Staged Photography", "Candid Photography",
+}
+
+func pickArtisticStyle() string {
+	if len(artisticStyles) == 0 {
+		return ""
+	}
+
+	styles := append([]string(nil), artisticStyles...)
+
+	// Shuffle the styles to avoid bias without mutating the shared pool.
+	rand.Shuffle(len(styles), func(i, j int) {
+		styles[i], styles[j] = styles[j], styles[i]
+	})
+
+	return styles[0]
+}
+
+func chooseArtisticStyle() string {
+	style := pickArtisticStyle()
+	if style == "" {
+		return defaultArtisticStyle
+	}
+
+	return style
 }

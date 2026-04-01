@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -244,16 +243,12 @@ func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWor
 		scene = ""
 	}
 
-	// Copy the shared styles before shuffling so the package-level list stays stable.
-	styles := append([]string(nil), ArtisticStyles...)
-
-	// Shuffle the styles to avoid bias
-	rand.Shuffle(len(styles), func(i, j int) {
-		styles[i], styles[j] = styles[j], styles[i]
-	})
-
-	// Select a random style from the shuffled list
-	selectedStyle := styles[0]
+	// Select a random style from the shared pool. Fall back to a generic style if
+	// the pool has been emptied by tests or future callers.
+	selectedStyle := chooseArtisticStyle()
+	if selectedStyle == defaultArtisticStyle {
+		fmt.Printf("  No artistic styles available, using generic prompt\n")
+	}
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
 	// Define prompt components in order of importance
