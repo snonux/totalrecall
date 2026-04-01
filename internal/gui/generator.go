@@ -14,6 +14,19 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
+type promptAwareImageClient interface {
+	image.ImageSearcher
+	SetPromptCallback(func(prompt string))
+}
+
+var newOpenAIImageClient = func(config *image.OpenAIConfig) promptAwareImageClient {
+	return image.NewOpenAIClient(config)
+}
+
+var newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareImageClient {
+	return image.NewNanoBananaClient(config)
+}
+
 func randomVoiceAndSpeed(voices []string) (string, float64) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	voice := voices[rng.Intn(len(voices))]
@@ -232,27 +245,9 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 
 // generateImagesWithPrompt downloads a single image for a word with optional custom prompt and translation
 func (a *Application) generateImagesWithPrompt(ctx context.Context, word string, customPrompt string, translation string, cardDir string) (string, error) {
-	// Create image searcher based on provider
-	var searcher image.ImageSearcher
-	var err error
-
-	switch a.config.ImageProvider {
-	case "openai":
-		openaiConfig := &image.OpenAIConfig{
-			APIKey:  a.config.OpenAIKey,
-			Model:   "dall-e-2", // DALL-E 2 supports 512x512
-			Size:    "512x512",  // Half of 1024x1024
-			Quality: "standard",
-			Style:   "natural",
-		}
-
-		openaiClient := image.NewOpenAIClient(openaiConfig)
-		searcher = openaiClient
-		if openaiConfig.APIKey == "" {
-			return "", fmt.Errorf("OpenAI API key is required for image generation")
-		}
-	default:
-		return "", fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
+	searcher, err := a.newImageSearcher()
+	if err != nil {
+		return "", err
 	}
 
 	// Use the provided card directory
@@ -271,29 +266,8 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 
 	downloader := image.NewDownloader(searcher, downloadOpts)
 
-	// Set up callback for OpenAI to update prompt immediately when it's generated
-	if a.config.ImageProvider == "openai" {
-		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
-			openaiClient.SetPromptCallback(func(prompt string) {
-				// Save the prompt to disk immediately for this word
-				promptFile := filepath.Join(cardDir, "image_prompt.txt")
-				if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
-					fmt.Printf("Warning: Failed to save prompt for '%s': %v\n", word, err)
-				}
-
-				// Only update UI if this word is still the current word
-				a.mu.Lock()
-				isCurrentWord := a.currentWord == word
-				a.mu.Unlock()
-
-				if isCurrentWord {
-					fyne.Do(func() {
-						a.imagePromptEntry.SetText(prompt)
-					})
-				}
-			})
-		}
-	}
+	// Set up a prompt callback so the GUI and on-disk metadata update as soon as the prompt exists.
+	searcher.SetPromptCallback(a.imagePromptCallback(cardDir, word))
 
 	// Create search options with custom prompt and translation if provided
 	searchOpts := image.DefaultSearchOptions(word)
@@ -313,6 +287,58 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word string,
 	// The prompt has already been saved and UI updated via the callback
 
 	return path, nil
+}
+
+func (a *Application) newImageSearcher() (promptAwareImageClient, error) {
+	switch a.config.ImageProvider {
+	case imageProviderOpenAI:
+		if a.config.OpenAIKey == "" {
+			return nil, fmt.Errorf("OpenAI API key is required for image generation")
+		}
+
+		openaiConfig := &image.OpenAIConfig{
+			APIKey:  a.config.OpenAIKey,
+			Model:   "dall-e-2", // DALL-E 2 supports 512x512
+			Size:    "512x512",  // Half of 1024x1024
+			Quality: "standard",
+			Style:   "natural",
+		}
+
+		return newOpenAIImageClient(openaiConfig), nil
+	case imageProviderNanoBanana:
+		if a.config.GoogleAPIKey == "" {
+			return nil, fmt.Errorf("Google API key is required for image generation")
+		}
+
+		nanoBananaConfig := &image.NanoBananaConfig{
+			APIKey: a.config.GoogleAPIKey,
+		}
+
+		return newNanoBananaImageClient(nanoBananaConfig), nil
+	default:
+		return nil, fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
+	}
+}
+
+func (a *Application) imagePromptCallback(cardDir, word string) func(prompt string) {
+	return func(prompt string) {
+		// Save the prompt to disk immediately for this word.
+		promptFile := filepath.Join(cardDir, "image_prompt.txt")
+		if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
+			fmt.Printf("Warning: Failed to save prompt for '%s': %v\n", word, err)
+		}
+
+		// Only update UI if this word is still the current word.
+		a.mu.Lock()
+		isCurrentWord := a.currentWord == word
+		a.mu.Unlock()
+
+		if isCurrentWord && a.imagePromptEntry != nil {
+			fyne.Do(func() {
+				a.imagePromptEntry.SetText(prompt)
+			})
+		}
+	}
 }
 
 // saveAudioAttribution saves attribution info for generated audio

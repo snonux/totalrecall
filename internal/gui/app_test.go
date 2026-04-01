@@ -12,6 +12,9 @@ func TestDefaultConfigUsesOpenAITranslationProvider(t *testing.T) {
 	if config.TranslationProvider != translation.ProviderOpenAI {
 		t.Fatalf("DefaultConfig() translation provider = %q, want %q", config.TranslationProvider, translation.ProviderOpenAI)
 	}
+	if config.ImageProvider != imageProviderNanoBanana {
+		t.Fatalf("DefaultConfig() image provider = %q, want %q", config.ImageProvider, imageProviderNanoBanana)
+	}
 }
 
 func TestTranslationConfigForApp(t *testing.T) {

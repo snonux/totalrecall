@@ -510,8 +510,8 @@ func (a *Application) loadExistingFiles(word string) {
 			a.imageDisplay.SetImages([]string{a.currentImage})
 		})
 
-		// Try to load the prompt from attribution file if using OpenAI
-		if a.config.ImageProvider == "openai" {
+		// Try to load the prompt from attribution file for AI image providers.
+		if a.config.ImageProvider == imageProviderOpenAI || a.config.ImageProvider == imageProviderNanoBanana {
 			// Look for attribution file
 			baseImagePath := a.currentImage
 			attrPath := strings.TrimSuffix(baseImagePath, filepath.Ext(baseImagePath)) + "_attribution.txt"
@@ -523,9 +523,11 @@ func (a *Application) loadExistingFiles(word string) {
 					if strings.HasPrefix(line, "Prompt used:") && i+1 < len(lines) {
 						// The prompt is on the next line
 						prompt := strings.TrimSpace(lines[i+1])
-						fyne.Do(func() {
-							a.imagePromptEntry.SetText(prompt)
-						})
+						if a.imagePromptEntry != nil {
+							fyne.Do(func() {
+								a.imagePromptEntry.SetText(prompt)
+							})
+						}
 						break
 					}
 				}

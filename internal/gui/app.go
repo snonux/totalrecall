@@ -117,6 +117,11 @@ type Config struct {
 	AutoPlay            bool // Whether to automatically play audio when generated or navigated to
 }
 
+const (
+	imageProviderOpenAI     = "openai"
+	imageProviderNanoBanana = "nanobanana"
+)
+
 // DefaultConfig returns default GUI configuration
 func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
@@ -126,7 +131,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		OutputDir:           outputDir,
 		AudioFormat:         "mp3",
-		ImageProvider:       "openai",
+		ImageProvider:       imageProviderNanoBanana,
 		TranslationProvider: translation.ProviderOpenAI,
 		PhoneticProvider:    phonetic.ProviderOpenAI,
 		AutoPlay:            true, // Auto-play enabled by default
