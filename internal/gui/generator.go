@@ -6,11 +6,9 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
-	"github.com/sashabaranov/go-openai"
 
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/image"
@@ -25,68 +23,20 @@ func randomVoiceAndSpeed(voices []string) (string, float64) {
 
 // translateWord translates a Bulgarian word to English
 func (a *Application) translateWord(word string) (string, error) {
-	if a.config.OpenAIKey == "" {
-		return "", fmt.Errorf("OpenAI API key not configured")
+	if a.translator == nil {
+		return "", fmt.Errorf("translation service not configured")
 	}
 
-	client := openai.NewClient(a.config.OpenAIKey)
-
-	req := openai.ChatCompletionRequest{
-		Model: openai.GPT4oMini,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf("Translate the Bulgarian word '%s' to English. Respond with only the English translation, nothing else.", word),
-			},
-		},
-		MaxTokens:   50,
-		Temperature: 0.3,
-	}
-
-	resp, err := client.CreateChatCompletion(a.ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("OpenAI API error: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no translation returned")
-	}
-
-	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
-	return translation, nil
+	return a.translator.TranslateWord(word)
 }
 
 // translateEnglishToBulgarian translates an English word to Bulgarian
 func (a *Application) translateEnglishToBulgarian(word string) (string, error) {
-	if a.config.OpenAIKey == "" {
-		return "", fmt.Errorf("OpenAI API key not configured")
+	if a.translator == nil {
+		return "", fmt.Errorf("translation service not configured")
 	}
 
-	client := openai.NewClient(a.config.OpenAIKey)
-
-	req := openai.ChatCompletionRequest{
-		Model: openai.GPT4oMini,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf("Translate the English word '%s' to Bulgarian. Respond with only the Bulgarian translation in Cyrillic script, nothing else.", word),
-			},
-		},
-		MaxTokens:   50,
-		Temperature: 0.3,
-	}
-
-	resp, err := client.CreateChatCompletion(a.ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("OpenAI API error: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no translation returned")
-	}
-
-	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
-	return translation, nil
+	return a.translator.TranslateEnglishToBulgarian(word)
 }
 
 // generateAudio generates audio for a word

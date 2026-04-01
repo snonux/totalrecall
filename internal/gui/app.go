@@ -25,6 +25,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
+	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
 // Application represents the main GUI application
@@ -87,6 +88,7 @@ type Application struct {
 	config          *Config
 	audioConfig     *audio.Config
 	phoneticFetcher *phonetic.Fetcher
+	translator      *translation.Translator
 
 	// Background processing
 	ctx    context.Context
@@ -105,13 +107,14 @@ type Application struct {
 
 // Config holds GUI application configuration
 type Config struct {
-	OutputDir        string
-	AudioFormat      string
-	ImageProvider    string
-	OpenAIKey        string
-	GoogleAPIKey     string
-	PhoneticProvider phonetic.Provider
-	AutoPlay         bool // Whether to automatically play audio when generated or navigated to
+	OutputDir           string
+	AudioFormat         string
+	ImageProvider       string
+	OpenAIKey           string
+	GoogleAPIKey        string
+	TranslationProvider translation.Provider
+	PhoneticProvider    phonetic.Provider
+	AutoPlay            bool // Whether to automatically play audio when generated or navigated to
 }
 
 // DefaultConfig returns default GUI configuration
@@ -121,11 +124,12 @@ func DefaultConfig() *Config {
 	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
 
 	return &Config{
-		OutputDir:        outputDir,
-		AudioFormat:      "mp3",
-		ImageProvider:    "openai",
-		PhoneticProvider: phonetic.ProviderOpenAI,
-		AutoPlay:         true, // Auto-play enabled by default
+		OutputDir:           outputDir,
+		AudioFormat:         "mp3",
+		ImageProvider:       "openai",
+		TranslationProvider: translation.ProviderGemini,
+		PhoneticProvider:    phonetic.ProviderOpenAI,
+		AutoPlay:            true, // Auto-play enabled by default
 	}
 }
 
@@ -190,6 +194,7 @@ func New(config *Config) *Application {
 		OpenAIKey:    config.OpenAIKey,
 		GoogleAPIKey: config.GoogleAPIKey,
 	})
+	app.translator = translation.NewTranslator(translationConfigForApp(config))
 
 	app.setupUI()
 
@@ -200,6 +205,31 @@ func New(config *Config) *Application {
 	app.updateQueueStatus()
 
 	return app
+}
+
+// translationConfigForApp normalizes the GUI translation settings.
+// When no provider is explicitly configured, Gemini is preferred if a Google
+// API key is available; otherwise the GUI falls back to OpenAI so existing
+// OpenAI-only setups continue to work.
+func translationConfigForApp(config *Config) *translation.Config {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	provider := config.TranslationProvider
+	if provider == "" {
+		if strings.TrimSpace(config.GoogleAPIKey) != "" {
+			provider = translation.ProviderGemini
+		} else {
+			provider = translation.ProviderOpenAI
+		}
+	}
+
+	return &translation.Config{
+		Provider:     provider,
+		OpenAIKey:    config.OpenAIKey,
+		GoogleAPIKey: config.GoogleAPIKey,
+	}
 }
 
 // setupUI creates the main user interface
