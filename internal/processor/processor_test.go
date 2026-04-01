@@ -471,6 +471,70 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	}
 }
 
+func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "openai")
+	viper.Set("audio.format", "mp3")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioProvider = "openai"
+	flags.AudioFormat = "wav"
+
+	p := NewProcessor(flags)
+	wordDir := p.findOrCreateWordDirectory("ябълка")
+	if err := p.generateAudioWithVoiceAndFilenameInDir("ябълка", "alloy", "audio", wordDir); err != nil {
+		t.Fatalf("generateAudioWithVoiceAndFilenameInDir() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OutputFormat != "mp3" {
+		t.Fatalf("captured OutputFormat = %q, want %q", capturedConfig.OutputFormat, "mp3")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want mp3 output", fakeProvider.lastOutputFile)
+	}
+
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	for _, want := range []string{
+		"provider=openai",
+		"model=gpt-4o-mini-tts",
+		"voice=alloy",
+		"format=mp3",
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
+}
+
 func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()

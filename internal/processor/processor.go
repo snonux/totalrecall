@@ -256,6 +256,12 @@ func (p *Processor) effectiveAudioFormat() string {
 		return "wav"
 	}
 
+	if viper.IsSet("audio.format") {
+		if format := strings.ToLower(strings.TrimSpace(viper.GetString("audio.format"))); format != "" {
+			return format
+		}
+	}
+
 	if p != nil && p.flags != nil {
 		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
 			return format
