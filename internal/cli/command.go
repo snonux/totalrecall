@@ -20,7 +20,7 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
 It creates audio pronunciation files using OpenAI TTS and downloads
-representative images from web search APIs.
+representative images using OpenAI or Gemini Nano Banana.
 
 Examples:
   totalrecall                     # Launch interactive GUI (default)
@@ -55,7 +55,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (only openai supported)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (openai or nanobanana; default: nanobanana)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
@@ -79,6 +79,10 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.OpenAIImageQuality, "openai-image-quality", flags.OpenAIImageQuality, "Image quality: standard or hd (dall-e-3 only)")
 	cmd.Flags().StringVar(&flags.OpenAIImageStyle, "openai-image-style", flags.OpenAIImageStyle, "Image style: natural or vivid (dall-e-3 only)")
 
+	// Nano Banana Image Generation flags
+	cmd.Flags().StringVar(&flags.NanoBananaModel, "nanobanana-model", flags.NanoBananaModel, "Nano Banana image model (Gemini image preview model)")
+	cmd.Flags().StringVar(&flags.NanoBananaTextModel, "nanobanana-text-model", flags.NanoBananaTextModel, "Nano Banana text model for prompt generation")
+
 	// Bind flags to viper
 	if err := bindFlagsToViper(cmd); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to bind flags to config: %v\n", err)
@@ -87,17 +91,19 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 
 func bindFlagsToViper(cmd *cobra.Command) error {
 	bindings := map[string]string{
-		"audio.format":             "format",
-		"audio.openai_model":       "openai-model",
-		"audio.openai_voice":       "openai-voice",
-		"audio.openai_speed":       "openai-speed",
-		"audio.openai_instruction": "openai-instruction",
-		"output.directory":         "output",
-		"image.provider":           "image-api",
-		"image.openai_model":       "openai-image-model",
-		"image.openai_size":        "openai-image-size",
-		"image.openai_quality":     "openai-image-quality",
-		"image.openai_style":       "openai-image-style",
+		"audio.format":                "format",
+		"audio.openai_model":          "openai-model",
+		"audio.openai_voice":          "openai-voice",
+		"audio.openai_speed":          "openai-speed",
+		"audio.openai_instruction":    "openai-instruction",
+		"output.directory":            "output",
+		"image.provider":              "image-api",
+		"image.openai_model":          "openai-image-model",
+		"image.openai_size":           "openai-image-size",
+		"image.openai_quality":        "openai-image-quality",
+		"image.openai_style":          "openai-image-style",
+		"image.nanobanana_model":      "nanobanana-model",
+		"image.nanobanana_text_model": "nanobanana-text-model",
 	}
 
 	var errs []error
@@ -156,7 +162,8 @@ func GetOpenAIKey() string {
 	return viper.GetString("audio.openai_key")
 }
 
-// GetGoogleAPIKey retrieves the Google API key from environment or config.
+// GetGoogleAPIKey retrieves the Google API key from GOOGLE_API_KEY or config.
+// It prefers image.google_api_key and falls back to google.api_key for older configs.
 func GetGoogleAPIKey() string {
 	// First check environment variable
 	if key := os.Getenv("GOOGLE_API_KEY"); key != "" {
@@ -164,5 +171,10 @@ func GetGoogleAPIKey() string {
 	}
 
 	// Then check config file
+	if key := viper.GetString("image.google_api_key"); key != "" {
+		return key
+	}
+
+	// Fall back to the legacy key for compatibility with older configs.
 	return viper.GetString("google.api_key")
 }

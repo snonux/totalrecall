@@ -50,6 +50,8 @@ func TestCreateRootCommand(t *testing.T) {
 		{"openai-image-size", true},
 		{"openai-image-quality", true},
 		{"openai-image-style", true},
+		{"nanobanana-model", true},
+		{"nanobanana-text-model", true},
 	}
 
 	for _, tt := range flagTests {
@@ -92,6 +94,30 @@ func TestSetupFlags(t *testing.T) {
 	}
 	if formatFlag.DefValue != "mp3" {
 		t.Errorf("Expected default format to be mp3, got %s", formatFlag.DefValue)
+	}
+
+	imageAPIFlag := cmd.Flags().Lookup("image-api")
+	if imageAPIFlag == nil {
+		t.Fatal("image-api flag not found")
+	}
+	if imageAPIFlag.DefValue != "nanobanana" {
+		t.Errorf("Expected default image-api to be nanobanana, got %s", imageAPIFlag.DefValue)
+	}
+
+	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
+	if nanoBananaModelFlag == nil {
+		t.Fatal("nanobanana-model flag not found")
+	}
+	if nanoBananaModelFlag.DefValue != "gemini-3.1-flash-image-preview" {
+		t.Errorf("Expected default nanobanana-model to be gemini-3.1-flash-image-preview, got %s", nanoBananaModelFlag.DefValue)
+	}
+
+	nanoBananaTextModelFlag := cmd.Flags().Lookup("nanobanana-text-model")
+	if nanoBananaTextModelFlag == nil {
+		t.Fatal("nanobanana-text-model flag not found")
+	}
+	if nanoBananaTextModelFlag.DefValue != "gemini-2.5-flash" {
+		t.Errorf("Expected default nanobanana-text-model to be gemini-2.5-flash, got %s", nanoBananaTextModelFlag.DefValue)
 	}
 }
 
@@ -291,7 +317,7 @@ func TestGetGoogleAPIKey(t *testing.T) {
 			}
 
 			if tt.configKey != "" {
-				viper.Set("google.api_key", tt.configKey)
+				viper.Set("image.google_api_key", tt.configKey)
 			}
 
 			got := GetGoogleAPIKey()
@@ -327,6 +353,12 @@ func TestBindFlagsToViper(t *testing.T) {
 	if err := cmd.Flags().Set("openai-model", "tts-1-hd"); err != nil {
 		t.Fatalf("Failed to set openai-model flag: %v", err)
 	}
+	if err := cmd.Flags().Set("nanobanana-model", "gemini-3.1-flash-image-preview"); err != nil {
+		t.Fatalf("Failed to set nanobanana-model flag: %v", err)
+	}
+	if err := cmd.Flags().Set("nanobanana-text-model", "gemini-2.5-flash"); err != nil {
+		t.Fatalf("Failed to set nanobanana-text-model flag: %v", err)
+	}
 
 	if err := bindFlagsToViper(cmd); err != nil {
 		t.Fatalf("bindFlagsToViper() failed: %v", err)
@@ -343,5 +375,11 @@ func TestBindFlagsToViper(t *testing.T) {
 
 	if viper.GetString("audio.openai_model") != "tts-1-hd" {
 		t.Errorf("Expected audio.openai_model to be tts-1-hd, got %s", viper.GetString("audio.openai_model"))
+	}
+	if viper.GetString("image.nanobanana_model") != "gemini-3.1-flash-image-preview" {
+		t.Errorf("Expected image.nanobanana_model to be gemini-3.1-flash-image-preview, got %s", viper.GetString("image.nanobanana_model"))
+	}
+	if viper.GetString("image.nanobanana_text_model") != "gemini-2.5-flash" {
+		t.Errorf("Expected image.nanobanana_text_model to be gemini-2.5-flash, got %s", viper.GetString("image.nanobanana_text_model"))
 	}
 }

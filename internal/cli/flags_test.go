@@ -15,7 +15,7 @@ func TestNewFlags(t *testing.T) {
 		expected interface{}
 	}{
 		{"AudioFormat", flags.AudioFormat, "mp3"},
-		{"ImageAPI", flags.ImageAPI, "openai"},
+		{"ImageAPI", flags.ImageAPI, "nanobanana"},
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},
@@ -23,6 +23,8 @@ func TestNewFlags(t *testing.T) {
 		{"OpenAIImageSize", flags.OpenAIImageSize, "512x512"},
 		{"OpenAIImageQuality", flags.OpenAIImageQuality, "standard"},
 		{"OpenAIImageStyle", flags.OpenAIImageStyle, "natural"},
+		{"NanoBananaModel", flags.NanoBananaModel, "gemini-3.1-flash-image-preview"},
+		{"NanoBananaTextModel", flags.NanoBananaTextModel, "gemini-2.5-flash"},
 	}
 
 	for _, tt := range tests {
@@ -87,6 +89,7 @@ func TestFlagsStructure(t *testing.T) {
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",
 		"OpenAIImageModel", "OpenAIImageSize", "OpenAIImageQuality", "OpenAIImageStyle",
+		"NanoBananaModel", "NanoBananaTextModel",
 	}
 
 	for _, fieldName := range expectedFields {
