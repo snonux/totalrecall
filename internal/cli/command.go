@@ -20,9 +20,9 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
 It creates audio pronunciation files using OpenAI TTS and downloads
-representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Use --image-api for explicit CLI runs; it currently supports OpenAI only. Nano Banana CLI selection is pending z8.
+representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Explicit CLI runs can use OpenAI or Nano Banana via --image-api, and config files can set image.provider too.
 
-Nano Banana model and text-model flags are exposed for upcoming runtime wiring.
+Nano Banana model and text-model flags are available for Nano Banana image generation.
 
 Examples:
   totalrecall                     # Launch interactive GUI (default)
@@ -57,7 +57,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (OpenAI only for now; GUI no-arg path defaults to Nano Banana)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
@@ -82,8 +82,8 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.OpenAIImageStyle, "openai-image-style", flags.OpenAIImageStyle, "Image style: natural or vivid (dall-e-3 only)")
 
 	// Nano Banana Image Generation flags
-	cmd.Flags().StringVar(&flags.NanoBananaModel, "nanobanana-model", flags.NanoBananaModel, "Nano Banana image model for upcoming runtime wiring")
-	cmd.Flags().StringVar(&flags.NanoBananaTextModel, "nanobanana-text-model", flags.NanoBananaTextModel, "Nano Banana text model for upcoming runtime wiring")
+	cmd.Flags().StringVar(&flags.NanoBananaModel, "nanobanana-model", flags.NanoBananaModel, "Nano Banana image model used when Nano Banana image generation is selected")
+	cmd.Flags().StringVar(&flags.NanoBananaTextModel, "nanobanana-text-model", flags.NanoBananaTextModel, "Nano Banana text model used when Nano Banana image generation is selected")
 
 	// Bind flags to viper
 	if err := bindFlagsToViper(cmd); err != nil {

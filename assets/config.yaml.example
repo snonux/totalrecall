@@ -42,7 +42,7 @@ google:
 
 # Image configuration
 image:
-  # Provider: currently only openai is supported
+  # Provider: openai or nanobanana
   provider: openai
   
   # OpenAI DALL-E settings
@@ -50,6 +50,10 @@ image:
   openai_size: 1024x1024     # Options vary by model
   openai_quality: standard   # Options: standard, hd (dall-e-3 only)
   openai_style: natural      # Options: natural, vivid (dall-e-3 only)
+
+  # Nano Banana settings
+  nanobanana_model: gemini-3.1-flash-image-preview
+  nanobanana_text_model: gemini-2.5-flash
 
 # Output configuration
 output:

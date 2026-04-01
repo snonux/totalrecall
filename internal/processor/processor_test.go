@@ -289,6 +289,114 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	}
 }
 
+func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpecified(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.provider", "nanobanana")
+	viper.Set("image.nanobanana_model", "config-image-model")
+	viper.Set("image.nanobanana_text_model", "config-text-model")
+
+	originalConstructor := newNanoBananaImageClient
+	stubSearcher := &stubImageSearcher{}
+	capturedConfig := new(image.NanoBananaConfig)
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+		*capturedConfig = *config
+		return stubSearcher
+	}
+	t.Cleanup(func() {
+		newNanoBananaImageClient = originalConstructor
+	})
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = false
+
+	p := NewProcessor(flags)
+	if err := p.downloadImagesWithTranslation("ябълка", "apple"); err != nil {
+		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
+	}
+
+	if capturedConfig.APIKey != "test-google-key" {
+		t.Fatalf("NanoBanana APIKey = %q, want %q", capturedConfig.APIKey, "test-google-key")
+	}
+	if capturedConfig.Model != "config-image-model" {
+		t.Fatalf("NanoBanana Model = %q, want %q", capturedConfig.Model, "config-image-model")
+	}
+	if capturedConfig.TextModel != "config-text-model" {
+		t.Fatalf("NanoBanana TextModel = %q, want %q", capturedConfig.TextModel, "config-text-model")
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected word directory to be created")
+	}
+
+	promptData, err := os.ReadFile(filepath.Join(wordDir, "image_prompt.txt"))
+	if err != nil {
+		t.Fatalf("expected prompt file: %v", err)
+	}
+	if got := strings.TrimSpace(string(promptData)); got != stubSearcher.GetLastPrompt() {
+		t.Fatalf("prompt file = %q, want %q", got, stubSearcher.GetLastPrompt())
+	}
+}
+
+func TestNewImageSearcherRejectsUnknownConfiguredProvider(t *testing.T) {
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.provider", "not-a-real-provider")
+
+	flags := cli.NewFlags()
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = false
+	p := NewProcessor(flags)
+
+	_, err := p.newImageSearcher()
+	if err == nil {
+		t.Fatal("expected error for unknown configured provider")
+	}
+	if got := err.Error(); got != "unknown image provider: not-a-real-provider" {
+		t.Fatalf("newImageSearcher() error = %q, want %q", got, "unknown image provider: not-a-real-provider")
+	}
+}
+
+func TestNewImageSearcherConfiguredNanoBananaRequiresGoogleAPIKey(t *testing.T) {
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.provider", "nanobanana")
+
+	flags := cli.NewFlags()
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = false
+	p := NewProcessor(flags)
+
+	_, err := p.newImageSearcher()
+	if err == nil {
+		t.Fatal("expected error when Google API key is missing for Nano Banana")
+	}
+	if got := err.Error(); got != "Google API key is required for image generation" {
+		t.Fatalf("newImageSearcher() error = %q, want %q", got, "Google API key is required for image generation")
+	}
+}
+
 func TestProcessSingleWord_InvalidWord(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()

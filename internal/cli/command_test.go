@@ -26,8 +26,8 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Long, "uses Nano Banana for images by default") {
 		t.Errorf("Expected Long description to describe the Nano Banana GUI default")
 	}
-	if !strings.Contains(cmd.Long, "Use --image-api for explicit CLI runs; it currently supports OpenAI only") {
-		t.Errorf("Expected Long description to explain the current explicit CLI image-provider matrix")
+	if !strings.Contains(cmd.Long, "Explicit CLI runs can use OpenAI or Nano Banana via --image-api") {
+		t.Errorf("Expected Long description to describe explicit CLI Nano Banana support")
 	}
 
 	// Test that flags are set up
@@ -109,8 +109,8 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag.DefValue != "openai" {
 		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
 	}
-	if imageAPIFlag.Usage != "Image source for explicit CLI runs (OpenAI only for now; GUI no-arg path defaults to Nano Banana)" {
-		t.Errorf("Expected image-api help to describe the GUI Nano Banana default and OpenAI-only CLI image path, got %q", imageAPIFlag.Usage)
+	if imageAPIFlag.Usage != "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)" {
+		t.Errorf("Expected image-api help to describe CLI Nano Banana support and config fallback, got %q", imageAPIFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
@@ -120,8 +120,8 @@ func TestSetupFlags(t *testing.T) {
 	if nanoBananaModelFlag.DefValue != "gemini-3.1-flash-image-preview" {
 		t.Errorf("Expected default nanobanana-model to be gemini-3.1-flash-image-preview, got %s", nanoBananaModelFlag.DefValue)
 	}
-	if !strings.Contains(nanoBananaModelFlag.Usage, "upcoming runtime wiring") {
-		t.Errorf("Expected nanobanana-model help to describe future wiring, got %q", nanoBananaModelFlag.Usage)
+	if !strings.Contains(nanoBananaModelFlag.Usage, "selected") {
+		t.Errorf("Expected nanobanana-model help to describe supported Nano Banana selection, got %q", nanoBananaModelFlag.Usage)
 	}
 
 	nanoBananaTextModelFlag := cmd.Flags().Lookup("nanobanana-text-model")
@@ -131,8 +131,8 @@ func TestSetupFlags(t *testing.T) {
 	if nanoBananaTextModelFlag.DefValue != "gemini-2.5-flash" {
 		t.Errorf("Expected default nanobanana-text-model to be gemini-2.5-flash, got %s", nanoBananaTextModelFlag.DefValue)
 	}
-	if !strings.Contains(nanoBananaTextModelFlag.Usage, "upcoming runtime wiring") {
-		t.Errorf("Expected nanobanana-text-model help to describe future wiring, got %q", nanoBananaTextModelFlag.Usage)
+	if !strings.Contains(nanoBananaTextModelFlag.Usage, "selected") {
+		t.Errorf("Expected nanobanana-text-model help to describe supported Nano Banana selection, got %q", nanoBananaTextModelFlag.Usage)
 	}
 }
 

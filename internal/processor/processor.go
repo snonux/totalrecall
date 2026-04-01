@@ -546,14 +546,28 @@ func (p *Processor) guiConfigForRunMode() *gui.Config {
 }
 
 func (p *Processor) newImageSearcher() (image.ImageSearcher, error) {
-	switch p.flags.ImageAPI {
+	provider := p.imageProviderForRunMode()
+
+	switch provider {
 	case "openai":
 		return p.newOpenAIImageSearcher()
 	case "nanobanana":
 		return p.newNanoBananaImageSearcher()
 	default:
-		return nil, fmt.Errorf("unknown image provider: %s", p.flags.ImageAPI)
+		return nil, fmt.Errorf("unknown image provider: %s", provider)
 	}
+}
+
+func (p *Processor) imageProviderForRunMode() string {
+	if p.flags.ImageAPISpecified {
+		return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
+	}
+
+	if provider := strings.ToLower(strings.TrimSpace(viper.GetString("image.provider"))); provider != "" {
+		return provider
+	}
+
+	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 }
 
 func (p *Processor) newOpenAIImageSearcher() (image.ImageSearcher, error) {
