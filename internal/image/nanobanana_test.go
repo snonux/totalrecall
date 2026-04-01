@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -106,6 +107,215 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 	}
 	if !strings.HasPrefix(results[0].URL, "data:image/png;base64,") {
 		t.Fatalf("expected PNG data URI, got %q", results[0].URL)
+	}
+}
+
+func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	originalStyles := append([]string(nil), ArtisticStyles...)
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+		ArtisticStyles = originalStyles
+	})
+
+	ArtisticStyles = []string{"Photorealism"}
+
+	var translationCalls int
+	var sceneCalls int
+	var gotPrompt string
+	var callbackPrompt string
+
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
+		switch {
+		case strings.Contains(systemPrompt, "Bulgarian language expert"):
+			translationCalls++
+			if temperature != 0.3 || maxOutputTokens != 50 {
+				t.Fatalf("translation params = %v/%d, want 0.3/50", temperature, maxOutputTokens)
+			}
+			if !strings.Contains(userPrompt, "ябълка") {
+				t.Fatalf("translation prompt = %q, want Bulgarian query", userPrompt)
+			}
+			return "apple", nil
+		case strings.Contains(systemPrompt, "educational flashcards for language learning"):
+			sceneCalls++
+			if temperature != 0.7 || maxOutputTokens != 100 {
+				t.Fatalf("scene params = %v/%d, want 0.7/100", temperature, maxOutputTokens)
+			}
+			if !strings.Contains(userPrompt, "apple") {
+				t.Fatalf("scene prompt = %q, want English translation", userPrompt)
+			}
+			return "A bright apple sits centered on a wooden table.", nil
+		default:
+			t.Fatalf("unexpected system prompt: %q", systemPrompt)
+			return "", nil
+		}
+	}
+
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+		gotPrompt = prompt
+		return mustJPEGBytes(t), "image/jpeg", nil
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	callbackCalled := false
+	client.SetPromptCallback(func(prompt string) {
+		callbackCalled = true
+		callbackPrompt = prompt
+	})
+
+	results, err := client.Search(context.Background(), DefaultSearchOptions("ябълка"))
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v", err)
+	}
+	if translationCalls != 1 {
+		t.Fatalf("translationCalls = %d, want 1", translationCalls)
+	}
+	if sceneCalls != 1 {
+		t.Fatalf("sceneCalls = %d, want 1", sceneCalls)
+	}
+	if !callbackCalled {
+		t.Fatal("expected prompt callback to be called")
+	}
+	if callbackPrompt != gotPrompt {
+		t.Fatalf("prompt callback = %q, want %q", callbackPrompt, gotPrompt)
+	}
+	if client.GetLastPrompt() != gotPrompt {
+		t.Fatalf("GetLastPrompt() = %q, want %q", client.GetLastPrompt(), gotPrompt)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	result := results[0]
+	if result.Source != nanoBananaSource {
+		t.Fatalf("Source = %q, want %q", result.Source, nanoBananaSource)
+	}
+	if result.Width != nanoBananaImageWidth || result.Height != nanoBananaImageHeight {
+		t.Fatalf("Size = %dx%d, want %dx%d", result.Width, result.Height, nanoBananaImageWidth, nanoBananaImageHeight)
+	}
+	if !strings.Contains(result.Description, "apple") {
+		t.Fatalf("Description = %q, want translated word", result.Description)
+	}
+	if !strings.Contains(gotPrompt, "Generate a Photorealism depicting: A bright apple sits centered on a wooden table.") {
+		t.Fatalf("Prompt = %q, want generated scene and selected style", gotPrompt)
+	}
+
+	reader, err := client.Download(context.Background(), result.URL)
+	if err != nil {
+		t.Fatalf("Download() unexpected error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = reader.Close()
+	})
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll() unexpected error: %v", err)
+	}
+	if !bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("Search output was not normalized to PNG")
+	}
+}
+
+func TestNanoBananaClient_Search_TranslationFailureFallsBackToQuery(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	originalStyles := append([]string(nil), ArtisticStyles...)
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+		ArtisticStyles = originalStyles
+	})
+
+	ArtisticStyles = []string{"Photorealism"}
+
+	var sceneSawOriginalQuery bool
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, userPrompt string, _ float32, _ int32) (string, error) {
+		if strings.Contains(systemPrompt, "Bulgarian language expert") {
+			if !strings.Contains(userPrompt, "ябълка") {
+				t.Fatalf("translation prompt = %q, want Bulgarian query", userPrompt)
+			}
+			return "", fmt.Errorf("translation unavailable")
+		}
+		if strings.Contains(systemPrompt, "educational flashcards for language learning") {
+			if !strings.Contains(userPrompt, "ябълка") {
+				t.Fatalf("scene prompt = %q, want original query fallback", userPrompt)
+			}
+			sceneSawOriginalQuery = true
+			return "Fallback scene", nil
+		}
+		t.Fatalf("unexpected system prompt: %q", systemPrompt)
+		return "", nil
+	}
+
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+		return mustPNGBytes(t), "image/png", nil
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	results, err := client.Search(context.Background(), DefaultSearchOptions("ябълка"))
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !sceneSawOriginalQuery {
+		t.Fatal("expected scene generation to use the original query after translation failure")
+	}
+	if client.GetLastPrompt() == "" {
+		t.Fatal("expected last prompt to be recorded")
+	}
+}
+
+func TestNanoBananaClient_Search_ImageGenerationError(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	originalStyles := append([]string(nil), ArtisticStyles...)
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+		ArtisticStyles = originalStyles
+	})
+
+	ArtisticStyles = []string{"Photorealism"}
+
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, userPrompt string, _ float32, _ int32) (string, error) {
+		switch {
+		case strings.Contains(systemPrompt, "Bulgarian language expert"):
+			if !strings.Contains(userPrompt, "ябълка") {
+				t.Fatalf("translation prompt = %q, want Bulgarian query", userPrompt)
+			}
+			return "apple", nil
+		case strings.Contains(systemPrompt, "educational flashcards for language learning"):
+			if !strings.Contains(userPrompt, "apple") {
+				t.Fatalf("scene prompt = %q, want translated word", userPrompt)
+			}
+			return "A bright apple sits centered on a wooden table.", nil
+		default:
+			t.Fatalf("unexpected system prompt: %q", systemPrompt)
+			return "", nil
+		}
+	}
+
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+		return nil, "", fmt.Errorf("image generation failed")
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	_, err := client.Search(context.Background(), DefaultSearchOptions("ябълка"))
+	if err == nil {
+		t.Fatal("expected image generation error")
+	}
+
+	searchErr, ok := err.(*SearchError)
+	if !ok {
+		t.Fatalf("expected SearchError, got %T", err)
+	}
+	if searchErr.Code != "API_ERROR" {
+		t.Fatalf("expected API_ERROR, got %s", searchErr.Code)
 	}
 }
 

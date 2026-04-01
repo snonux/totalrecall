@@ -110,7 +110,14 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 
 	imageBytes, mimeType, err := nanoBananaGenerateImage(ctx, c, prompt)
 	if err != nil {
-		return nil, err
+		if searchErr, ok := err.(*SearchError); ok {
+			return nil, searchErr
+		}
+		return nil, &SearchError{
+			Provider: nanoBananaSource,
+			Code:     "API_ERROR",
+			Message:  fmt.Sprintf("failed to generate image: %v", err),
+		}
 	}
 
 	dataURL, err := encodeDataURL(imageBytes, mimeType)
