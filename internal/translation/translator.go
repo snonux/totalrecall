@@ -36,10 +36,10 @@ type Config struct {
 	GeminiModel  string
 }
 
-// DefaultConfig returns a translator configuration with Gemini as the default backend.
+// DefaultConfig returns a translator configuration with OpenAI as the default backend.
 func DefaultConfig() *Config {
 	return &Config{
-		Provider:    ProviderGemini,
+		Provider:    ProviderOpenAI,
 		OpenAIModel: openai.GPT4oMini,
 		GeminiModel: defaultGeminiModel,
 	}
@@ -244,7 +244,7 @@ func normalizeConfig(config *Config) *Config {
 	normalized.Provider = normalizeProvider(normalized.Provider)
 
 	if normalized.Provider == "" {
-		normalized.Provider = ProviderGemini
+		normalized.Provider = ProviderOpenAI
 	}
 	if normalized.OpenAIModel == "" {
 		normalized.OpenAIModel = openai.GPT4oMini
@@ -258,10 +258,10 @@ func normalizeConfig(config *Config) *Config {
 
 func normalizeProvider(provider Provider) Provider {
 	switch strings.ToLower(strings.TrimSpace(string(provider))) {
-	case "", string(ProviderGemini):
-		return ProviderGemini
-	case string(ProviderOpenAI):
+	case "", string(ProviderOpenAI):
 		return ProviderOpenAI
+	case string(ProviderGemini):
+		return ProviderGemini
 	default:
 		return Provider(strings.ToLower(strings.TrimSpace(string(provider))))
 	}

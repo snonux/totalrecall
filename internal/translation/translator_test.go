@@ -7,20 +7,45 @@ import (
 	"testing"
 )
 
-func TestNewTranslator_DefaultsToGemini(t *testing.T) {
+func TestNewTranslator_DefaultsToOpenAI(t *testing.T) {
 	translator := NewTranslator(nil)
 
 	if translator == nil {
 		t.Fatal("NewTranslator returned nil")
 	}
-	if translator.provider != ProviderGemini {
-		t.Fatalf("Expected default provider %q, got %q", ProviderGemini, translator.provider)
-	}
-	if translator.geminiModel != defaultGeminiModel {
-		t.Fatalf("Expected Gemini model %q, got %q", defaultGeminiModel, translator.geminiModel)
+	if translator.provider != ProviderOpenAI {
+		t.Fatalf("Expected default provider %q, got %q", ProviderOpenAI, translator.provider)
 	}
 	if translator.openAIModel != "gpt-4o-mini" {
 		t.Fatalf("Expected OpenAI model gpt-4o-mini, got %q", translator.openAIModel)
+	}
+}
+
+func TestNewTranslator_ExplicitGeminiProvider(t *testing.T) {
+	translator := NewTranslator(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
+	})
+
+	if translator == nil {
+		t.Fatal("NewTranslator returned nil")
+	}
+	if translator.provider != ProviderGemini {
+		t.Fatalf("Expected provider %q, got %q", ProviderGemini, translator.provider)
+	}
+	if translator.geminiClient == nil {
+		t.Fatal("Gemini client not initialized")
+	}
+}
+
+func TestNewTranslator_EmptyProviderDefaultsToOpenAI(t *testing.T) {
+	translator := NewTranslator(&Config{})
+
+	if translator == nil {
+		t.Fatal("NewTranslator returned nil")
+	}
+	if translator.provider != ProviderOpenAI {
+		t.Fatalf("Expected empty provider to default to %q, got %q", ProviderOpenAI, translator.provider)
 	}
 }
 
@@ -41,7 +66,19 @@ func TestNewTranslator_OpenAIProvider(t *testing.T) {
 	}
 }
 
-func TestTranslateWord_NoGoogleAPIKey(t *testing.T) {
+func TestTranslateWord_DefaultProviderRequiresOpenAIKey(t *testing.T) {
+	translator := NewTranslator(&Config{})
+
+	_, err := translator.TranslateWord("ябълка")
+	if err == nil {
+		t.Fatal("Expected error for missing OpenAI API key")
+	}
+	if err.Error() != "OpenAI API key not found" {
+		t.Fatalf("Expected 'OpenAI API key not found' error, got: %v", err)
+	}
+}
+
+func TestTranslateWord_ExplicitGeminiRequiresGoogleAPIKey(t *testing.T) {
 	translator := NewTranslator(&Config{Provider: ProviderGemini})
 
 	_, err := translator.TranslateWord("ябълка")
@@ -84,6 +121,20 @@ func TestTranslateEnglishToBulgarian_NoOpenAIKey(t *testing.T) {
 	}
 	if err.Error() != "OpenAI API key not found" {
 		t.Fatalf("Expected 'OpenAI API key not found' error, got: %v", err)
+	}
+}
+
+func TestTranslateWithUnknownProvider(t *testing.T) {
+	translator := NewTranslator(&Config{
+		Provider: Provider("legacy"),
+	})
+
+	_, err := translator.TranslateWord("ябълка")
+	if err == nil {
+		t.Fatal("Expected error for unknown provider")
+	}
+	if err.Error() != "unknown translation provider: legacy" {
+		t.Fatalf("Expected unknown provider error, got: %v", err)
 	}
 }
 

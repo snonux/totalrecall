@@ -6,11 +6,19 @@ import (
 	"testing"
 
 	"codeberg.org/snonux/totalrecall/internal/cli"
+	"github.com/spf13/viper"
 )
 
 func TestNewProcessor(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
 
 	flags := cli.NewFlags()
 	p := NewProcessor(flags)
@@ -33,6 +41,53 @@ func TestNewProcessor(t *testing.T) {
 
 	if p.phoneticFetcher == nil {
 		t.Error("Phonetic fetcher not initialized")
+	}
+}
+
+func TestNewProcessor_DefaultTranslationProviderUsesOpenAI(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+
+	flags := cli.NewFlags()
+	p := NewProcessor(flags)
+
+	_, err := p.translator.TranslateWord("ябълка")
+	if err == nil {
+		t.Fatal("Expected error for missing OpenAI API key")
+	}
+	if err.Error() != "OpenAI API key not found" {
+		t.Fatalf("Expected OpenAI default provider error, got: %v", err)
+	}
+}
+
+func TestNewProcessor_ExplicitGeminiTranslationProvider(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("translation.provider", "gemini")
+
+	flags := cli.NewFlags()
+	p := NewProcessor(flags)
+
+	_, err := p.translator.TranslateWord("ябълка")
+	if err == nil {
+		t.Fatal("Expected error for missing Google API key")
+	}
+	if err.Error() != "Google API key not found" {
+		t.Fatalf("Expected Gemini provider error, got: %v", err)
 	}
 }
 
