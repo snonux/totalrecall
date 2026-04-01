@@ -237,6 +237,71 @@ func TestGetOpenAIKey(t *testing.T) {
 	}
 }
 
+func TestGetGoogleAPIKey(t *testing.T) {
+	// Save original viper state
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+
+	tests := []struct {
+		name      string
+		envKey    string
+		configKey string
+		expected  string
+	}{
+		{
+			name:      "from environment",
+			envKey:    "env-google-key",
+			configKey: "config-google-key",
+			expected:  "env-google-key",
+		},
+		{
+			name:      "from config when no env",
+			envKey:    "",
+			configKey: "config-google-key",
+			expected:  "config-google-key",
+		},
+		{
+			name:      "empty when neither set",
+			envKey:    "",
+			configKey: "",
+			expected:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
+
+			if tt.envKey != "" {
+				if err := os.Setenv("GOOGLE_API_KEY", tt.envKey); err != nil {
+					t.Fatalf("Failed to set GOOGLE_API_KEY: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv("GOOGLE_API_KEY"); err != nil {
+						t.Errorf("Failed to unset GOOGLE_API_KEY: %v", err)
+					}
+				}()
+			} else {
+				if err := os.Unsetenv("GOOGLE_API_KEY"); err != nil {
+					t.Fatalf("Failed to unset GOOGLE_API_KEY: %v", err)
+				}
+			}
+
+			if tt.configKey != "" {
+				viper.Set("google.api_key", tt.configKey)
+			}
+
+			got := GetGoogleAPIKey()
+			if got != tt.expected {
+				t.Errorf("GetGoogleAPIKey() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBindFlagsToViper(t *testing.T) {
 	// Save original viper state
 	originalConfig := viper.New()

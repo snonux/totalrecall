@@ -32,12 +32,13 @@ type Processor struct {
 
 // NewProcessor creates a new word processor
 func NewProcessor(flags *cli.Flags) *Processor {
-	apiKey := cli.GetOpenAIKey()
+	openAIKey := cli.GetOpenAIKey()
+	translationProvider := translation.Provider(viper.GetString("translation.provider"))
 	return &Processor{
 		flags:            flags,
-		translator:       translation.NewTranslator(apiKey),
+		translator:       translation.NewTranslator(&translation.Config{Provider: translationProvider, OpenAIKey: openAIKey, GoogleAPIKey: cli.GetGoogleAPIKey()}),
 		translationCache: translation.NewTranslationCache(),
-		phoneticFetcher:  phonetic.NewFetcher(apiKey),
+		phoneticFetcher:  phonetic.NewFetcher(openAIKey),
 	}
 }
 

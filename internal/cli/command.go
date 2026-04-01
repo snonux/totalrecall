@@ -155,3 +155,14 @@ func GetOpenAIKey() string {
 	// Then check config file
 	return viper.GetString("audio.openai_key")
 }
+
+// GetGoogleAPIKey retrieves the Google API key from environment or config.
+func GetGoogleAPIKey() string {
+	// First check environment variable
+	if key := os.Getenv("GOOGLE_API_KEY"); key != "" {
+		return key
+	}
+
+	// Then check config file
+	return viper.GetString("google.api_key")
+}

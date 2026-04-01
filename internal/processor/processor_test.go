@@ -9,15 +9,8 @@ import (
 )
 
 func TestNewProcessor(t *testing.T) {
-	// Set up test environment
-	if err := os.Setenv("OPENAI_API_KEY", "test-key"); err != nil {
-		t.Fatalf("Failed to set OPENAI_API_KEY: %v", err)
-	}
-	defer func() {
-		if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
-			t.Errorf("Failed to unset OPENAI_API_KEY: %v", err)
-		}
-	}()
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
 	flags := cli.NewFlags()
 	p := NewProcessor(flags)
@@ -63,8 +56,8 @@ func TestProcessSingleWord_InvalidWord(t *testing.T) {
 
 func TestProcessSingleWord_ValidWord(t *testing.T) {
 	// Skip if no API key
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("Skipping test: OPENAI_API_KEY not set")
+	if os.Getenv("OPENAI_API_KEY") == "" || os.Getenv("GOOGLE_API_KEY") == "" {
+		t.Skip("Skipping test: OPENAI_API_KEY and GOOGLE_API_KEY must be set")
 	}
 
 	flags := cli.NewFlags()
@@ -114,9 +107,9 @@ func TestProcessBatch_ValidFile(t *testing.T) {
 	flags.SkipImages = true
 	p := NewProcessor(flags)
 
-	// Skip if no API key
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("Skipping test: OPENAI_API_KEY not set")
+	// Skip if no API keys
+	if os.Getenv("OPENAI_API_KEY") == "" || os.Getenv("GOOGLE_API_KEY") == "" {
+		t.Skip("Skipping test: OPENAI_API_KEY and GOOGLE_API_KEY must be set")
 	}
 
 	err = p.ProcessBatch()

@@ -7,94 +7,105 @@ import (
 	"testing"
 )
 
-func TestNewTranslator(t *testing.T) {
-	translator := NewTranslator("test-api-key")
+func TestNewTranslator_DefaultsToGemini(t *testing.T) {
+	translator := NewTranslator(nil)
 
 	if translator == nil {
 		t.Fatal("NewTranslator returned nil")
 	}
-
-	if translator.apiKey != "test-api-key" {
-		t.Errorf("Expected API key 'test-api-key', got '%s'", translator.apiKey)
+	if translator.provider != ProviderGemini {
+		t.Fatalf("Expected default provider %q, got %q", ProviderGemini, translator.provider)
 	}
-
-	if translator.client == nil {
-		t.Error("OpenAI client not initialized")
+	if translator.geminiModel != defaultGeminiModel {
+		t.Fatalf("Expected Gemini model %q, got %q", defaultGeminiModel, translator.geminiModel)
+	}
+	if translator.openAIModel != "gpt-4o-mini" {
+		t.Fatalf("Expected OpenAI model gpt-4o-mini, got %q", translator.openAIModel)
 	}
 }
 
-func TestTranslateWord_NoAPIKey(t *testing.T) {
-	translator := NewTranslator("")
+func TestNewTranslator_OpenAIProvider(t *testing.T) {
+	translator := NewTranslator(&Config{
+		Provider:  ProviderOpenAI,
+		OpenAIKey: "test-api-key",
+	})
+
+	if translator == nil {
+		t.Fatal("NewTranslator returned nil")
+	}
+	if translator.provider != ProviderOpenAI {
+		t.Fatalf("Expected provider %q, got %q", ProviderOpenAI, translator.provider)
+	}
+	if translator.openAIClient == nil {
+		t.Fatal("OpenAI client not initialized")
+	}
+}
+
+func TestTranslateWord_NoGoogleAPIKey(t *testing.T) {
+	translator := NewTranslator(&Config{Provider: ProviderGemini})
 
 	_, err := translator.TranslateWord("ябълка")
 	if err == nil {
-		t.Error("Expected error for missing API key")
+		t.Fatal("Expected error for missing Google API key")
 	}
-
-	if err.Error() != "OpenAI API key not found" {
-		t.Errorf("Expected 'OpenAI API key not found' error, got: %v", err)
+	if err.Error() != "Google API key not found" {
+		t.Fatalf("Expected 'Google API key not found' error, got: %v", err)
 	}
 }
 
-func TestTranslateWord_Integration(t *testing.T) {
-	// Skip if no API key
-	apiKey := os.Getenv("OPENAI_API_KEY")
+func TestTranslateWord_IntegrationGemini(t *testing.T) {
+	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
-		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
+		t.Skip("Skipping integration test: GOOGLE_API_KEY not set")
 	}
 
-	translator := NewTranslator(apiKey)
+	translator := NewTranslator(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: apiKey,
+	})
 
-	// Test with a simple word
 	translation, err := translator.TranslateWord("ябълка")
 	if err != nil {
-		t.Errorf("TranslateWord failed: %v", err)
+		t.Fatalf("TranslateWord failed: %v", err)
 	}
-
-	// Check that we got a reasonable translation
-	// The exact translation might vary, but it should contain "apple"
 	if translation == "" {
-		t.Error("Got empty translation")
+		t.Fatal("Got empty translation")
 	}
 
 	t.Logf("Translation of 'ябълка': %s", translation)
 }
 
-func TestTranslateEnglishToBulgarian_NoAPIKey(t *testing.T) {
-	translator := NewTranslator("")
+func TestTranslateEnglishToBulgarian_NoOpenAIKey(t *testing.T) {
+	translator := NewTranslator(&Config{Provider: ProviderOpenAI})
 
 	_, err := translator.TranslateEnglishToBulgarian("apple")
 	if err == nil {
-		t.Error("Expected error for missing API key")
+		t.Fatal("Expected error for missing OpenAI API key")
 	}
-
 	if err.Error() != "OpenAI API key not found" {
-		t.Errorf("Expected 'OpenAI API key not found' error, got: %v", err)
+		t.Fatalf("Expected 'OpenAI API key not found' error, got: %v", err)
 	}
 }
 
-func TestTranslateEnglishToBulgarian_Integration(t *testing.T) {
-	// Skip if no API key
+func TestTranslateEnglishToBulgarian_IntegrationOpenAI(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
 	}
 
-	translator := NewTranslator(apiKey)
+	translator := NewTranslator(&Config{
+		Provider:  ProviderOpenAI,
+		OpenAIKey: apiKey,
+	})
 
-	// Test with a simple word
 	translation, err := translator.TranslateEnglishToBulgarian("apple")
 	if err != nil {
-		t.Errorf("TranslateEnglishToBulgarian failed: %v", err)
+		t.Fatalf("TranslateEnglishToBulgarian failed: %v", err)
 	}
-
-	// Check that we got a reasonable translation
-	// The exact translation might vary, but it should be in Cyrillic
 	if translation == "" {
-		t.Error("Got empty translation")
+		t.Fatal("Got empty translation")
 	}
 
-	// Check that the result contains Cyrillic characters
 	hasCyrillic := false
 	for _, r := range translation {
 		if r >= 'А' && r <= 'я' {
@@ -103,7 +114,7 @@ func TestTranslateEnglishToBulgarian_Integration(t *testing.T) {
 		}
 	}
 	if !hasCyrillic {
-		t.Errorf("Expected Cyrillic translation, got: %s", translation)
+		t.Fatalf("Expected Cyrillic translation, got: %s", translation)
 	}
 
 	t.Logf("Translation of 'apple': %s", translation)
@@ -112,70 +123,61 @@ func TestTranslateEnglishToBulgarian_Integration(t *testing.T) {
 func TestSaveTranslation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	err := SaveTranslation(tmpDir, "ябълка", "apple")
-	if err != nil {
-		t.Errorf("SaveTranslation failed: %v", err)
+	if err := SaveTranslation(tmpDir, "ябълка", "apple"); err != nil {
+		t.Fatalf("SaveTranslation failed: %v", err)
 	}
 
-	// Check file was created
 	translationFile := filepath.Join(tmpDir, "translation.txt")
 	content, err := os.ReadFile(translationFile)
 	if err != nil {
-		t.Errorf("Failed to read translation file: %v", err)
+		t.Fatalf("Failed to read translation file: %v", err)
 	}
 
 	expected := "ябълка = apple\n"
 	if string(content) != expected {
-		t.Errorf("Expected content '%s', got '%s'", expected, string(content))
+		t.Fatalf("Expected content %q, got %q", expected, string(content))
 	}
 }
 
 func TestSaveTranslation_InvalidPath(t *testing.T) {
-	err := SaveTranslation("/nonexistent/path", "ябълка", "apple")
-	if err == nil {
-		t.Error("Expected error for invalid path")
+	if err := SaveTranslation("/nonexistent/path", "ябълка", "apple"); err == nil {
+		t.Fatal("Expected error for invalid path")
 	}
 }
 
 func TestTranslationCache(t *testing.T) {
 	cache := NewTranslationCache()
 
-	// Test empty cache
-	_, found := cache.Get("ябълка")
-	if found {
-		t.Error("Expected not found in empty cache")
+	if _, found := cache.Get("ябълка"); found {
+		t.Fatal("Expected not found in empty cache")
 	}
 
-	// Test adding and retrieving
 	cache.Add("ябълка", "apple")
 	cache.Add("котка", "cat")
 
 	translation, found := cache.Get("ябълка")
 	if !found {
-		t.Error("Expected to find 'ябълка' in cache")
+		t.Fatal("Expected to find 'ябълка' in cache")
 	}
 	if translation != "apple" {
-		t.Errorf("Expected 'apple', got '%s'", translation)
+		t.Fatalf("Expected 'apple', got %q", translation)
 	}
 
-	// Test overwriting
 	cache.Add("ябълка", "apple (fruit)")
 	translation, found = cache.Get("ябълка")
 	if !found || translation != "apple (fruit)" {
-		t.Errorf("Expected 'apple (fruit)', got '%s'", translation)
+		t.Fatalf("Expected 'apple (fruit)', got %q", translation)
 	}
 }
 
 func TestTranslationCache_GetAll(t *testing.T) {
 	cache := NewTranslationCache()
 
-	// Add some translations
 	cache.Add("ябълка", "apple")
 	cache.Add("котка", "cat")
 	cache.Add("куче", "dog")
 
 	all := cache.GetAll()
-
 	expected := map[string]string{
 		"ябълка": "apple",
 		"котка":  "cat",
@@ -183,15 +185,14 @@ func TestTranslationCache_GetAll(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(all, expected) {
-		t.Errorf("GetAll() = %v, want %v", all, expected)
+		t.Fatalf("GetAll() = %v, want %v", all, expected)
 	}
 
-	// Test that modifying returned map doesn't affect cache
 	all["ябълка"] = "modified"
 
 	translation, _ := cache.Get("ябълка")
 	if translation != "apple" {
-		t.Error("Cache was modified through returned map")
+		t.Fatal("Cache was modified through returned map")
 	}
 }
 
@@ -200,6 +201,6 @@ func TestTranslationCache_EmptyCache(t *testing.T) {
 
 	all := cache.GetAll()
 	if len(all) != 0 {
-		t.Errorf("Expected empty map, got %v", all)
+		t.Fatalf("Expected empty map, got %v", all)
 	}
 }
