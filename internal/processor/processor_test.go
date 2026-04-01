@@ -555,11 +555,18 @@ func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
 	p.translationCache.Add("ябълка", "apple")
 
 	wordDir := p.findOrCreateWordDirectory("ябълка")
-	if err := os.WriteFile(filepath.Join(wordDir, "audio.wav"), []byte("audio data"), 0644); err != nil {
-		t.Fatalf("failed to create wav audio file: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(wordDir, "phonetic.txt"), []byte("phonetic"), 0644); err != nil {
-		t.Fatalf("failed to create phonetic file: %v", err)
+	for name, content := range map[string]string{
+		"audio_metadata.txt":          "provider=gemini\nmodel=gemini-2.5-flash-preview-tts\nvoice=Kore\nspeed=1.00\nformat=wav\n",
+		"phonetic.txt":                "phonetic",
+		"audio_alpha.wav":             "audio data",
+		"audio_beta.wav":              "audio data",
+		"audio_alpha_attribution.txt": "attribution",
+		"audio_beta_attribution.txt":  "attribution",
+		"translation.txt":             "ябълка = apple",
+	} {
+		if err := os.WriteFile(filepath.Join(wordDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create %s: %v", name, err)
+		}
 	}
 
 	outputPath, err := p.GenerateAnkiFile()
@@ -575,12 +582,12 @@ func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
 		t.Fatalf("failed to read generated CSV: %v", err)
 	}
 	cardID := filepath.Base(wordDir)
-	if !strings.Contains(string(csvData), fmt.Sprintf("[sound:%s_audio.wav]", cardID)) {
-		t.Fatalf("generated CSV did not reference wav audio for card %q: %s", cardID, csvData)
+	if !strings.Contains(string(csvData), fmt.Sprintf("[sound:%s_audio_alpha.wav]", cardID)) {
+		t.Fatalf("generated CSV did not reference the resolved multi-voice wav audio for card %q: %s", cardID, csvData)
 	}
 }
 
-func TestIsWordFullyProcessedUsesEffectiveAudioFormatForGemini(t *testing.T) {
+func TestIsWordFullyProcessedUsesMultiVoiceAttributionFiles(t *testing.T) {
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
 	defer func() {
@@ -598,22 +605,22 @@ func TestIsWordFullyProcessedUsesEffectiveAudioFormatForGemini(t *testing.T) {
 	p := NewProcessor(flags)
 	wordDir := p.findOrCreateWordDirectory("ябълка")
 	files := map[string]string{
-		"translation.txt":       "ябълка = apple",
-		"phonetic.txt":          "phonetic",
-		"audio_metadata.txt":    "provider=gemini\nmodel=gemini-2.5-flash-preview-tts\nvoice=Kore\nspeed=1.00\nformat=wav\n",
-		"audio_attribution.txt": "attribution",
+		"translation.txt":             "ябълка = apple",
+		"phonetic.txt":                "phonetic",
+		"audio_metadata.txt":          "provider=gemini\nmodel=gemini-2.5-flash-preview-tts\nvoice=Kore\nspeed=1.00\nformat=wav\n",
+		"audio_alpha.wav":             "audio data",
+		"audio_beta.wav":              "audio data",
+		"audio_alpha_attribution.txt": "attribution",
+		"audio_beta_attribution.txt":  "attribution",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(wordDir, name), []byte(content), 0644); err != nil {
 			t.Fatalf("failed to create %s: %v", name, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(wordDir, "audio.wav"), []byte("audio data"), 0644); err != nil {
-		t.Fatalf("failed to create wav audio file: %v", err)
-	}
 
 	if !p.isWordFullyProcessed("ябълка") {
-		t.Fatal("expected Gemini word with wav audio to be treated as fully processed")
+		t.Fatal("expected Gemini word with multi-voice wav audio to be treated as fully processed")
 	}
 }
 

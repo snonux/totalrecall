@@ -550,10 +550,12 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 			// Find associated media files in the output directory
 			wordDir := p.findCardDirectory(bulgarian)
 			if wordDir != "" {
-				// Look for audio file
-				audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", audioFormat))
-				if _, err := os.Stat(audioFile); err == nil {
-					card.AudioFile = audioFile
+				cardType := internal.LoadCardType(wordDir)
+				if cardType.IsBgBg() {
+					card.AudioFile = anki.ResolveAudioFile(wordDir, "audio_front", audioFormat)
+					card.AudioFileBack = anki.ResolveAudioFile(wordDir, "audio_back", audioFormat)
+				} else {
+					card.AudioFile = anki.ResolveAudioFile(wordDir, "audio", audioFormat)
 				}
 
 				// Look for image file
@@ -812,35 +814,37 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 		audioFormat := p.effectiveAudioFormat()
 
 		if cardType.IsBgBg() {
-			// For bg-bg cards, check for audio_front and audio_back
-			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", audioFormat))
-			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", audioFormat))
-			if _, err := os.Stat(frontAudio); os.IsNotExist(err) {
+			frontAudioFiles := anki.ResolveAudioPaths(wordDir, "audio_front", audioFormat)
+			backAudioFiles := anki.ResolveAudioPaths(wordDir, "audio_back", audioFormat)
+			if len(frontAudioFiles) == 0 || len(backAudioFiles) == 0 {
 				if os.Getenv("DEBUG_BATCH") != "" {
-					fmt.Printf("  [DEBUG] No front audio file found: %s\n", frontAudio)
+					fmt.Printf("  [DEBUG] No bg-bg audio files found in %s\n", wordDir)
 				}
 				return false
 			}
-			if _, err := os.Stat(backAudio); os.IsNotExist(err) {
-				if os.Getenv("DEBUG_BATCH") != "" {
-					fmt.Printf("  [DEBUG] No back audio file found: %s\n", backAudio)
+			for _, audioFile := range append(frontAudioFiles, backAudioFiles...) {
+				if _, err := os.Stat(audio.AttributionPath(audioFile)); os.IsNotExist(err) {
+					if os.Getenv("DEBUG_BATCH") != "" {
+						fmt.Printf("  [DEBUG] Missing attribution for audio file: %s\n", audioFile)
+					}
+					return false
 				}
-				return false
 			}
 		} else {
-			// For en-bg cards, check for standard audio file
-			requiredFiles = append(requiredFiles,
-				"audio_attribution.txt",
-				"audio_metadata.txt",
-			)
+			// For en-bg cards, check for at least one resolved audio file and its metadata.
+			requiredFiles = append(requiredFiles, "audio_metadata.txt")
 
-			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", audioFormat))
-			if _, err := os.Stat(audioFile); os.IsNotExist(err) {
-				audioPattern := fmt.Sprintf("audio_*.%s", audioFormat)
-				matches, _ := filepath.Glob(filepath.Join(wordDir, audioPattern))
-				if len(matches) == 0 {
+			audioFiles := anki.ResolveAudioPaths(wordDir, "audio", audioFormat)
+			if len(audioFiles) == 0 {
+				if os.Getenv("DEBUG_BATCH") != "" {
+					fmt.Printf("  [DEBUG] No audio files found in %s\n", wordDir)
+				}
+				return false
+			}
+			for _, audioFile := range audioFiles {
+				if _, err := os.Stat(audio.AttributionPath(audioFile)); os.IsNotExist(err) {
 					if os.Getenv("DEBUG_BATCH") != "" {
-						fmt.Printf("  [DEBUG] No audio file found: %s or pattern %s\n", audioFile, audioPattern)
+						fmt.Printf("  [DEBUG] Missing attribution for audio file: %s\n", audioFile)
 					}
 					return false
 				}

@@ -393,6 +393,42 @@ func TestGenerateFromDirectory(t *testing.T) {
 	}
 }
 
+func TestGenerateFromDirectoryPrefersMultiVoiceAudioFiles(t *testing.T) {
+	tempDir := t.TempDir()
+
+	wordDir := filepath.Join(tempDir, "ябълка")
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		t.Fatalf("Failed to create word dir: %v", err)
+	}
+
+	files := map[string]string{
+		"word.txt":           "ябълка",
+		"translation.txt":    "ябълка = apple",
+		"phonetic.txt":       "phonetic",
+		"audio.mp3":          "stale audio",
+		"audio_alpha.wav":    "audio data",
+		"audio_beta.wav":     "audio data",
+		"audio_metadata.txt": "provider=gemini\nmodel=gemini-2.5-flash-preview-tts\nvoice=Kore\nspeed=1.00\nformat=wav\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(wordDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write %s: %v", name, err)
+		}
+	}
+
+	gen := NewGenerator(nil)
+	if err := gen.GenerateFromDirectory(tempDir); err != nil {
+		t.Fatalf("GenerateFromDirectory() error = %v", err)
+	}
+
+	if len(gen.cards) != 1 {
+		t.Fatalf("Expected 1 card, got %d", len(gen.cards))
+	}
+	if !strings.HasSuffix(gen.cards[0].AudioFile, "audio_alpha.wav") {
+		t.Fatalf("Expected multi-voice wav selection, got %q", gen.cards[0].AudioFile)
+	}
+}
+
 func TestCopyMediaFile(t *testing.T) {
 	tempDir := t.TempDir()
 

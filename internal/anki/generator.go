@@ -202,28 +202,11 @@ func (g *Generator) GenerateFromDirectory(dir string) error {
 		}
 
 		// Look for audio file(s)
-		audioFormats := []string{"mp3", "wav"}
-		for _, format := range audioFormats {
-			// For bg-bg cards, look for audio_front and audio_back
-			if cardType.IsBgBg() {
-				frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", format))
-				backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", format))
-				if _, err := os.Stat(frontAudio); err == nil {
-					card.AudioFile = frontAudio
-				}
-				if _, err := os.Stat(backAudio); err == nil {
-					card.AudioFileBack = backAudio
-				}
-				if card.AudioFile != "" {
-					break
-				}
-			}
-			// For en-bg cards (or fallback), look for standard audio file
-			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", format))
-			if _, err := os.Stat(audioFile); err == nil {
-				card.AudioFile = audioFile
-				break
-			}
+		if cardType.IsBgBg() {
+			card.AudioFile = ResolveAudioFile(wordDir, "audio_front", "")
+			card.AudioFileBack = ResolveAudioFile(wordDir, "audio_back", "")
+		} else {
+			card.AudioFile = ResolveAudioFile(wordDir, "audio", "")
 		}
 
 		// Look for image files
