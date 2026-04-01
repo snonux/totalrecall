@@ -47,14 +47,17 @@ func DefaultConfig() *Config {
 
 // Translator handles Bulgarian and English translation using the configured backend.
 type Translator struct {
-	provider     Provider
-	openAIKey    string
-	googleAPIKey string
-	openAIClient *openai.Client
-	geminiClient *genai.Client
-	openAIModel  string
-	geminiModel  string
+	provider      Provider
+	openAIKey     string
+	googleAPIKey  string
+	openAIClient  *openai.Client
+	geminiClient  *genai.Client
+	geminiInitErr error
+	openAIModel   string
+	geminiModel   string
 }
+
+var newGeminiClient = genai.NewClient
 
 // NewTranslator creates a new translator instance from the provided config.
 func NewTranslator(config *Config) *Translator {
@@ -76,11 +79,13 @@ func NewTranslator(config *Config) *Translator {
 	}
 
 	if normalized.GoogleAPIKey != "" {
-		client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+		client, err := newGeminiClient(context.Background(), &genai.ClientConfig{
 			APIKey: normalized.GoogleAPIKey,
 		})
 		if err == nil {
 			translator.geminiClient = client
+		} else {
+			translator.geminiInitErr = err
 		}
 	}
 
@@ -168,6 +173,9 @@ func (t *Translator) translateWithOpenAI(prompt string) (string, error) {
 func (t *Translator) translateWithGemini(prompt string) (string, error) {
 	if t.googleAPIKey == "" {
 		return "", fmt.Errorf("Google API key not found")
+	}
+	if t.geminiInitErr != nil {
+		return "", fmt.Errorf("Gemini client initialization failed: %w", t.geminiInitErr)
 	}
 	if t.geminiClient == nil {
 		return "", fmt.Errorf("Gemini client not initialized")

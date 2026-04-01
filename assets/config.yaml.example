@@ -23,6 +23,17 @@ audio:
   # openai_instruction: "You are a Bulgarian language teacher. Pronounce the Bulgarian words slowly with authentic Bulgarian accent and phonetics."
   # openai_instruction: "Speak Bulgarian text with proper Bulgarian pronunciation. Avoid Russian accent. Speak clearly at a pace suitable for beginners."
 
+# Translation configuration
+translation:
+  # Translation backend used by internal/translation/translator.go
+  # Supported values: openai (default) or gemini
+  provider: openai
+
+# Google API settings
+google:
+  # Used by Gemini translation when translation.provider is set to gemini
+  api_key: ${GOOGLE_API_KEY}
+
 # Image configuration
 image:
   # Provider: currently only openai is supported

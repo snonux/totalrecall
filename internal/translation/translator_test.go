@@ -1,10 +1,14 @@
 package translation
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"google.golang.org/genai"
 )
 
 func TestNewTranslator_DefaultsToOpenAI(t *testing.T) {
@@ -87,6 +91,31 @@ func TestTranslateWord_ExplicitGeminiRequiresGoogleAPIKey(t *testing.T) {
 	}
 	if err.Error() != "Google API key not found" {
 		t.Fatalf("Expected 'Google API key not found' error, got: %v", err)
+	}
+}
+
+func TestTranslateWord_GeminiClientInitError(t *testing.T) {
+	originalNewGeminiClient := newGeminiClient
+	defer func() {
+		newGeminiClient = originalNewGeminiClient
+	}()
+
+	initErr := errors.New("boom")
+	newGeminiClient = func(context.Context, *genai.ClientConfig) (*genai.Client, error) {
+		return nil, initErr
+	}
+
+	translator := NewTranslator(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
+	})
+
+	_, err := translator.TranslateWord("ябълка")
+	if err == nil {
+		t.Fatal("Expected Gemini init error")
+	}
+	if !errors.Is(err, initErr) {
+		t.Fatalf("Expected wrapped init error, got: %v", err)
 	}
 }
 
