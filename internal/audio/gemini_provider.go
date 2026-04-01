@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultGeminiTTSModel  = "gemini-2.5-flash-preview-tts"
+	defaultGeminiTTSModel  = "gemini-2.5-flash"
 	geminiTTSLanguageCode  = "bg"
 	geminiTTSChannels      = 1
 	geminiTTSSampleRate    = 24000

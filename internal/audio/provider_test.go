@@ -30,8 +30,8 @@ func (m *mockProvider) IsAvailable() error {
 func TestDefaultProviderConfig(t *testing.T) {
 	config := DefaultProviderConfig()
 
-	if config.Provider != "openai" {
-		t.Errorf("Expected provider 'openai', got '%s'", config.Provider)
+	if config.Provider != "gemini" {
+		t.Errorf("Expected provider 'gemini', got '%s'", config.Provider)
 	}
 
 	if config.OutputFormat != "mp3" {
@@ -50,10 +50,13 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected OpenAI speed 1.0, got %f", config.OpenAISpeed)
 	}
 
-	if config.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
-		t.Errorf("Expected Gemini TTS model 'gemini-2.5-flash-preview-tts', got '%s'", config.GeminiTTSModel)
+	if config.GeminiTTSModel != "gemini-2.5-flash" {
+		t.Errorf("Expected Gemini TTS model 'gemini-2.5-flash', got '%s'", config.GeminiTTSModel)
 	}
 
+	if config.GeminiSpeed != 1.0 {
+		t.Errorf("Expected Gemini speed 1.0, got %f", config.GeminiSpeed)
+	}
 }
 
 func TestNewProvider(t *testing.T) {
@@ -68,7 +71,7 @@ func TestNewProvider(t *testing.T) {
 			name:    "nil config uses defaults",
 			config:  nil,
 			wantErr: true,
-			errMsg:  "OpenAI API key is required",
+			errMsg:  "Google API key is required",
 		},
 		{
 			name: "openai provider without key",

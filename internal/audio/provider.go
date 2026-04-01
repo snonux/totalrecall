@@ -17,7 +17,7 @@ type Provider interface {
 	IsAvailable() error
 }
 
-// Config holds common configuration for audio providers
+// Config holds common configuration for audio providers.
 type Config struct {
 	Provider     string // Provider name: "openai" or "gemini"
 	OutputDir    string // Directory for output files
@@ -32,7 +32,7 @@ type Config struct {
 
 	// Gemini-specific settings
 	GoogleAPIKey   string
-	GeminiTTSModel string  // "gemini-2.5-flash-preview-tts"
+	GeminiTTSModel string  // "gemini-2.5-flash"
 	GeminiVoice    string  // One of GeminiVoices, or empty for the model default.
 	GeminiSpeed    float64 // Prompt hint for desired speech speed
 }
@@ -40,7 +40,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultProviderConfig() *Config {
 	return &Config{
-		Provider:     "openai",
+		Provider:     "gemini",
 		OutputDir:    "./",
 		OutputFormat: "mp3",
 		OpenAIModel:  "gpt-4o-mini-tts", // New model with voice instructions support
@@ -48,7 +48,7 @@ func DefaultProviderConfig() *Config {
 		OpenAISpeed:  1.0,
 		// OpenAISpeed:       0.98, // Default speed for clarity
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		GeminiTTSModel:    "gemini-2.5-flash-preview-tts",
+		GeminiTTSModel:    "gemini-2.5-flash",
 		GeminiSpeed:       1.0,
 	}
 }
@@ -70,7 +70,6 @@ func NewProvider(config *Config) (Provider, error) {
 			return nil, fmt.Errorf("Google API key is required")
 		}
 		return NewGeminiProvider(config)
-
 	default:
 		return nil, fmt.Errorf("unknown audio provider: %s", config.Provider)
 	}
