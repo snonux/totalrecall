@@ -11,9 +11,11 @@ import (
 
 func TestNewGeminiProvider(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  *Config
-		wantErr bool
+		name      string
+		config    *Config
+		wantErr   bool
+		wantModel string
+		wantSpeed float64
 	}{
 		{
 			name:    "missing google api key",
@@ -23,12 +25,11 @@ func TestNewGeminiProvider(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				GoogleAPIKey:   "test-key",
-				GeminiTTSModel: "gemini-2.5-flash-preview-tts",
-				GeminiVoice:    "Kore",
-				GeminiSpeed:    1.0,
+				GoogleAPIKey: "test-key",
 			},
-			wantErr: false,
+			wantErr:   false,
+			wantModel: defaultGeminiTTSModel,
+			wantSpeed: 1.0,
 		},
 	}
 
@@ -45,22 +46,47 @@ func TestNewGeminiProvider(t *testing.T) {
 			if provider.Name() != "gemini" {
 				t.Fatalf("Name() = %q, want %q", provider.Name(), "gemini")
 			}
+
+			geminiProvider, ok := provider.(*GeminiProvider)
+			if !ok {
+				t.Fatalf("NewGeminiProvider() returned %T, want *GeminiProvider", provider)
+			}
+			if geminiProvider.config.GeminiTTSModel != tt.wantModel {
+				t.Fatalf("GeminiTTSModel = %q, want %q", geminiProvider.config.GeminiTTSModel, tt.wantModel)
+			}
+			if geminiProvider.config.GeminiSpeed != tt.wantSpeed {
+				t.Fatalf("GeminiSpeed = %v, want %v", geminiProvider.config.GeminiSpeed, tt.wantSpeed)
+			}
 		})
 	}
 }
 
 func TestGeminiProviderIsAvailable(t *testing.T) {
-	provider := &GeminiProvider{
-		config: &Config{GoogleAPIKey: "test-key"},
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name:    "with API key",
+			config:  &Config{GoogleAPIKey: "test-key"},
+			wantErr: false,
+		},
+		{
+			name:    "without API key",
+			config:  &Config{},
+			wantErr: true,
+		},
 	}
 
-	if err := provider.IsAvailable(); err != nil {
-		t.Fatalf("IsAvailable() unexpected error: %v", err)
-	}
-
-	provider.config.GoogleAPIKey = ""
-	if err := provider.IsAvailable(); err == nil {
-		t.Fatal("IsAvailable() expected error when API key is missing")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := &GeminiProvider{config: tt.config}
+			err := provider.IsAvailable()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("IsAvailable() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -157,5 +183,26 @@ func TestWriteGeminiAudioFileRejectsUnsupportedFormats(t *testing.T) {
 
 	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
 		t.Fatalf("expected no output file to be written, statErr=%v", statErr)
+	}
+}
+
+func TestGeminiProviderIntegrationWithGoogleAPIKey(t *testing.T) {
+	apiKey := strings.TrimSpace(os.Getenv("GOOGLE_API_KEY"))
+	if apiKey == "" {
+		t.Skip("Skipping integration test: GOOGLE_API_KEY not set")
+	}
+
+	provider, err := NewGeminiProvider(&Config{GoogleAPIKey: apiKey})
+	if err != nil {
+		t.Fatalf("NewGeminiProvider() unexpected error: %v", err)
+	}
+
+	geminiProvider, ok := provider.(*GeminiProvider)
+	if !ok {
+		t.Fatalf("NewGeminiProvider() returned %T, want *GeminiProvider", provider)
+	}
+
+	if err := geminiProvider.IsAvailable(); err != nil {
+		t.Fatalf("IsAvailable() unexpected error with GOOGLE_API_KEY set: %v", err)
 	}
 }

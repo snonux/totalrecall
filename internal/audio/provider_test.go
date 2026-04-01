@@ -113,6 +113,11 @@ func TestNewProvider(t *testing.T) {
 				if provider.Name() != tt.wantProvider {
 					t.Fatalf("NewProvider() Name() = %v, want %v", provider.Name(), tt.wantProvider)
 				}
+				if tt.wantProvider == "gemini" {
+					if _, ok := provider.(*GeminiProvider); !ok {
+						t.Fatalf("NewProvider() returned %T, want *GeminiProvider", provider)
+					}
+				}
 			}
 		})
 	}
