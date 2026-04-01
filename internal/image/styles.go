@@ -4,8 +4,8 @@ import "math/rand"
 
 const defaultArtisticStyle = "simple illustration"
 
-// artisticStyles contains the shared pool of artistic styles used for image prompts.
-var artisticStyles = []string{
+// ArtisticStyles contains the shared pool of artistic styles used for image prompts.
+var ArtisticStyles = []string{
 	"Photorealism", "Hyperrealism", "Surrealism", "Impressionism",
 	"Minimalism", "Pop Art", "Art Nouveau", "Digital Art",
 	"Watercolor", "Oil Painting", "Pencil Sketch", "Ink Drawing",
@@ -78,11 +78,11 @@ var artisticStyles = []string{
 }
 
 func pickArtisticStyle() string {
-	if len(artisticStyles) == 0 {
+	if len(ArtisticStyles) == 0 {
 		return ""
 	}
 
-	styles := append([]string(nil), artisticStyles...)
+	styles := append([]string(nil), ArtisticStyles...)
 
 	// Shuffle the styles to avoid bias without mutating the shared pool.
 	rand.Shuffle(len(styles), func(i, j int) {

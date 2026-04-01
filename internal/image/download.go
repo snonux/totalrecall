@@ -177,7 +177,9 @@ func (d *Downloader) generateFileName(word string, result *SearchResult, index i
 
 	// Determine extension from URL
 	ext := filepath.Ext(result.URL)
-	if ext == "" || len(ext) > 5 { // Probably not a real extension
+	if strings.HasPrefix(result.URL, "data:image/png") {
+		ext = ".png"
+	} else if ext == "" || len(ext) > 5 { // Probably not a real extension
 		ext = ".jpg" // Default to jpg
 	}
 

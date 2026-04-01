@@ -146,6 +146,9 @@ func containsHelper(s, substr string) bool {
 
 // Integration test (skipped by default)
 func TestOpenAIClient_Search_Integration(t *testing.T) {
+	if os.Getenv("TOTALRECALL_IMAGE_INTEGRATION") == "" {
+		t.Skip("TOTALRECALL_IMAGE_INTEGRATION not set, skipping integration test")
+	}
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		t.Skip("OPENAI_API_KEY not set, skipping integration test")
