@@ -10,6 +10,8 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -412,7 +414,7 @@ func TestNanoBananaClient_Search_InvalidOptions(t *testing.T) {
 
 func TestNanoBananaClient_DownloadDataURI(t *testing.T) {
 	client := &NanoBananaClient{}
-	payload := []byte("png-bytes")
+	payload := mustPNGBytes(t)
 	url := "data:image/png;base64," + encodeBase64(payload)
 
 	reader, err := client.Download(context.Background(), url)
@@ -427,8 +429,37 @@ func TestNanoBananaClient_DownloadDataURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadAll() unexpected error: %v", err)
 	}
-	if string(data) != string(payload) {
-		t.Fatalf("Download() = %q, want %q", data, payload)
+	if !bytes.Equal(data, payload) {
+		t.Fatalf("Download() = %v, want %v", data, payload)
+	}
+}
+
+func TestNanoBananaClient_DownloadHTTPFallback(t *testing.T) {
+	client := &NanoBananaClient{}
+	payload := []byte("fallback image bytes")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("request method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write(payload)
+	}))
+	t.Cleanup(server.Close)
+
+	reader, err := client.Download(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("Download() unexpected error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = reader.Close()
+	})
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll() unexpected error: %v", err)
+	}
+	if !bytes.Equal(data, payload) {
+		t.Fatalf("Download() = %v, want %v", data, payload)
 	}
 }
 
@@ -492,9 +523,6 @@ func TestNanoBananaClient_GetAttribution(t *testing.T) {
 }
 
 func TestNanoBananaClient_Integration(t *testing.T) {
-	if os.Getenv("TOTALRECALL_IMAGE_INTEGRATION") == "" {
-		t.Skip("TOTALRECALL_IMAGE_INTEGRATION not set, skipping integration test")
-	}
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
 		t.Skip("GOOGLE_API_KEY not set, skipping integration test")
