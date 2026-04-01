@@ -56,12 +56,16 @@ func (f *fakePromptAwareImageClient) SetPromptCallback(callback func(prompt stri
 
 type fakeAudioProvider struct {
 	generateCalls  int
+	texts          []string
+	outputFiles    []string
 	lastText       string
 	lastOutputFile string
 }
 
 func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile string) error {
 	f.generateCalls++
+	f.texts = append(f.texts, text)
+	f.outputFiles = append(f.outputFiles, outputFile)
 	f.lastText = text
 	f.lastOutputFile = outputFile
 	return nil
@@ -212,5 +216,76 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.HasSuffix(outputPath, "audio.mp3") {
 		t.Fatalf("outputPath = %q, want shared audio filename", outputPath)
+	}
+}
+
+func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-bg-gui-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	cardDir := filepath.Join(tempDir, "card")
+	if err := os.MkdirAll(cardDir, 0755); err != nil {
+		t.Fatalf("failed to create card dir: %v", err)
+	}
+
+	app := &Application{
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "mp3",
+		},
+		audioConfig: &audio.Config{
+			Provider:          "openai",
+			OutputDir:         tempDir,
+			OpenAIModel:       "gpt-4o-mini-tts",
+			OpenAIInstruction: "Speak clearly.",
+		},
+	}
+
+	frontPath, backPath, err := app.generateAudioBgBg(context.Background(), "ябълка", "круша", cardDir)
+	if err != nil {
+		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-bg-gui-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-bg-gui-voice")
+	}
+	if fakeProvider.generateCalls != 2 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 2)
+	}
+	if len(fakeProvider.outputFiles) != 2 {
+		t.Fatalf("output file count = %d, want %d", len(fakeProvider.outputFiles), 2)
+	}
+	if !strings.HasSuffix(fakeProvider.outputFiles[0], "audio_front.mp3") {
+		t.Fatalf("front output file = %q, want audio_front.mp3", fakeProvider.outputFiles[0])
+	}
+	if !strings.HasSuffix(fakeProvider.outputFiles[1], "audio_back.mp3") {
+		t.Fatalf("back output file = %q, want audio_back.mp3", fakeProvider.outputFiles[1])
+	}
+	if !strings.HasSuffix(frontPath, "audio_front.mp3") {
+		t.Fatalf("frontPath = %q, want audio_front.mp3", frontPath)
+	}
+	if !strings.HasSuffix(backPath, "audio_back.mp3") {
+		t.Fatalf("backPath = %q, want audio_back.mp3", backPath)
 	}
 }

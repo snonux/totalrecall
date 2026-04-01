@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -59,12 +60,16 @@ func (s *stubImageSearcher) GetLastPrompt() string {
 
 type fakeAudioProvider struct {
 	generateCalls  int
+	texts          []string
+	outputFiles    []string
 	lastText       string
 	lastOutputFile string
 }
 
 func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile string) error {
 	f.generateCalls++
+	f.texts = append(f.texts, text)
+	f.outputFiles = append(f.outputFiles, outputFile)
 	f.lastText = text
 	f.lastOutputFile = outputFile
 	return nil
@@ -300,6 +305,88 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio_sentinel-openai-voice.mp3") {
 		t.Fatalf("GenerateAudio() output file = %q, want shared voice name in filename", fakeProvider.lastOutputFile)
+	}
+}
+
+func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-bg-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	flags := cli.NewFlags()
+	flags.OutputDir = tempDir
+	flags.AudioFormat = "mp3"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudioBgBg("ябълка", "круша"); err != nil {
+		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-bg-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-bg-voice")
+	}
+	if fakeProvider.generateCalls != 2 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 2)
+	}
+	if len(fakeProvider.outputFiles) != 2 {
+		t.Fatalf("output file count = %d, want %d", len(fakeProvider.outputFiles), 2)
+	}
+	if !strings.HasSuffix(fakeProvider.outputFiles[0], "audio_front.mp3") {
+		t.Fatalf("front output file = %q, want audio_front.mp3", fakeProvider.outputFiles[0])
+	}
+	if !strings.HasSuffix(fakeProvider.outputFiles[1], "audio_back.mp3") {
+		t.Fatalf("back output file = %q, want audio_back.mp3", fakeProvider.outputFiles[1])
+	}
+}
+
+func TestGenerateAudioProviderFactoryError(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-failure-voice"}
+	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return nil, errors.New("provider factory failed")
+	}
+
+	tempDir := t.TempDir()
+	flags := cli.NewFlags()
+	flags.OutputDir = tempDir
+	flags.AudioFormat = "mp3"
+
+	p := NewProcessor(flags)
+	err := p.generateAudio("ябълка")
+	if err == nil {
+		t.Fatal("generateAudio() expected error from provider factory")
+	}
+	if !strings.Contains(err.Error(), "provider factory failed") {
+		t.Fatalf("generateAudio() error = %q, want it to contain %q", err.Error(), "provider factory failed")
 	}
 }
 

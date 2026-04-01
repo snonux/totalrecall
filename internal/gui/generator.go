@@ -205,7 +205,7 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 	audioConfig.OpenAISpeed = speed
 	audioConfig.OutputDir = a.config.OutputDir
 
-	provider, err := audio.NewProvider(&audioConfig)
+	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
 		return "", "", err
 	}
