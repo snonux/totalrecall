@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -287,5 +288,179 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.HasSuffix(backPath, "audio_back.mp3") {
 		t.Fatalf("backPath = %q, want audio_back.mp3", backPath)
+	}
+}
+
+func TestGenerateAudioFrontUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-front-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	cardDir := filepath.Join(tempDir, "card")
+	if err := os.MkdirAll(cardDir, 0755); err != nil {
+		t.Fatalf("failed to create card dir: %v", err)
+	}
+
+	app := &Application{
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "mp3",
+		},
+		audioConfig: &audio.Config{
+			Provider:          "openai",
+			OutputDir:         tempDir,
+			OpenAIModel:       "gpt-4o-mini-tts",
+			OpenAIInstruction: "Speak clearly.",
+		},
+	}
+
+	outputPath, err := app.generateAudioFront(context.Background(), "ябълка", cardDir)
+	if err != nil {
+		t.Fatalf("generateAudioFront() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-front-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-front-voice")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if fakeProvider.lastText != "ябълка" {
+		t.Fatalf("GenerateAudio() text = %q, want %q", fakeProvider.lastText, "ябълка")
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio_front.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want audio_front.mp3", fakeProvider.lastOutputFile)
+	}
+	if !strings.HasSuffix(outputPath, "audio_front.mp3") {
+		t.Fatalf("outputPath = %q, want audio_front.mp3", outputPath)
+	}
+}
+
+func TestGenerateAudioBackUsesSharedOpenAIVoices(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-back-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	tempDir := t.TempDir()
+	cardDir := filepath.Join(tempDir, "card")
+	if err := os.MkdirAll(cardDir, 0755); err != nil {
+		t.Fatalf("failed to create card dir: %v", err)
+	}
+
+	app := &Application{
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "mp3",
+		},
+		audioConfig: &audio.Config{
+			Provider:          "openai",
+			OutputDir:         tempDir,
+			OpenAIModel:       "gpt-4o-mini-tts",
+			OpenAIInstruction: "Speak clearly.",
+		},
+	}
+
+	outputPath, err := app.generateAudioBack(context.Background(), "круша", cardDir)
+	if err != nil {
+		t.Fatalf("generateAudioBack() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "sentinel-back-voice" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "sentinel-back-voice")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if fakeProvider.lastText != "круша" {
+		t.Fatalf("GenerateAudio() text = %q, want %q", fakeProvider.lastText, "круша")
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio_back.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want audio_back.mp3", fakeProvider.lastOutputFile)
+	}
+	if !strings.HasSuffix(outputPath, "audio_back.mp3") {
+		t.Fatalf("outputPath = %q, want audio_back.mp3", outputPath)
+	}
+}
+
+func TestGenerateAudioProviderFactoryError(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.OpenAIVoices...)
+	t.Cleanup(func() {
+		audio.OpenAIVoices = originalVoices
+	})
+
+	audio.OpenAIVoices = []string{"sentinel-error-voice"}
+	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return nil, errors.New("provider factory failed")
+	}
+
+	tempDir := t.TempDir()
+	cardDir := filepath.Join(tempDir, "card")
+	if err := os.MkdirAll(cardDir, 0755); err != nil {
+		t.Fatalf("failed to create card dir: %v", err)
+	}
+
+	app := &Application{
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "mp3",
+		},
+		audioConfig: &audio.Config{
+			Provider:          "openai",
+			OutputDir:         tempDir,
+			OpenAIModel:       "gpt-4o-mini-tts",
+			OpenAIInstruction: "Speak clearly.",
+		},
+	}
+
+	_, err := app.generateAudioFront(context.Background(), "ябълка", cardDir)
+	if err == nil {
+		t.Fatal("generateAudioFront() expected error from provider factory")
+	}
+	if !strings.Contains(err.Error(), "provider factory failed") {
+		t.Fatalf("generateAudioFront() error = %q, want it to contain %q", err.Error(), "provider factory failed")
 	}
 }
