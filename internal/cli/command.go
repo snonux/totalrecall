@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"codeberg.org/snonux/totalrecall/internal"
+	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
 // CreateRootCommand creates and configures the root cobra command
@@ -71,7 +73,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 
 	// OpenAI flags
 	cmd.Flags().StringVar(&flags.OpenAIModel, "openai-model", flags.OpenAIModel, "OpenAI TTS model: tts-1, tts-1-hd, gpt-4o-mini-tts")
-	cmd.Flags().StringVar(&flags.OpenAIVoice, "openai-voice", "", "OpenAI voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse (default: random)")
+	cmd.Flags().StringVar(&flags.OpenAIVoice, "openai-voice", "", openAIVoiceUsage())
 	cmd.Flags().Float64Var(&flags.OpenAISpeed, "openai-speed", flags.OpenAISpeed, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
 	cmd.Flags().StringVar(&flags.OpenAIInstruction, "openai-instruction", "", "Voice instructions for gpt-4o-mini-tts model (e.g., 'speak slowly with a Bulgarian accent')")
 
@@ -186,4 +188,8 @@ func GetGoogleAPIKey() string {
 
 	// Fall back to the legacy key for compatibility with older configs.
 	return viper.GetString("google.api_key")
+}
+
+func openAIVoiceUsage() string {
+	return "OpenAI voice: " + strings.Join(audio.OpenAIVoices, ", ") + " (default: random)"
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
 func TestCreateRootCommand(t *testing.T) {
@@ -111,6 +113,15 @@ func TestSetupFlags(t *testing.T) {
 	}
 	if imageAPIFlag.Usage != "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)" {
 		t.Errorf("Expected image-api help to describe CLI Nano Banana support and config fallback, got %q", imageAPIFlag.Usage)
+	}
+
+	openAIVoiceFlag := cmd.Flags().Lookup("openai-voice")
+	if openAIVoiceFlag == nil {
+		t.Fatal("openai-voice flag not found")
+	}
+	expectedOpenAIVoiceUsage := "OpenAI voice: " + strings.Join(audio.OpenAIVoices, ", ") + " (default: random)"
+	if openAIVoiceFlag.Usage != expectedOpenAIVoiceUsage {
+		t.Errorf("Expected openai-voice help to derive from shared voice list, got %q", openAIVoiceFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
