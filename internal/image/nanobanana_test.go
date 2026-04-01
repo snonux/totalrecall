@@ -85,6 +85,7 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 
 	results, err := client.Search(context.Background(), &SearchOptions{
 		Query:        "ябълка",
+		Translation:  "banana",
 		CustomPrompt: " custom flashcard prompt ",
 	})
 	if err != nil {
@@ -104,6 +105,9 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 	}
 	if !strings.Contains(results[0].Description, "ябълка") {
 		t.Fatalf("result description = %q, want it to mention the query", results[0].Description)
+	}
+	if !strings.Contains(results[0].Description, "banana") {
+		t.Fatalf("result description = %q, want translation metadata from custom prompt", results[0].Description)
 	}
 	if !strings.HasPrefix(results[0].URL, "data:image/png;base64,") {
 		t.Fatalf("expected PNG data URI, got %q", results[0].URL)
@@ -192,8 +196,8 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 	if result.Source != nanoBananaSource {
 		t.Fatalf("Source = %q, want %q", result.Source, nanoBananaSource)
 	}
-	if result.Width != nanoBananaImageWidth || result.Height != nanoBananaImageHeight {
-		t.Fatalf("Size = %dx%d, want %dx%d", result.Width, result.Height, nanoBananaImageWidth, nanoBananaImageHeight)
+	if result.Width != 1 || result.Height != 1 {
+		t.Fatalf("Size = %dx%d, want %dx%d", result.Width, result.Height, 1, 1)
 	}
 	if !strings.Contains(result.Description, "apple") {
 		t.Fatalf("Description = %q, want translated word", result.Description)
@@ -265,6 +269,9 @@ func TestNanoBananaClient_Search_TranslationFailureFallsBackToQuery(t *testing.T
 	if !sceneSawOriginalQuery {
 		t.Fatal("expected scene generation to use the original query after translation failure")
 	}
+	if !strings.Contains(results[0].Description, "ябълка") {
+		t.Fatalf("Description = %q, want original query in fallback description", results[0].Description)
+	}
 	if client.GetLastPrompt() == "" {
 		t.Fatal("expected last prompt to be recorded")
 	}
@@ -316,6 +323,39 @@ func TestNanoBananaClient_Search_ImageGenerationError(t *testing.T) {
 	}
 	if searchErr.Code != "API_ERROR" {
 		t.Fatalf("expected API_ERROR, got %s", searchErr.Code)
+	}
+}
+
+func TestNanoBananaClient_Search_CustomPromptPreservesTranslationMetadata(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+	})
+
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, _, _ string, _ float32, _ int32) (string, error) {
+		t.Fatal("unexpected text generation for custom prompt")
+		return "", nil
+	}
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+		return mustPNGBytes(t), "image/png", nil
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	results, err := client.Search(context.Background(), &SearchOptions{
+		Query:        "ябълка",
+		Translation:  "banana",
+		CustomPrompt: "flashcard prompt",
+	})
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !strings.Contains(results[0].Description, "banana") {
+		t.Fatalf("result description = %q, want translation metadata", results[0].Description)
 	}
 }
 
