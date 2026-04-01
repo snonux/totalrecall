@@ -251,6 +251,20 @@ func (p *Processor) audioProviderName() string {
 	return ""
 }
 
+func (p *Processor) effectiveAudioFormat() string {
+	if p.audioProviderName() == "gemini" {
+		return "wav"
+	}
+
+	if p != nil && p.flags != nil {
+		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
+			return format
+		}
+	}
+
+	return "mp3"
+}
+
 func (p *Processor) geminiTTSModel() string {
 	if model := strings.TrimSpace(viper.GetString("audio.gemini_tts_model")); model != "" {
 		return model
@@ -371,6 +385,7 @@ func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase 
 // generateAudioWithVoiceAndFilenameInDir generates audio for a word and saves it to a specific directory
 func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir string) error {
 	audioProvider := p.audioProviderName()
+	audioFormat := p.effectiveAudioFormat()
 
 	// Generate random speed between 0.90 and 1.00 if not explicitly set
 	speed := p.flags.OpenAISpeed
@@ -388,7 +403,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 
 	switch audioProvider {
 	case "gemini":
-		providerConfig.OutputFormat = "wav"
+		providerConfig.OutputFormat = audioFormat
 		providerConfig.GeminiTTSModel = p.geminiTTSModel()
 		if voice != "" {
 			providerConfig.GeminiVoice = voice
@@ -397,7 +412,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 		}
 		providerConfig.GeminiSpeed = 1.0
 	default:
-		providerConfig.OutputFormat = p.flags.AudioFormat
+		providerConfig.OutputFormat = audioFormat
 		providerConfig.OpenAIModel = p.flags.OpenAIModel
 		providerConfig.OpenAIVoice = voice
 		providerConfig.OpenAISpeed = speed
@@ -425,10 +440,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	ctx := context.Background()
 
 	// Build filename using the provided base
-	outputFormat := p.flags.AudioFormat
-	if providerConfig.Provider == "gemini" {
-		outputFormat = "wav"
-	}
+	outputFormat := providerConfig.OutputFormat
 	var outputFile string
 	if p.flags.AllVoices && filenameBase == "audio" {
 		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filenameBase, voice, outputFormat))
@@ -505,11 +517,12 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 	}
 
 	// Create Anki generator
+	audioFormat := p.effectiveAudioFormat()
 	gen := anki.NewGenerator(&anki.GeneratorOptions{
 		OutputPath:     filepath.Join(outputDir, "anki_import.csv"),
 		MediaFolder:    p.flags.OutputDir,
 		IncludeHeaders: true,
-		AudioFormat:    p.flags.AudioFormat,
+		AudioFormat:    audioFormat,
 	})
 
 	// Use the translation cache as the source of truth for cards
@@ -532,7 +545,7 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 			wordDir := p.findCardDirectory(bulgarian)
 			if wordDir != "" {
 				// Look for audio file
-				audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+				audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", audioFormat))
 				if _, err := os.Stat(audioFile); err == nil {
 					card.AudioFile = audioFile
 				}
@@ -790,11 +803,12 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	if !p.flags.SkipAudio {
 		// Load card type to determine required audio files
 		cardType := internal.LoadCardType(wordDir)
+		audioFormat := p.effectiveAudioFormat()
 
 		if cardType.IsBgBg() {
 			// For bg-bg cards, check for audio_front and audio_back
-			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", p.flags.AudioFormat))
-			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", p.flags.AudioFormat))
+			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", audioFormat))
+			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", audioFormat))
 			if _, err := os.Stat(frontAudio); os.IsNotExist(err) {
 				if os.Getenv("DEBUG_BATCH") != "" {
 					fmt.Printf("  [DEBUG] No front audio file found: %s\n", frontAudio)
@@ -814,9 +828,9 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 				"audio_metadata.txt",
 			)
 
-			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", p.flags.AudioFormat))
+			audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", audioFormat))
 			if _, err := os.Stat(audioFile); os.IsNotExist(err) {
-				audioPattern := fmt.Sprintf("audio_*.%s", p.flags.AudioFormat)
+				audioPattern := fmt.Sprintf("audio_*.%s", audioFormat)
 				matches, _ := filepath.Glob(filepath.Join(wordDir, audioPattern))
 				if len(matches) == 0 {
 					if os.Getenv("DEBUG_BATCH") != "" {
@@ -918,11 +932,48 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 	// Also save metadata for GUI display
 	wordDir := filepath.Dir(audioFile)
 	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
-	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\n", config.OpenAIVoice, config.OpenAISpeed)
+	metadata := p.buildAudioMetadata(config)
 	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
 		// Non-fatal error, just log it
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
 	return nil
+}
+
+func (p *Processor) buildAudioMetadata(config *audio.Config) string {
+	var b strings.Builder
+	provider := strings.ToLower(strings.TrimSpace(config.Provider))
+	if provider == "" {
+		provider = "openai"
+	}
+
+	fmt.Fprintf(&b, "provider=%s\n", provider)
+	switch provider {
+	case "gemini":
+		fmt.Fprintf(&b, "model=%s\n", config.GeminiTTSModel)
+		voice := strings.TrimSpace(config.GeminiVoice)
+		if voice == "" {
+			voice = "model-default"
+		}
+		fmt.Fprintf(&b, "voice=%s\n", voice)
+		fmt.Fprintf(&b, "speed=%.2f\n", config.GeminiSpeed)
+	default:
+		fmt.Fprintf(&b, "model=%s\n", config.OpenAIModel)
+		voice := strings.TrimSpace(config.OpenAIVoice)
+		if voice != "" {
+			fmt.Fprintf(&b, "voice=%s\n", voice)
+		}
+		fmt.Fprintf(&b, "speed=%.2f\n", config.OpenAISpeed)
+		if instruction := strings.TrimSpace(config.OpenAIInstruction); instruction != "" {
+			fmt.Fprintf(&b, "instruction=%s\n", instruction)
+		}
+	}
+	format := strings.TrimSpace(config.OutputFormat)
+	if format == "" {
+		format = p.effectiveAudioFormat()
+	}
+	fmt.Fprintf(&b, "format=%s\n", format)
+
+	return b.String()
 }

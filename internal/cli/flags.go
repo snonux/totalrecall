@@ -61,7 +61,7 @@ func NewFlags() *Flags {
 	defaults := audio.DefaultProviderConfig()
 
 	return &Flags{
-		AudioFormat:         "mp3",
+		AudioFormat:         defaults.OutputFormat,
 		AudioProvider:       defaults.Provider,
 		ImageAPI:            "openai",
 		DeckName:            "Bulgarian Vocabulary",

@@ -103,8 +103,8 @@ func TestSetupFlags(t *testing.T) {
 	if formatFlag == nil {
 		t.Fatal("format flag not found")
 	}
-	if formatFlag.DefValue != "mp3" {
-		t.Errorf("Expected default format to be mp3, got %s", formatFlag.DefValue)
+	if formatFlag.DefValue != audio.DefaultProviderConfig().OutputFormat {
+		t.Errorf("Expected default format to be %s, got %s", audio.DefaultProviderConfig().OutputFormat, formatFlag.DefValue)
 	}
 
 	imageAPIFlag := cmd.Flags().Lookup("image-api")

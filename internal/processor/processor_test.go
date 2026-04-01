@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -446,6 +447,109 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	}
 	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.wav") {
 		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	for _, want := range []string{
+		"provider=gemini",
+		"model=gemini-2.5-flash-preview-tts",
+		"voice=Kore",
+		"speed=1.00",
+		"format=wav",
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
+}
+
+func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	tempDir := t.TempDir()
+	flags := cli.NewFlags()
+	flags.OutputDir = tempDir
+	flags.AudioProvider = "gemini"
+	flags.AudioFormat = "mp3"
+	flags.AnkiCSV = true
+
+	p := NewProcessor(flags)
+	p.translationCache.Add("ябълка", "apple")
+
+	wordDir := p.findOrCreateWordDirectory("ябълка")
+	if err := os.WriteFile(filepath.Join(wordDir, "audio.wav"), []byte("audio data"), 0644); err != nil {
+		t.Fatalf("failed to create wav audio file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wordDir, "phonetic.txt"), []byte("phonetic"), 0644); err != nil {
+		t.Fatalf("failed to create phonetic file: %v", err)
+	}
+
+	outputPath, err := p.GenerateAnkiFile()
+	if err != nil {
+		t.Fatalf("GenerateAnkiFile() unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(outputPath, "anki_import.csv") {
+		t.Fatalf("GenerateAnkiFile() output = %q, want CSV output", outputPath)
+	}
+
+	csvData, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read generated CSV: %v", err)
+	}
+	cardID := filepath.Base(wordDir)
+	if !strings.Contains(string(csvData), fmt.Sprintf("[sound:%s_audio.wav]", cardID)) {
+		t.Fatalf("generated CSV did not reference wav audio for card %q: %s", cardID, csvData)
+	}
+}
+
+func TestIsWordFullyProcessedUsesEffectiveAudioFormatForGemini(t *testing.T) {
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioProvider = "gemini"
+	flags.AudioFormat = "mp3"
+	flags.SkipImages = true
+
+	p := NewProcessor(flags)
+	wordDir := p.findOrCreateWordDirectory("ябълка")
+	files := map[string]string{
+		"translation.txt":       "ябълка = apple",
+		"phonetic.txt":          "phonetic",
+		"audio_metadata.txt":    "provider=gemini\nmodel=gemini-2.5-flash-preview-tts\nvoice=Kore\nspeed=1.00\nformat=wav\n",
+		"audio_attribution.txt": "attribution",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(wordDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to create %s: %v", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(wordDir, "audio.wav"), []byte("audio data"), 0644); err != nil {
+		t.Fatalf("failed to create wav audio file: %v", err)
+	}
+
+	if !p.isWordFullyProcessed("ябълка") {
+		t.Fatal("expected Gemini word with wav audio to be treated as fully processed")
 	}
 }
 

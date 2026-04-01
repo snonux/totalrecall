@@ -16,7 +16,7 @@ func TestNewFlags(t *testing.T) {
 		got      interface{}
 		expected interface{}
 	}{
-		{"AudioFormat", flags.AudioFormat, "mp3"},
+		{"AudioFormat", flags.AudioFormat, audio.DefaultProviderConfig().OutputFormat},
 		{"AudioProvider", flags.AudioProvider, audio.DefaultProviderConfig().Provider},
 		{"ImageAPI", flags.ImageAPI, "openai"},
 		{"ImageAPISpecified", flags.ImageAPISpecified, false},
