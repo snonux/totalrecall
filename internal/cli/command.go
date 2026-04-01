@@ -20,7 +20,9 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
 It creates audio pronunciation files using OpenAI TTS and downloads
-representative images using OpenAI or Gemini Nano Banana.
+representative images using the currently supported OpenAI image provider.
+
+Nano Banana model and text-model flags are exposed for upcoming runtime wiring.
 
 Examples:
   totalrecall                     # Launch interactive GUI (default)
@@ -55,7 +57,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (openai or nanobanana; default: openai)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (currently openai)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
@@ -80,8 +82,8 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.OpenAIImageStyle, "openai-image-style", flags.OpenAIImageStyle, "Image style: natural or vivid (dall-e-3 only)")
 
 	// Nano Banana Image Generation flags
-	cmd.Flags().StringVar(&flags.NanoBananaModel, "nanobanana-model", flags.NanoBananaModel, "Nano Banana image model (Gemini image preview model)")
-	cmd.Flags().StringVar(&flags.NanoBananaTextModel, "nanobanana-text-model", flags.NanoBananaTextModel, "Nano Banana text model for prompt generation")
+	cmd.Flags().StringVar(&flags.NanoBananaModel, "nanobanana-model", flags.NanoBananaModel, "Nano Banana image model for upcoming runtime wiring")
+	cmd.Flags().StringVar(&flags.NanoBananaTextModel, "nanobanana-text-model", flags.NanoBananaTextModel, "Nano Banana text model for upcoming runtime wiring")
 
 	// Bind flags to viper
 	if err := bindFlagsToViper(cmd); err != nil {

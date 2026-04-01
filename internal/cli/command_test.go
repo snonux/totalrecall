@@ -23,6 +23,12 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Short, "Bulgarian Anki Flashcard Generator") {
 		t.Errorf("Expected Short description to contain 'Bulgarian Anki Flashcard Generator'")
 	}
+	if !strings.Contains(cmd.Long, "currently supported OpenAI image provider") {
+		t.Errorf("Expected Long description to describe the supported OpenAI image provider")
+	}
+	if strings.Contains(cmd.Long, "OpenAI or Gemini Nano Banana") {
+		t.Errorf("Long description should not imply Nano Banana runtime support")
+	}
 
 	// Test that flags are set up
 	flagTests := []struct {
@@ -103,6 +109,9 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag.DefValue != "openai" {
 		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
 	}
+	if imageAPIFlag.Usage != "Image source (currently openai)" {
+		t.Errorf("Expected image-api help to describe only the current OpenAI provider, got %q", imageAPIFlag.Usage)
+	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
 	if nanoBananaModelFlag == nil {
@@ -111,6 +120,9 @@ func TestSetupFlags(t *testing.T) {
 	if nanoBananaModelFlag.DefValue != "gemini-3.1-flash-image-preview" {
 		t.Errorf("Expected default nanobanana-model to be gemini-3.1-flash-image-preview, got %s", nanoBananaModelFlag.DefValue)
 	}
+	if !strings.Contains(nanoBananaModelFlag.Usage, "upcoming runtime wiring") {
+		t.Errorf("Expected nanobanana-model help to describe future wiring, got %q", nanoBananaModelFlag.Usage)
+	}
 
 	nanoBananaTextModelFlag := cmd.Flags().Lookup("nanobanana-text-model")
 	if nanoBananaTextModelFlag == nil {
@@ -118,6 +130,9 @@ func TestSetupFlags(t *testing.T) {
 	}
 	if nanoBananaTextModelFlag.DefValue != "gemini-2.5-flash" {
 		t.Errorf("Expected default nanobanana-text-model to be gemini-2.5-flash, got %s", nanoBananaTextModelFlag.DefValue)
+	}
+	if !strings.Contains(nanoBananaTextModelFlag.Usage, "upcoming runtime wiring") {
+		t.Errorf("Expected nanobanana-text-model help to describe future wiring, got %q", nanoBananaTextModelFlag.Usage)
 	}
 }
 
