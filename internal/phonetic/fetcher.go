@@ -147,6 +147,11 @@ func (f *Fetcher) FetchAndSave(word, wordDir string) error {
 	return nil
 }
 
+// Provider reports the configured phonetic backend.
+func (f *Fetcher) Provider() Provider {
+	return f.provider
+}
+
 func (f *Fetcher) fetchPhoneticInfo(ctx context.Context, word string) (string, error) {
 	switch f.provider {
 	case ProviderOpenAI:
@@ -185,7 +190,7 @@ func (f *Fetcher) fetchWithGemini(ctx context.Context, word string) (string, err
 
 func normalizeConfig(config *Config) Config {
 	normalized := Config{
-		Provider:     ProviderGemini,
+		Provider:     ProviderOpenAI,
 		OpenAIKey:    "",
 		GoogleAPIKey: "",
 	}
@@ -204,7 +209,7 @@ func normalizeConfig(config *Config) Config {
 func normalizeProvider(provider Provider) Provider {
 	normalized := Provider(strings.ToLower(strings.TrimSpace(string(provider))))
 	if normalized == "" {
-		return ProviderGemini
+		return ProviderOpenAI
 	}
 
 	return normalized

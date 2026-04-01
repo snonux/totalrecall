@@ -10,37 +10,15 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestNewFetcher_DefaultsToGemini(t *testing.T) {
+func TestNewFetcher_DefaultsToOpenAI(t *testing.T) {
 	fetcher := NewFetcher(nil)
 
 	if fetcher == nil {
 		t.Fatal("NewFetcher returned nil")
 	}
 
-	if fetcher.provider != ProviderGemini {
-		t.Fatalf("expected default provider %q, got %q", ProviderGemini, fetcher.provider)
-	}
-
-	if fetcher.openAIClient != nil {
-		t.Error("expected OpenAI client to be nil without an API key")
-	}
-
-	if fetcher.geminiClient != nil {
-		t.Error("expected Gemini client to be nil without an API key")
-	}
-}
-
-func TestFetchAndSave_NoGoogleAPIKey(t *testing.T) {
-	fetcher := NewFetcher(nil)
-	tmpDir := t.TempDir()
-
-	err := fetcher.FetchAndSave("ябълка", tmpDir)
-	if err == nil {
-		t.Fatal("expected error for missing Google API key")
-	}
-
-	if err.Error() != "Google API key not configured" {
-		t.Fatalf("expected Google API key error, got %v", err)
+	if got := fetcher.Provider(); got != ProviderOpenAI {
+		t.Fatalf("expected default provider %q, got %q", ProviderOpenAI, got)
 	}
 }
 
@@ -55,6 +33,34 @@ func TestFetchAndSave_NoOpenAIAPIKey(t *testing.T) {
 
 	if err.Error() != "OpenAI API key not configured" {
 		t.Fatalf("expected OpenAI API key error, got %v", err)
+	}
+}
+
+func TestFetchAndSave_NoGoogleAPIKey(t *testing.T) {
+	fetcher := NewFetcher(&Config{Provider: ProviderGemini})
+	tmpDir := t.TempDir()
+
+	err := fetcher.FetchAndSave("ябълка", tmpDir)
+	if err == nil {
+		t.Fatal("expected error for missing Google API key")
+	}
+
+	if err.Error() != "Google API key not configured" {
+		t.Fatalf("expected Google API key error, got %v", err)
+	}
+}
+
+func TestFetchAndSave_UnknownProvider(t *testing.T) {
+	fetcher := NewFetcher(&Config{Provider: Provider("mystery")})
+	tmpDir := t.TempDir()
+
+	err := fetcher.FetchAndSave("ябълка", tmpDir)
+	if err == nil {
+		t.Fatal("expected error for unknown provider")
+	}
+
+	if err.Error() != "unknown phonetic provider: mystery" {
+		t.Fatalf("expected unknown provider error, got %v", err)
 	}
 }
 
@@ -124,22 +130,58 @@ func TestFetchAndSave_GeminiProvider_WritesFile(t *testing.T) {
 	}
 }
 
-func TestFetchAndSave_InvalidDirectory(t *testing.T) {
-	originalFetch := fetchOpenAIPhonetic
-	fetchOpenAIPhonetic = func(context.Context, *openai.Client, string) (string, error) {
-		return "[ˈjɤbɐlkɐ]", nil
+func TestFetchAndSave_GeminiInitFailure(t *testing.T) {
+	originalNewGeminiClient := newGeminiClient
+	newGeminiClient = func(context.Context, *genai.ClientConfig) (*genai.Client, error) {
+		return nil, context.Canceled
 	}
 	t.Cleanup(func() {
-		fetchOpenAIPhonetic = originalFetch
+		newGeminiClient = originalNewGeminiClient
 	})
 
 	fetcher := NewFetcher(&Config{
-		Provider:  ProviderOpenAI,
-		OpenAIKey: "test-openai-key",
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
 	})
 
-	err := fetcher.FetchAndSave("ябълка", "/nonexistent/path")
+	err := fetcher.FetchAndSave("ябълка", t.TempDir())
 	if err == nil {
-		t.Fatal("expected error for invalid directory")
+		t.Fatal("expected Gemini init failure")
+	}
+
+	if err.Error() != "Gemini client initialization failed: context canceled" {
+		t.Fatalf("unexpected Gemini init error: %v", err)
+	}
+}
+
+func TestFetchAndSave_GeminiAPIFailure(t *testing.T) {
+	originalFetch := fetchGeminiPhonetic
+	fetchGeminiPhonetic = func(context.Context, *genai.Client, string) (string, error) {
+		return "", context.DeadlineExceeded
+	}
+	t.Cleanup(func() {
+		fetchGeminiPhonetic = originalFetch
+	})
+
+	originalNewGeminiClient := newGeminiClient
+	newGeminiClient = func(context.Context, *genai.ClientConfig) (*genai.Client, error) {
+		return &genai.Client{}, nil
+	}
+	t.Cleanup(func() {
+		newGeminiClient = originalNewGeminiClient
+	})
+
+	fetcher := NewFetcher(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
+	})
+
+	err := fetcher.FetchAndSave("ябълка", t.TempDir())
+	if err == nil {
+		t.Fatal("expected Gemini API failure")
+	}
+
+	if err.Error() != "context deadline exceeded" {
+		t.Fatalf("unexpected Gemini API error: %v", err)
 	}
 }

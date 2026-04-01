@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeberg.org/snonux/totalrecall/internal/cli"
+	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"github.com/spf13/viper"
 )
 
@@ -41,6 +42,45 @@ func TestNewProcessor(t *testing.T) {
 
 	if p.phoneticFetcher == nil {
 		t.Error("Phonetic fetcher not initialized")
+	}
+}
+
+func TestNewProcessor_DefaultPhoneticProviderUsesOpenAI(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+
+	flags := cli.NewFlags()
+	p := NewProcessor(flags)
+
+	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderOpenAI {
+		t.Fatalf("expected default phonetic provider %q, got %q", phonetic.ProviderOpenAI, got)
+	}
+}
+
+func TestNewProcessor_ExplicitGeminiPhoneticProvider(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("phonetic.provider", "gemini")
+
+	flags := cli.NewFlags()
+	p := NewProcessor(flags)
+
+	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderGemini {
+		t.Fatalf("expected gemini phonetic provider %q, got %q", phonetic.ProviderGemini, got)
 	}
 }
 

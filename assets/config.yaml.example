@@ -32,12 +32,12 @@ translation:
 # Phonetic configuration
 phonetic:
   # IPA phonetic backend used by internal/phonetic/fetcher.go
-  # Supported values: gemini (default) or openai
-  provider: gemini
+  # Supported values: openai (default) or gemini
+  provider: openai
 
 # Google API settings
 google:
-  # Used by Gemini translation and Gemini phonetic fetching
+  # Used by Gemini translation and Gemini phonetic fetching when enabled
   api_key: ${GOOGLE_API_KEY}
 
 # Image configuration
