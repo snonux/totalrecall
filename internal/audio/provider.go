@@ -19,7 +19,7 @@ type Provider interface {
 
 // Config holds common configuration for audio providers
 type Config struct {
-	Provider     string // Provider name: "openai"
+	Provider     string // Provider name: "openai" or "gemini"
 	OutputDir    string // Directory for output files
 	OutputFormat string // Output format: "mp3" or "wav"
 
@@ -30,6 +30,11 @@ type Config struct {
 	OpenAISpeed       float64 // 0.25 to 4.0
 	OpenAIInstruction string  // Voice instructions for gpt-4o-mini-tts model
 
+	// Gemini-specific settings
+	GoogleAPIKey   string
+	GeminiTTSModel string  // "gemini-2.5-flash"
+	GeminiVoice    string  // Prebuilt Gemini TTS voice name, or empty for the model default
+	GeminiSpeed    float64 // Prompt hint for desired speech speed
 }
 
 // DefaultConfig returns default configuration
@@ -43,6 +48,8 @@ func DefaultProviderConfig() *Config {
 		OpenAISpeed:  1.0,
 		// OpenAISpeed:       0.98, // Default speed for clarity
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
+		GeminiTTSModel:    "gemini-2.5-flash",
+		GeminiSpeed:       1.0,
 	}
 }
 
