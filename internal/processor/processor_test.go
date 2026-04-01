@@ -226,8 +226,14 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	if guiConfig.ImageProvider != gui.DefaultConfig().ImageProvider {
 		t.Fatalf("guiConfig.ImageProvider = %q, want GUI default %q", guiConfig.ImageProvider, gui.DefaultConfig().ImageProvider)
 	}
+	if guiConfig.AudioProvider != "gemini" {
+		t.Fatalf("guiConfig.AudioProvider = %q, want %q", guiConfig.AudioProvider, "gemini")
+	}
 	if guiConfig.AudioFormat != "wav" {
 		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "wav")
+	}
+	if guiConfig.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
+		t.Fatalf("guiConfig.GeminiTTSModel = %q, want %q", guiConfig.GeminiTTSModel, "gemini-2.5-flash-preview-tts")
 	}
 	if guiConfig.GoogleAPIKey != "test-google-key" {
 		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")
@@ -253,6 +259,9 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	guiConfig := p.guiConfigForRunMode()
 	if guiConfig.ImageProvider != "openai" {
 		t.Fatalf("guiConfig.ImageProvider = %q, want %q", guiConfig.ImageProvider, "openai")
+	}
+	if guiConfig.AudioProvider != "gemini" {
+		t.Fatalf("guiConfig.AudioProvider = %q, want %q", guiConfig.AudioProvider, "gemini")
 	}
 	if guiConfig.GoogleAPIKey != "test-google-key" {
 		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")

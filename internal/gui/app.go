@@ -107,11 +107,17 @@ type Application struct {
 
 // Config holds GUI application configuration
 type Config struct {
-	OutputDir           string
-	AudioFormat         string
-	ImageProvider       string
-	OpenAIKey           string
-	GoogleAPIKey        string
+	OutputDir   string
+	AudioFormat string
+	// AudioProvider selects the TTS backend used by the GUI.
+	AudioProvider string
+	ImageProvider string
+	OpenAIKey     string
+	GoogleAPIKey  string
+	// GeminiTTSModel selects the Gemini TTS model when Gemini audio is active.
+	GeminiTTSModel string
+	// GeminiVoice selects a specific Gemini voice; empty uses a random shared voice.
+	GeminiVoice         string
 	TranslationProvider translation.Provider
 	PhoneticProvider    phonetic.Provider
 	AutoPlay            bool // Whether to automatically play audio when generated or navigated to
@@ -127,10 +133,13 @@ func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	// Use XDG Base Directory specification for state data
 	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
+	audioDefaults := audio.DefaultProviderConfig()
 
 	return &Config{
 		OutputDir:           outputDir,
-		AudioFormat:         "mp3",
+		AudioFormat:         audioDefaults.OutputFormat,
+		AudioProvider:       audioDefaults.Provider,
+		GeminiTTSModel:      audioDefaults.GeminiTTSModel,
 		ImageProvider:       imageProviderNanoBanana,
 		TranslationProvider: translation.ProviderOpenAI,
 		PhoneticProvider:    phonetic.ProviderOpenAI,
@@ -145,14 +154,24 @@ func New(config *Config) *Application {
 	} else {
 		// Fill in missing fields with defaults
 		defaults := DefaultConfig()
+		if config.AudioProvider == "" {
+			config.AudioProvider = defaults.AudioProvider
+		}
 		if config.OutputDir == "" {
 			config.OutputDir = defaults.OutputDir
 		}
 		if config.AudioFormat == "" {
-			config.AudioFormat = defaults.AudioFormat
+			if strings.EqualFold(config.AudioProvider, "gemini") {
+				config.AudioFormat = defaults.AudioFormat
+			} else {
+				config.AudioFormat = "mp3"
+			}
 		}
 		if config.ImageProvider == "" {
 			config.ImageProvider = defaults.ImageProvider
+		}
+		if config.GeminiTTSModel == "" {
+			config.GeminiTTSModel = defaults.GeminiTTSModel
 		}
 		// Don't override AutoPlay if it's explicitly set to false
 		// (since bool zero value is false, we can't distinguish between unset and false)
@@ -184,16 +203,7 @@ func New(config *Config) *Application {
 	app.queue.SetCallbacks(app.onQueueStatusUpdate, app.onJobComplete)
 
 	// Set up audio configuration
-	app.audioConfig = &audio.Config{
-		Provider:          "openai",
-		OutputDir:         config.OutputDir,
-		OutputFormat:      config.AudioFormat,
-		OpenAIKey:         config.OpenAIKey,
-		OpenAIModel:       "gpt-4o-mini-tts",
-		OpenAIVoice:       "nova",
-		OpenAISpeed:       0.9,
-		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-	}
+	app.audioConfig = audioConfigForApp(config)
 	app.phoneticFetcher = phonetic.NewFetcher(&phonetic.Config{
 		Provider:     config.PhoneticProvider,
 		OpenAIKey:    config.OpenAIKey,
@@ -230,6 +240,48 @@ func translationConfigForApp(config *Config) *translation.Config {
 		OpenAIKey:    config.OpenAIKey,
 		GoogleAPIKey: config.GoogleAPIKey,
 	}
+}
+
+// audioConfigForApp normalizes the GUI audio settings using the shared audio defaults.
+func audioConfigForApp(config *Config) *audio.Config {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	defaults := audio.DefaultProviderConfig()
+	provider := strings.ToLower(strings.TrimSpace(config.AudioProvider))
+	if provider == "" {
+		provider = defaults.Provider
+	}
+	outputFormat := strings.TrimSpace(config.AudioFormat)
+	if outputFormat == "" {
+		if provider == "gemini" {
+			outputFormat = defaults.OutputFormat
+		} else {
+			outputFormat = "mp3"
+		}
+	}
+
+	audioConfig := &audio.Config{
+		Provider:          provider,
+		OutputDir:         config.OutputDir,
+		OutputFormat:      outputFormat,
+		OpenAIKey:         config.OpenAIKey,
+		GoogleAPIKey:      config.GoogleAPIKey,
+		OpenAIModel:       defaults.OpenAIModel,
+		OpenAIVoice:       defaults.OpenAIVoice,
+		OpenAISpeed:       defaults.OpenAISpeed,
+		OpenAIInstruction: defaults.OpenAIInstruction,
+		GeminiTTSModel:    defaults.GeminiTTSModel,
+		GeminiVoice:       config.GeminiVoice,
+		GeminiSpeed:       defaults.GeminiSpeed,
+	}
+
+	if config.GeminiTTSModel != "" {
+		audioConfig.GeminiTTSModel = config.GeminiTTSModel
+	}
+
+	return audioConfig
 }
 
 // setupUI creates the main user interface

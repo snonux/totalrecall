@@ -629,10 +629,13 @@ func (p *Processor) guiConfigForRunMode() *gui.Config {
 	}
 
 	return &gui.Config{
-		AudioFormat:         p.flags.AudioFormat,
+		AudioFormat:         p.effectiveAudioFormat(),
+		AudioProvider:       p.audioProviderName(),
 		ImageProvider:       imageProvider,
 		OpenAIKey:           cli.GetOpenAIKey(),
 		GoogleAPIKey:        cli.GetGoogleAPIKey(),
+		GeminiTTSModel:      p.geminiTTSModel(),
+		GeminiVoice:         p.geminiVoice(),
 		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
 		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
 		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)

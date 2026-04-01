@@ -3,17 +3,28 @@ package gui
 import (
 	"testing"
 
+	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
 func TestDefaultConfigUsesOpenAITranslationProvider(t *testing.T) {
 	config := DefaultConfig()
+	audioDefaults := audio.DefaultProviderConfig()
 
 	if config.TranslationProvider != translation.ProviderOpenAI {
 		t.Fatalf("DefaultConfig() translation provider = %q, want %q", config.TranslationProvider, translation.ProviderOpenAI)
 	}
 	if config.ImageProvider != imageProviderNanoBanana {
 		t.Fatalf("DefaultConfig() image provider = %q, want %q", config.ImageProvider, imageProviderNanoBanana)
+	}
+	if config.AudioProvider != audioDefaults.Provider {
+		t.Fatalf("DefaultConfig() audio provider = %q, want %q", config.AudioProvider, audioDefaults.Provider)
+	}
+	if config.AudioFormat != audioDefaults.OutputFormat {
+		t.Fatalf("DefaultConfig() audio format = %q, want %q", config.AudioFormat, audioDefaults.OutputFormat)
+	}
+	if config.GeminiTTSModel != audioDefaults.GeminiTTSModel {
+		t.Fatalf("DefaultConfig() GeminiTTSModel = %q, want %q", config.GeminiTTSModel, audioDefaults.GeminiTTSModel)
 	}
 }
 

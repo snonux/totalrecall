@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -29,11 +30,96 @@ var newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareI
 
 var newAudioProvider = audio.NewProvider
 
-func randomVoiceAndSpeed(voices []string) (string, float64) {
+func randomVoice(voices []string) string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	voice := voices[rng.Intn(len(voices))]
-	speed := 0.90 + rng.Float64()*0.10
-	return voice, speed
+	return voices[rng.Intn(len(voices))]
+}
+
+func randomOpenAISpeed() float64 {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return 0.90 + rng.Float64()*0.10
+}
+
+func (a *Application) audioProviderName() string {
+	if a != nil && a.audioConfig != nil {
+		if provider := strings.ToLower(strings.TrimSpace(a.audioConfig.Provider)); provider != "" {
+			return provider
+		}
+	}
+	return audio.DefaultProviderConfig().Provider
+}
+
+func (a *Application) audioVoices() []string {
+	switch a.audioProviderName() {
+	case "gemini":
+		return audio.GeminiVoices
+	default:
+		return audio.OpenAIVoices
+	}
+}
+
+func (a *Application) audioVoiceAndSpeed() (string, float64) {
+	switch a.audioProviderName() {
+	case "gemini":
+		if a.audioConfig != nil {
+			if voice := strings.TrimSpace(a.audioConfig.GeminiVoice); voice != "" {
+				return voice, a.geminiSpeed()
+			}
+		}
+		return randomVoice(a.audioVoices()), a.geminiSpeed()
+	default:
+		return randomVoice(a.audioVoices()), randomOpenAISpeed()
+	}
+}
+
+func (a *Application) geminiSpeed() float64 {
+	if a != nil && a.audioConfig != nil && a.audioConfig.GeminiSpeed > 0 {
+		return a.audioConfig.GeminiSpeed
+	}
+	return audio.DefaultProviderConfig().GeminiSpeed
+}
+
+func (a *Application) audioOutputFormat() string {
+	if a.audioProviderName() == "gemini" {
+		return "wav"
+	}
+
+	if a != nil && a.config != nil && strings.TrimSpace(a.config.AudioFormat) != "" {
+		return a.config.AudioFormat
+	}
+
+	if a != nil && a.audioConfig != nil && strings.TrimSpace(a.audioConfig.OutputFormat) != "" {
+		return a.audioConfig.OutputFormat
+	}
+
+	return audio.DefaultProviderConfig().OutputFormat
+}
+
+func (a *Application) audioConfigForGeneration(voice string, speed float64) audio.Config {
+	audioConfig := audio.Config{}
+	if a != nil && a.audioConfig != nil {
+		audioConfig = *a.audioConfig
+	}
+
+	audioConfig.Provider = a.audioProviderName()
+	if a != nil && a.config != nil {
+		audioConfig.OutputDir = a.config.OutputDir
+	}
+	audioConfig.OutputFormat = a.audioOutputFormat()
+
+	switch audioConfig.Provider {
+	case "gemini":
+		audioConfig.GeminiVoice = voice
+		audioConfig.GeminiSpeed = speed
+		if strings.TrimSpace(audioConfig.GeminiTTSModel) == "" {
+			audioConfig.GeminiTTSModel = audio.DefaultProviderConfig().GeminiTTSModel
+		}
+	default:
+		audioConfig.OpenAIVoice = voice
+		audioConfig.OpenAISpeed = speed
+	}
+
+	return audioConfig
 }
 
 // translateWord translates a Bulgarian word to English
@@ -59,20 +145,14 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	// Check if this is a regeneration by looking for existing audio file
 	isRegeneration := false
 	if cardDir != "" {
-		audioFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+		audioFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.audioOutputFormat()))
 		if _, err := os.Stat(audioFile); err == nil {
 			isRegeneration = true
 		}
 	}
 
-	// Select a random voice
-	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
-
-	// Create a copy of audio config with selected voice and speed
-	audioConfig := *a.audioConfig
-	audioConfig.OpenAIVoice = voice
-	audioConfig.OpenAISpeed = speed
-	audioConfig.OutputDir = a.config.OutputDir // Ensure correct output directory
+	voice, speed := a.audioVoiceAndSpeed()
+	audioConfig := a.audioConfigForGeneration(voice, speed)
 
 	// Log the audio generation details
 	if isRegeneration {
@@ -93,7 +173,7 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	}
 
 	// Generate filename in subdirectory
-	outputFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
+	outputFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", audioConfig.OutputFormat))
 
 	// Generate audio
 	err = provider.GenerateAudio(ctx, word, outputFile)
@@ -126,12 +206,8 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
-
-	audioConfig := *a.audioConfig
-	audioConfig.OpenAIVoice = voice
-	audioConfig.OpenAISpeed = speed
-	audioConfig.OutputDir = a.config.OutputDir
+	voice, speed := a.audioVoiceAndSpeed()
+	audioConfig := a.audioConfigForGeneration(voice, speed)
 
 	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
@@ -141,7 +217,7 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 
 	fmt.Printf("DEBUG (generateAudioFront): Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
-	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", audioConfig.OutputFormat))
 	fmt.Printf("DEBUG (generateAudioFront): Will write to: %s\n", frontFile)
 	if err := provider.GenerateAudio(ctx, word, frontFile); err != nil {
 		return "", fmt.Errorf("failed to generate front audio: %w", err)
@@ -167,12 +243,8 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
-
-	audioConfig := *a.audioConfig
-	audioConfig.OpenAIVoice = voice
-	audioConfig.OpenAISpeed = speed
-	audioConfig.OutputDir = a.config.OutputDir
+	voice, speed := a.audioVoiceAndSpeed()
+	audioConfig := a.audioConfigForGeneration(voice, speed)
 
 	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
@@ -182,7 +254,7 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 
 	fmt.Printf("DEBUG (generateAudioBack): Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
 	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
-	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", audioConfig.OutputFormat))
 	fmt.Printf("DEBUG (generateAudioBack): Will write to: %s\n", backFile)
 	if err := provider.GenerateAudio(ctx, text, backFile); err != nil {
 		return "", fmt.Errorf("failed to generate back audio: %w", err)
@@ -198,12 +270,8 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 		return "", "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
-
-	audioConfig := *a.audioConfig
-	audioConfig.OpenAIVoice = voice
-	audioConfig.OpenAISpeed = speed
-	audioConfig.OutputDir = a.config.OutputDir
+	voice, speed := a.audioVoiceAndSpeed()
+	audioConfig := a.audioConfigForGeneration(voice, speed)
 
 	provider, err := newAudioProvider(&audioConfig)
 	if err != nil {
@@ -212,14 +280,14 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 
 	// Generate front audio
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", front, voice, speed)
-	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", audioConfig.OutputFormat))
 	if err := provider.GenerateAudio(ctx, front, frontFile); err != nil {
 		return "", "", fmt.Errorf("failed to generate front audio: %w", err)
 	}
 
 	// Generate back audio
 	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", back, voice, speed)
-	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", audioConfig.OutputFormat))
 	if err := provider.GenerateAudio(ctx, back, backFile); err != nil {
 		return frontFile, "", fmt.Errorf("failed to generate back audio: %w", err)
 	}
@@ -339,14 +407,40 @@ func (a *Application) imagePromptCallback(cardDir, word string) func(prompt stri
 
 // saveAudioAttribution saves attribution info for generated audio
 func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed float64) error {
-	attribution := audio.BuildOpenAIAttribution(audio.AttributionParams{
-		Word:        word,
-		Model:       a.audioConfig.OpenAIModel,
-		Voice:       voice,
-		Speed:       speed,
-		Instruction: a.audioConfig.OpenAIInstruction,
-		GeneratedAt: time.Now(),
-	})
+	var attribution string
+	switch a.audioProviderName() {
+	case "gemini":
+		model := audio.DefaultProviderConfig().GeminiTTSModel
+		if a.audioConfig != nil && strings.TrimSpace(a.audioConfig.GeminiTTSModel) != "" {
+			model = a.audioConfig.GeminiTTSModel
+		}
+		attribution = audio.BuildGeminiAttribution(audio.AttributionParams{
+			Word:        word,
+			Model:       model,
+			Voice:       voice,
+			Speed:       speed,
+			GeneratedAt: time.Now(),
+		})
+	default:
+		model := audio.DefaultProviderConfig().OpenAIModel
+		instruction := audio.DefaultProviderConfig().OpenAIInstruction
+		if a.audioConfig != nil {
+			if strings.TrimSpace(a.audioConfig.OpenAIModel) != "" {
+				model = a.audioConfig.OpenAIModel
+			}
+			if strings.TrimSpace(a.audioConfig.OpenAIInstruction) != "" {
+				instruction = a.audioConfig.OpenAIInstruction
+			}
+		}
+		attribution = audio.BuildOpenAIAttribution(audio.AttributionParams{
+			Word:        word,
+			Model:       model,
+			Voice:       voice,
+			Speed:       speed,
+			Instruction: instruction,
+			GeneratedAt: time.Now(),
+		})
+	}
 
 	// Save to file
 	attrPath := audio.AttributionPath(audioFile)
