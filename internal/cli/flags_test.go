@@ -16,6 +16,7 @@ func TestNewFlags(t *testing.T) {
 	}{
 		{"AudioFormat", flags.AudioFormat, "mp3"},
 		{"ImageAPI", flags.ImageAPI, "openai"},
+		{"ImageAPISpecified", flags.ImageAPISpecified, false},
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},
@@ -84,7 +85,7 @@ func TestFlagsStructure(t *testing.T) {
 	flagsType := reflect.TypeOf(*flags)
 
 	expectedFields := []string{
-		"CfgFile", "OutputDir", "AudioFormat", "ImageAPI", "BatchFile",
+		"CfgFile", "OutputDir", "AudioFormat", "ImageAPI", "ImageAPISpecified", "BatchFile",
 		"SkipAudio", "SkipImages", "GenerateAnki", "AnkiCSV", "DeckName",
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",

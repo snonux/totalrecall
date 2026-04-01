@@ -541,16 +541,7 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 
 // RunGUIMode launches the GUI application
 func (p *Processor) RunGUIMode() error {
-	// Create GUI configuration from command line flags and viper config
-	guiConfig := &gui.Config{
-		AudioFormat:         p.flags.AudioFormat,
-		ImageProvider:       p.flags.ImageAPI,
-		OpenAIKey:           cli.GetOpenAIKey(),
-		GoogleAPIKey:        cli.GetGoogleAPIKey(),
-		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
-		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
-		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
-	}
+	guiConfig := p.guiConfigForRunMode()
 
 	// Only set OutputDir if it was explicitly provided via flag
 	// Check if the outputDir is different from the default
@@ -567,6 +558,23 @@ func (p *Processor) RunGUIMode() error {
 	app.Run()
 
 	return nil
+}
+
+func (p *Processor) guiConfigForRunMode() *gui.Config {
+	imageProvider := p.flags.ImageAPI
+	if !p.flags.ImageAPISpecified {
+		imageProvider = gui.DefaultConfig().ImageProvider
+	}
+
+	return &gui.Config{
+		AudioFormat:         p.flags.AudioFormat,
+		ImageProvider:       imageProvider,
+		OpenAIKey:           cli.GetOpenAIKey(),
+		GoogleAPIKey:        cli.GetGoogleAPIKey(),
+		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
+		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
+		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
+	}
 }
 
 // Helper methods

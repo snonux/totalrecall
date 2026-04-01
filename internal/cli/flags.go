@@ -8,20 +8,21 @@ const (
 // Flags holds all command-line flag values
 type Flags struct {
 	// General flags
-	CfgFile      string
-	OutputDir    string
-	AudioFormat  string
-	ImageAPI     string
-	BatchFile    string
-	SkipAudio    bool
-	SkipImages   bool
-	GenerateAnki bool
-	AnkiCSV      bool
-	DeckName     string
-	ListModels   bool
-	AllVoices    bool
-	NoAutoPlay   bool
-	Archive      bool
+	CfgFile           string
+	OutputDir         string
+	AudioFormat       string
+	ImageAPI          string
+	ImageAPISpecified bool
+	BatchFile         string
+	SkipAudio         bool
+	SkipImages        bool
+	GenerateAnki      bool
+	AnkiCSV           bool
+	DeckName          string
+	ListModels        bool
+	AllVoices         bool
+	NoAutoPlay        bool
+	Archive           bool
 
 	// OpenAI flags
 	OpenAIModel       string

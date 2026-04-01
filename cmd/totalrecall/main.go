@@ -60,6 +60,8 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		fmt.Printf("Note: Using image size 1024x1024 for DALL-E 3 (use --openai-image-size to override)\n")
 	}
 
+	flags.ImageAPISpecified = cmd.Flags().Changed("image-api")
+
 	// Create processor
 	proc := processor.NewProcessor(flags)
 

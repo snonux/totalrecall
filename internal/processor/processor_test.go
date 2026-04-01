@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeberg.org/snonux/totalrecall/internal/cli"
+	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"github.com/spf13/viper"
 )
@@ -128,6 +129,54 @@ func TestNewProcessor_ExplicitGeminiTranslationProvider(t *testing.T) {
 	}
 	if err.Error() != "Google API key not found" {
 		t.Fatalf("Expected Gemini provider error, got: %v", err)
+	}
+}
+
+func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+
+	flags := cli.NewFlags()
+	flags.AudioFormat = "wav"
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = false
+	p := NewProcessor(flags)
+
+	guiConfig := p.guiConfigForRunMode()
+	if guiConfig.ImageProvider != gui.DefaultConfig().ImageProvider {
+		t.Fatalf("guiConfig.ImageProvider = %q, want GUI default %q", guiConfig.ImageProvider, gui.DefaultConfig().ImageProvider)
+	}
+	if guiConfig.AudioFormat != "wav" {
+		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "wav")
+	}
+}
+
+func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+
+	flags := cli.NewFlags()
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = true
+	p := NewProcessor(flags)
+
+	guiConfig := p.guiConfigForRunMode()
+	if guiConfig.ImageProvider != "openai" {
+		t.Fatalf("guiConfig.ImageProvider = %q, want %q", guiConfig.ImageProvider, "openai")
 	}
 }
 
