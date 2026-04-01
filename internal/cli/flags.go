@@ -45,7 +45,7 @@ type Flags struct {
 func NewFlags() *Flags {
 	return &Flags{
 		AudioFormat:         "mp3",
-		ImageAPI:            "nanobanana",
+		ImageAPI:            "openai",
 		DeckName:            "Bulgarian Vocabulary",
 		OpenAIModel:         "gpt-4o-mini-tts",
 		OpenAISpeed:         0.9,

@@ -55,7 +55,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (openai or nanobanana; default: nanobanana)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (openai or nanobanana; default: openai)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")

@@ -15,7 +15,7 @@ func TestNewFlags(t *testing.T) {
 		expected interface{}
 	}{
 		{"AudioFormat", flags.AudioFormat, "mp3"},
-		{"ImageAPI", flags.ImageAPI, "nanobanana"},
+		{"ImageAPI", flags.ImageAPI, "openai"},
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},

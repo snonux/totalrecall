@@ -100,8 +100,8 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag == nil {
 		t.Fatal("image-api flag not found")
 	}
-	if imageAPIFlag.DefValue != "nanobanana" {
-		t.Errorf("Expected default image-api to be nanobanana, got %s", imageAPIFlag.DefValue)
+	if imageAPIFlag.DefValue != "openai" {
+		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
@@ -275,24 +275,35 @@ func TestGetGoogleAPIKey(t *testing.T) {
 		name      string
 		envKey    string
 		configKey string
+		legacyKey string
 		expected  string
 	}{
 		{
 			name:      "from environment",
 			envKey:    "env-google-key",
 			configKey: "config-google-key",
+			legacyKey: "legacy-google-key",
 			expected:  "env-google-key",
 		},
 		{
 			name:      "from config when no env",
 			envKey:    "",
 			configKey: "config-google-key",
+			legacyKey: "legacy-google-key",
 			expected:  "config-google-key",
+		},
+		{
+			name:      "falls back to legacy config key",
+			envKey:    "",
+			configKey: "",
+			legacyKey: "legacy-google-key",
+			expected:  "legacy-google-key",
 		},
 		{
 			name:      "empty when neither set",
 			envKey:    "",
 			configKey: "",
+			legacyKey: "",
 			expected:  "",
 		},
 	}
@@ -319,12 +330,35 @@ func TestGetGoogleAPIKey(t *testing.T) {
 			if tt.configKey != "" {
 				viper.Set("image.google_api_key", tt.configKey)
 			}
+			if tt.legacyKey != "" {
+				viper.Set("google.api_key", tt.legacyKey)
+			}
 
 			got := GetGoogleAPIKey()
 			if got != tt.expected {
 				t.Errorf("GetGoogleAPIKey() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestGetGoogleAPIKey_PrefersImageConfigOverLegacyConfig(t *testing.T) {
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+
+	viper.Reset()
+	if err := os.Unsetenv("GOOGLE_API_KEY"); err != nil {
+		t.Fatalf("Failed to unset GOOGLE_API_KEY: %v", err)
+	}
+
+	viper.Set("image.google_api_key", "new-google-key")
+	viper.Set("google.api_key", "legacy-google-key")
+
+	if got := GetGoogleAPIKey(); got != "new-google-key" {
+		t.Fatalf("GetGoogleAPIKey() = %v, want %v", got, "new-google-key")
 	}
 }
 
@@ -381,5 +415,8 @@ func TestBindFlagsToViper(t *testing.T) {
 	}
 	if viper.GetString("image.nanobanana_text_model") != "gemini-2.5-flash" {
 		t.Errorf("Expected image.nanobanana_text_model to be gemini-2.5-flash, got %s", viper.GetString("image.nanobanana_text_model"))
+	}
+	if viper.GetString("image.provider") != "openai" {
+		t.Errorf("Expected image.provider to be openai by default, got %s", viper.GetString("image.provider"))
 	}
 }
