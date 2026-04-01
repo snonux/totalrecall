@@ -105,11 +105,9 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
-	if !strings.Contains(results[0].Description, "ябълка") {
-		t.Fatalf("result description = %q, want it to mention the query", results[0].Description)
-	}
-	if !strings.Contains(results[0].Description, "banana") {
-		t.Fatalf("result description = %q, want translation metadata from custom prompt", results[0].Description)
+	wantDescription := "Generated educational image for ябълка (banana)"
+	if results[0].Description != wantDescription {
+		t.Fatalf("result description = %q, want %q", results[0].Description, wantDescription)
 	}
 	if !strings.HasPrefix(results[0].URL, "data:image/png;base64,") {
 		t.Fatalf("expected PNG data URI, got %q", results[0].URL)
