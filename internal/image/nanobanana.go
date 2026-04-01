@@ -130,8 +130,6 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 	description := fmt.Sprintf("Generated educational image for %s", opts.Query)
 	if translatedWord != "" {
 		description = fmt.Sprintf("%s (%s)", description, translatedWord)
-	} else if opts.Translation != "" {
-		description = fmt.Sprintf("%s (%s)", description, strings.TrimSpace(opts.Translation))
 	}
 
 	result := SearchResult{
@@ -244,10 +242,10 @@ func (c *NanoBananaClient) ensureReady() error {
 	return nil
 }
 
-func (c *NanoBananaClient) resolveTranslation(ctx context.Context, opts *SearchOptions) (string, error) {
-	if opts.Translation != "" {
-		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, opts.Translation)
-		return opts.Translation, nil
+func (c *NanoBananaClient) resolveTranslation(ctx context.Context, opts *SearchOptions, translation string) (string, error) {
+	if translation != "" {
+		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, translation)
+		return translation, nil
 	}
 
 	translation, err := c.translateBulgarianToEnglish(ctx, opts.Query)
@@ -280,15 +278,17 @@ func (c *NanoBananaClient) buildPrompt(ctx context.Context, opts *SearchOptions)
 		}
 	}
 
+	translation := strings.TrimSpace(opts.Translation)
+
 	if customPrompt := strings.TrimSpace(opts.CustomPrompt); customPrompt != "" {
 		if len(customPrompt) > 1000 {
 			customPrompt = customPrompt[:997] + "..."
 		}
 		fmt.Printf("Using custom prompt: %s\n", customPrompt)
-		return customPrompt, "", nil
+		return customPrompt, translation, nil
 	}
 
-	translatedWord, err := c.resolveTranslation(ctx, opts)
+	translatedWord, err := c.resolveTranslation(ctx, opts, translation)
 	if err != nil {
 		return "", "", err
 	}

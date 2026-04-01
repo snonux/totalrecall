@@ -359,6 +359,39 @@ func TestNanoBananaClient_Search_CustomPromptPreservesTranslationMetadata(t *tes
 	}
 }
 
+func TestNanoBananaClient_Search_CustomPromptIgnoresWhitespaceTranslation(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+	})
+
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, _, _ string, _ float32, _ int32) (string, error) {
+		t.Fatal("unexpected text generation for custom prompt")
+		return "", nil
+	}
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+		return mustPNGBytes(t), "image/png", nil
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	results, err := client.Search(context.Background(), &SearchOptions{
+		Query:        "ябълка",
+		Translation:  "   ",
+		CustomPrompt: "flashcard prompt",
+	})
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if strings.Contains(results[0].Description, "(") || strings.Contains(results[0].Description, ")") {
+		t.Fatalf("result description = %q, want no translation metadata for whitespace-only input", results[0].Description)
+	}
+}
+
 func TestNanoBananaClient_Search_InvalidOptions(t *testing.T) {
 	t.Parallel()
 
