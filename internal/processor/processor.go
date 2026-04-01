@@ -30,6 +30,14 @@ type Processor struct {
 	phoneticFetcher  *phonetic.Fetcher
 }
 
+var newOpenAIImageClient = func(config *image.OpenAIConfig) image.ImageSearcher {
+	return image.NewOpenAIClient(config)
+}
+
+var newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+	return image.NewNanoBananaClient(config)
+}
+
 // NewProcessor creates a new word processor
 func NewProcessor(flags *cli.Flags) *Processor {
 	openAIKey := cli.GetOpenAIKey()
@@ -371,41 +379,9 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 
 // downloadImagesWithTranslation downloads images for a word
 func (p *Processor) downloadImagesWithTranslation(word, translationText string) error {
-	// Create image searcher based on provider
-	var searcher image.ImageSearcher
-
-	switch p.flags.ImageAPI {
-	case "openai":
-		// Create OpenAI image configuration
-		openaiConfig := &image.OpenAIConfig{
-			APIKey:  cli.GetOpenAIKey(),
-			Model:   p.flags.OpenAIImageModel,
-			Size:    p.flags.OpenAIImageSize,
-			Quality: p.flags.OpenAIImageQuality,
-			Style:   p.flags.OpenAIImageStyle,
-		}
-
-		// Use config file values if not overridden by flags
-		if p.flags.OpenAIImageModel == "dall-e-2" && viper.IsSet("image.openai_model") {
-			openaiConfig.Model = viper.GetString("image.openai_model")
-		}
-		if p.flags.OpenAIImageSize == "512x512" && viper.IsSet("image.openai_size") {
-			openaiConfig.Size = viper.GetString("image.openai_size")
-		}
-		if p.flags.OpenAIImageQuality == "standard" && viper.IsSet("image.openai_quality") {
-			openaiConfig.Quality = viper.GetString("image.openai_quality")
-		}
-		if p.flags.OpenAIImageStyle == "natural" && viper.IsSet("image.openai_style") {
-			openaiConfig.Style = viper.GetString("image.openai_style")
-		}
-
-		searcher = image.NewOpenAIClient(openaiConfig)
-		if openaiConfig.APIKey == "" {
-			return fmt.Errorf("OpenAI API key is required for image generation")
-		}
-
-	default:
-		return fmt.Errorf("unknown image provider: %s", p.flags.ImageAPI)
+	searcher, err := p.newImageSearcher()
+	if err != nil {
+		return err
 	}
 
 	// Find existing card directory or create new one
@@ -436,18 +412,7 @@ func (p *Processor) downloadImagesWithTranslation(word, translationText string) 
 	}
 	fmt.Printf("    Downloaded: %s\n", path)
 
-	// If using OpenAI, save the prompt
-	if p.flags.ImageAPI == "openai" {
-		if openaiClient, ok := searcher.(*image.OpenAIClient); ok {
-			usedPrompt := openaiClient.GetLastPrompt()
-			if usedPrompt != "" {
-				promptFile := filepath.Join(wordDir, "image_prompt.txt")
-				if err := os.WriteFile(promptFile, []byte(usedPrompt), 0644); err != nil {
-					fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
-				}
-			}
-		}
-	}
+	p.saveImagePrompt(wordDir, searcher)
 
 	return nil
 }
@@ -551,6 +516,9 @@ func (p *Processor) RunGUIMode() error {
 		// User explicitly set a different output directory
 		guiConfig.OutputDir = p.flags.OutputDir
 	}
+	if guiConfig.GoogleAPIKey == "" {
+		guiConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
+	}
 	// Otherwise, gui.New will use its own default (XDG state directory)
 
 	// Create and run GUI application
@@ -574,6 +542,88 @@ func (p *Processor) guiConfigForRunMode() *gui.Config {
 		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
 		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
 		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
+	}
+}
+
+func (p *Processor) newImageSearcher() (image.ImageSearcher, error) {
+	switch p.flags.ImageAPI {
+	case "openai":
+		return p.newOpenAIImageSearcher()
+	case "nanobanana":
+		return p.newNanoBananaImageSearcher()
+	default:
+		return nil, fmt.Errorf("unknown image provider: %s", p.flags.ImageAPI)
+	}
+}
+
+func (p *Processor) newOpenAIImageSearcher() (image.ImageSearcher, error) {
+	openaiConfig := &image.OpenAIConfig{
+		APIKey:  cli.GetOpenAIKey(),
+		Model:   p.flags.OpenAIImageModel,
+		Size:    p.flags.OpenAIImageSize,
+		Quality: p.flags.OpenAIImageQuality,
+		Style:   p.flags.OpenAIImageStyle,
+	}
+
+	if p.flags.OpenAIImageModel == "dall-e-2" && viper.IsSet("image.openai_model") {
+		openaiConfig.Model = viper.GetString("image.openai_model")
+	}
+	if p.flags.OpenAIImageSize == "512x512" && viper.IsSet("image.openai_size") {
+		openaiConfig.Size = viper.GetString("image.openai_size")
+	}
+	if p.flags.OpenAIImageQuality == "standard" && viper.IsSet("image.openai_quality") {
+		openaiConfig.Quality = viper.GetString("image.openai_quality")
+	}
+	if p.flags.OpenAIImageStyle == "natural" && viper.IsSet("image.openai_style") {
+		openaiConfig.Style = viper.GetString("image.openai_style")
+	}
+
+	if openaiConfig.APIKey == "" {
+		return nil, fmt.Errorf("OpenAI API key is required for image generation")
+	}
+
+	return newOpenAIImageClient(openaiConfig), nil
+}
+
+func (p *Processor) newNanoBananaImageSearcher() (image.ImageSearcher, error) {
+	nanoBananaConfig := &image.NanoBananaConfig{
+		APIKey:    cli.GetGoogleAPIKey(),
+		Model:     p.flags.NanoBananaModel,
+		TextModel: p.flags.NanoBananaTextModel,
+	}
+
+	if p.flags.NanoBananaModel == image.DefaultNanoBananaModel && viper.IsSet("image.nanobanana_model") {
+		nanoBananaConfig.Model = viper.GetString("image.nanobanana_model")
+	}
+	if p.flags.NanoBananaTextModel == image.DefaultNanoBananaTextModel && viper.IsSet("image.nanobanana_text_model") {
+		nanoBananaConfig.TextModel = viper.GetString("image.nanobanana_text_model")
+	}
+
+	if nanoBananaConfig.APIKey == "" {
+		return nil, fmt.Errorf("Google API key is required for image generation")
+	}
+
+	return newNanoBananaImageClient(nanoBananaConfig), nil
+}
+
+func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageSearcher) {
+	type promptGetter interface {
+		GetLastPrompt() string
+	}
+
+	promptSource, ok := searcher.(promptGetter)
+	if !ok {
+		return
+	}
+
+	usedPrompt := promptSource.GetLastPrompt()
+	if usedPrompt == "" {
+		return
+	}
+
+	promptFile := filepath.Join(wordDir, "image_prompt.txt")
+	if err := os.WriteFile(promptFile, []byte(usedPrompt), 0644); err != nil {
+		fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
 	}
 }
 

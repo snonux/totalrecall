@@ -1,15 +1,60 @@
 package processor
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/gui"
+	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"github.com/spf13/viper"
 )
+
+type stubImageSearcher struct {
+	lastPrompt string
+	searchErr  error
+}
+
+func (s *stubImageSearcher) Search(ctx context.Context, opts *image.SearchOptions) ([]image.SearchResult, error) {
+	if s.searchErr != nil {
+		return nil, s.searchErr
+	}
+
+	s.lastPrompt = "stub nanobanana prompt"
+	return []image.SearchResult{
+		{
+			ID:           "stub-image",
+			URL:          "data:image/png;base64,AAAA",
+			ThumbnailURL: "data:image/png;base64,AAAA",
+			Width:        1,
+			Height:       1,
+			Description:  "stub image",
+			Attribution:  "stub attribution",
+			Source:       "nanobanana",
+		},
+	}, nil
+}
+
+func (s *stubImageSearcher) Download(ctx context.Context, url string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("mock image data")), nil
+}
+
+func (s *stubImageSearcher) GetAttribution(result *image.SearchResult) string {
+	return result.Attribution
+}
+
+func (s *stubImageSearcher) Name() string {
+	return "nanobanana"
+}
+
+func (s *stubImageSearcher) GetLastPrompt() string {
+	return s.lastPrompt
+}
 
 func TestNewProcessor(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
@@ -156,6 +201,9 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	if guiConfig.AudioFormat != "wav" {
 		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "wav")
 	}
+	if guiConfig.GoogleAPIKey != "test-google-key" {
+		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")
+	}
 }
 
 func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
@@ -177,6 +225,67 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	guiConfig := p.guiConfigForRunMode()
 	if guiConfig.ImageProvider != "openai" {
 		t.Fatalf("guiConfig.ImageProvider = %q, want %q", guiConfig.ImageProvider, "openai")
+	}
+	if guiConfig.GoogleAPIKey != "test-google-key" {
+		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")
+	}
+}
+
+func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.nanobanana_model", "custom-image-model")
+	viper.Set("image.nanobanana_text_model", "custom-text-model")
+
+	originalConstructor := newNanoBananaImageClient
+	stubSearcher := &stubImageSearcher{}
+	capturedConfig := new(image.NanoBananaConfig)
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+		*capturedConfig = *config
+		return stubSearcher
+	}
+	t.Cleanup(func() {
+		newNanoBananaImageClient = originalConstructor
+	})
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.ImageAPI = "nanobanana"
+	flags.ImageAPISpecified = true
+
+	p := NewProcessor(flags)
+	if err := p.downloadImagesWithTranslation("ябълка", "apple"); err != nil {
+		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
+	}
+
+	if capturedConfig.APIKey != "test-google-key" {
+		t.Fatalf("NanoBanana APIKey = %q, want %q", capturedConfig.APIKey, "test-google-key")
+	}
+	if capturedConfig.Model != "custom-image-model" {
+		t.Fatalf("NanoBanana Model = %q, want %q", capturedConfig.Model, "custom-image-model")
+	}
+	if capturedConfig.TextModel != "custom-text-model" {
+		t.Fatalf("NanoBanana TextModel = %q, want %q", capturedConfig.TextModel, "custom-text-model")
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected word directory to be created")
+	}
+
+	promptData, err := os.ReadFile(filepath.Join(wordDir, "image_prompt.txt"))
+	if err != nil {
+		t.Fatalf("expected prompt file: %v", err)
+	}
+	if got := strings.TrimSpace(string(promptData)); got != stubSearcher.GetLastPrompt() {
+		t.Fatalf("prompt file = %q, want %q", got, stubSearcher.GetLastPrompt())
 	}
 }
 
