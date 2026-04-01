@@ -241,19 +241,17 @@ func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation 
 
 // generateAudio generates audio files for a word
 func (p *Processor) generateAudio(word string) error {
-	allVoicesList := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-
 	// Get list of voices to use
 	var voices []string
 	if p.flags.AllVoices {
-		voices = allVoicesList
+		voices = audio.OpenAIVoices
 	} else if p.flags.OpenAIVoice != "" {
 		// Use explicitly specified voice
 		voices = []string{p.flags.OpenAIVoice}
 		fmt.Printf("  Using specified voice: %s\n", p.flags.OpenAIVoice)
 	} else {
 		// Select a random voice
-		randomVoice := allVoicesList[rand.Intn(len(allVoicesList))]
+		randomVoice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
 		voices = []string{randomVoice}
 		fmt.Printf("  Using random voice: %s\n", randomVoice)
 	}
@@ -273,10 +271,8 @@ func (p *Processor) generateAudio(word string) error {
 
 // generateAudioBgBg generates audio files for both sides of a bg-bg card
 func (p *Processor) generateAudioBgBg(front, back string) error {
-	allVoicesList := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-
 	// Select a random voice (same voice for both sides for consistency)
-	voice := allVoicesList[rand.Intn(len(allVoicesList))]
+	voice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
 	if p.flags.OpenAIVoice != "" {
 		voice = p.flags.OpenAIVoice
 	}

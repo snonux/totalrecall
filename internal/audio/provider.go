@@ -26,14 +26,14 @@ type Config struct {
 	// OpenAI-specific settings
 	OpenAIKey         string
 	OpenAIModel       string  // "tts-1", "tts-1-hd", or "gpt-4o-mini-tts"
-	OpenAIVoice       string  // "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"
+	OpenAIVoice       string  // One of OpenAIVoices.
 	OpenAISpeed       float64 // 0.25 to 4.0
 	OpenAIInstruction string  // Voice instructions for gpt-4o-mini-tts model
 
 	// Gemini-specific settings
 	GoogleAPIKey   string
 	GeminiTTSModel string  // "gemini-2.5-flash-preview-tts"
-	GeminiVoice    string  // Prebuilt Gemini TTS voice name, or empty for the model default
+	GeminiVoice    string  // One of GeminiVoices, or empty for the model default.
 	GeminiSpeed    float64 // Prompt hint for desired speech speed
 }
 

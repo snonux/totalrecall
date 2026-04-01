@@ -63,11 +63,8 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 		}
 	}
 
-	// Always use random voice and speed
-	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-
 	// Select a random voice
-	voice, speed := randomVoiceAndSpeed(allVoices)
+	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
 
 	// Create a copy of audio config with selected voice and speed
 	audioConfig := *a.audioConfig
@@ -127,8 +124,7 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	voice, speed := randomVoiceAndSpeed(allVoices)
+	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
@@ -169,8 +165,7 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	voice, speed := randomVoiceAndSpeed(allVoices)
+	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
@@ -201,8 +196,7 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 		return "", "", fmt.Errorf("card directory not provided")
 	}
 
-	allVoices := []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"}
-	voice, speed := randomVoiceAndSpeed(allVoices)
+	voice, speed := randomVoiceAndSpeed(audio.OpenAIVoices)
 
 	audioConfig := *a.audioConfig
 	audioConfig.OpenAIVoice = voice
