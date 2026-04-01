@@ -3,6 +3,8 @@ package audio
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -34,8 +36,8 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected provider 'gemini', got '%s'", config.Provider)
 	}
 
-	if config.OutputFormat != "mp3" {
-		t.Errorf("Expected output format 'mp3', got '%s'", config.OutputFormat)
+	if config.OutputFormat != "wav" {
+		t.Errorf("Expected output format 'wav', got '%s'", config.OutputFormat)
 	}
 
 	if config.OpenAIModel != "gpt-4o-mini-tts" {
@@ -50,12 +52,37 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected OpenAI speed 1.0, got %f", config.OpenAISpeed)
 	}
 
-	if config.GeminiTTSModel != "gemini-2.5-flash" {
-		t.Errorf("Expected Gemini TTS model 'gemini-2.5-flash', got '%s'", config.GeminiTTSModel)
+	if config.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
+		t.Errorf("Expected Gemini TTS model 'gemini-2.5-flash-preview-tts', got '%s'", config.GeminiTTSModel)
 	}
 
 	if config.GeminiSpeed != 1.0 {
 		t.Errorf("Expected Gemini speed 1.0, got %f", config.GeminiSpeed)
+	}
+}
+
+func TestDefaultProviderConfigIsGeminiCompatible(t *testing.T) {
+	config := DefaultProviderConfig()
+
+	if config.Provider != "gemini" {
+		t.Fatalf("DefaultProviderConfig() Provider = %q, want %q", config.Provider, "gemini")
+	}
+
+	if config.GeminiTTSModel != defaultGeminiTTSModel {
+		t.Fatalf("DefaultProviderConfig() GeminiTTSModel = %q, want %q", config.GeminiTTSModel, defaultGeminiTTSModel)
+	}
+
+	outputFile := filepath.Join(t.TempDir(), "audio."+config.OutputFormat)
+	if filepath.Ext(outputFile) != ".wav" {
+		t.Fatalf("DefaultProviderConfig() output file %q is incompatible with Gemini TTS", outputFile)
+	}
+
+	if !strings.HasSuffix(config.GeminiTTSModel, "-tts") {
+		t.Fatalf("DefaultProviderConfig() GeminiTTSModel = %q, want a TTS model variant", config.GeminiTTSModel)
+	}
+
+	if err := writeGeminiAudioFile(outputFile, []byte{0x11, 0x22}, "audio/pcm"); err != nil {
+		t.Fatalf("writeGeminiAudioFile() with default Gemini output failed: %v", err)
 	}
 }
 
