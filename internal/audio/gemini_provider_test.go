@@ -145,6 +145,57 @@ func TestExtractAudioData(t *testing.T) {
 	}
 }
 
+func TestExtractAudioDataErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		response  *genai.GenerateContentResponse
+		wantError string
+	}{
+		{
+			name:      "nil response",
+			response:  nil,
+			wantError: "no response from Gemini",
+		},
+		{
+			name: "response without audio",
+			response: &genai.GenerateContentResponse{
+				Candidates: []*genai.Candidate{
+					nil,
+					{Content: nil},
+					{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								nil,
+								{InlineData: nil},
+								{InlineData: &genai.Blob{Data: nil, MIMEType: "audio/pcm"}},
+							},
+						},
+					},
+				},
+			},
+			wantError: "no audio data returned from Gemini",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, mimeType, err := extractAudioData(tt.response)
+			if err == nil {
+				t.Fatal("extractAudioData() expected error")
+			}
+			if err.Error() != tt.wantError {
+				t.Fatalf("extractAudioData() error = %q, want %q", err.Error(), tt.wantError)
+			}
+			if data != nil {
+				t.Fatalf("extractAudioData() data = %v, want nil", data)
+			}
+			if mimeType != "" {
+				t.Fatalf("extractAudioData() mimeType = %q, want empty string", mimeType)
+			}
+		})
+	}
+}
+
 func TestWriteGeminiAudioFileWritesWAV(t *testing.T) {
 	dir := t.TempDir()
 	outputFile := filepath.Join(dir, "output.wav")
@@ -186,10 +237,10 @@ func TestWriteGeminiAudioFileRejectsUnsupportedFormats(t *testing.T) {
 	}
 }
 
-func TestGeminiProviderIntegrationWithGoogleAPIKey(t *testing.T) {
+func TestNewGeminiProviderWithGoogleAPIKey(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("GOOGLE_API_KEY"))
 	if apiKey == "" {
-		t.Skip("Skipping integration test: GOOGLE_API_KEY not set")
+		t.Skip("Skipping smoke test: GOOGLE_API_KEY not set")
 	}
 
 	provider, err := NewGeminiProvider(&Config{GoogleAPIKey: apiKey})
@@ -200,6 +251,10 @@ func TestGeminiProviderIntegrationWithGoogleAPIKey(t *testing.T) {
 	geminiProvider, ok := provider.(*GeminiProvider)
 	if !ok {
 		t.Fatalf("NewGeminiProvider() returned %T, want *GeminiProvider", provider)
+	}
+
+	if geminiProvider.Name() != "gemini" {
+		t.Fatalf("Name() = %q, want %q", geminiProvider.Name(), "gemini")
 	}
 
 	if err := geminiProvider.IsAvailable(); err != nil {
