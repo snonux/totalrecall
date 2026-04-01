@@ -1,27 +1,23 @@
-# TotalRecalooConfiguration Example
-# Copy this to ~/.totalrecall.yaml or ./.totalrecall.yaml
+# TotalRecall Configuration Example
+# Copy this to ~/.totalrecall.yaml or ~/.config/totalrecall/config.yaml
 
 # Audio configuration
 audio:
-  # Audio is generated using OpenAI TTS
-  # Provider field removed - OpenAI is now the only option
-  
-  # Audio output format
-  format: mp3
-  
-  # OpenAI TTS settings
+  # Gemini is the default audio provider. Set this to openai to switch back.
+  provider: gemini
+
+  # Gemini TTS writes WAV files.
+  format: wav
+
+  # OpenAI TTS settings (used only when audio.provider is openai)
   openai_key: ${OPENAI_API_KEY}  # Can also use environment variable
   openai_model: gpt-4o-mini-tts  # Options: tts-1, tts-1-hd, gpt-4o-mini-tts
-  openai_speed: 0.9               # Range: 0.25 to 4.0 (may be ignored by gpt-4o-mini models)
-  
-  # Voice instructions for gpt-4o-mini-tts model
-  # This allows you to customize how the AI speaks
+  openai_speed: 0.9               # Range: 0.25 to 4.0 (may be ignored by gpt-4o-mini-tts)
   openai_instruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners."
-  
-  # Alternative instruction examples:
-  # openai_instruction: "Speak in Bulgarian (not Russian!). Use native Bulgarian pronunciation with clear articulation for each syllable."
-  # openai_instruction: "You are a Bulgarian language teacher. Pronounce the Bulgarian words slowly with authentic Bulgarian accent and phonetics."
-  # openai_instruction: "Speak Bulgarian text with proper Bulgarian pronunciation. Avoid Russian accent. Speak clearly at a pace suitable for beginners."
+
+  # Gemini TTS settings (used when audio.provider is gemini)
+  gemini_tts_model: gemini-2.5-flash-preview-tts
+  gemini_voice: ""  # Leave empty to use the model default voice
 
 # Translation configuration
 translation:
@@ -35,21 +31,14 @@ phonetic:
   # Supported values: openai (default) or gemini
   provider: openai
 
-# Google API settings
-google:
-  # Used by Gemini translation and Gemini phonetic fetching when enabled
-  api_key: ${GOOGLE_API_KEY}
-
 # Image configuration
 image:
-  # Provider: openai or nanobanana
-  provider: openai
-  
-  # OpenAI DALL-E settings
-  openai_model: dall-e-3     # Options: dall-e-2, dall-e-3
-  openai_size: 1024x1024     # Options vary by model
-  openai_quality: standard   # Options: standard, hd (dall-e-3 only)
-  openai_style: natural      # Options: natural, vivid (dall-e-3 only)
+  # Preferred Google API key location for Gemini translation, phonetics, and Nano Banana.
+  # google.api_key is still supported for older configs.
+  google_api_key: ${GOOGLE_API_KEY}
+
+  # Nano Banana is the GUI default and the recommended image provider for config-driven runs.
+  provider: nanobanana
 
   # Nano Banana settings
   nanobanana_model: gemini-3.1-flash-image-preview
