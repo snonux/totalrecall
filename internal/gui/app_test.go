@@ -6,11 +6,11 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
-func TestDefaultConfigPrefersGeminiTranslationProvider(t *testing.T) {
+func TestDefaultConfigUsesOpenAITranslationProvider(t *testing.T) {
 	config := DefaultConfig()
 
-	if config.TranslationProvider != translation.ProviderGemini {
-		t.Fatalf("DefaultConfig() translation provider = %q, want %q", config.TranslationProvider, translation.ProviderGemini)
+	if config.TranslationProvider != translation.ProviderOpenAI {
+		t.Fatalf("DefaultConfig() translation provider = %q, want %q", config.TranslationProvider, translation.ProviderOpenAI)
 	}
 }
 
@@ -25,22 +25,32 @@ func TestTranslationConfigForApp(t *testing.T) {
 		wantGoogle string
 	}{
 		{
-			name: "default to gemini when google key is available",
-			config: &Config{
-				GoogleAPIKey: "google-key",
-			},
-			wantProv:   translation.ProviderGemini,
-			wantOpen:   "",
-			wantGoogle: "google-key",
-		},
-		{
-			name: "fallback to openai when only openai key is available",
+			name: "default to openai when provider is unset and only openai key is available",
 			config: &Config{
 				OpenAIKey: "openai-key",
 			},
 			wantProv:   translation.ProviderOpenAI,
 			wantOpen:   "openai-key",
 			wantGoogle: "",
+		},
+		{
+			name: "default to openai when provider is unset and both keys are available",
+			config: &Config{
+				OpenAIKey:    "openai-key",
+				GoogleAPIKey: "google-key",
+			},
+			wantProv:   translation.ProviderOpenAI,
+			wantOpen:   "openai-key",
+			wantGoogle: "google-key",
+		},
+		{
+			name: "default to openai when provider is unset and only google key is available",
+			config: &Config{
+				GoogleAPIKey: "google-key",
+			},
+			wantProv:   translation.ProviderOpenAI,
+			wantOpen:   "",
+			wantGoogle: "google-key",
 		},
 		{
 			name: "honor explicit gemini provider",
@@ -63,6 +73,13 @@ func TestTranslationConfigForApp(t *testing.T) {
 			wantProv:   translation.ProviderOpenAI,
 			wantOpen:   "openai-key",
 			wantGoogle: "google-key",
+		},
+		{
+			name:       "nil config still uses openai defaults",
+			config:     nil,
+			wantProv:   translation.ProviderOpenAI,
+			wantOpen:   "",
+			wantGoogle: "",
 		},
 	}
 

@@ -127,7 +127,7 @@ func DefaultConfig() *Config {
 		OutputDir:           outputDir,
 		AudioFormat:         "mp3",
 		ImageProvider:       "openai",
-		TranslationProvider: translation.ProviderGemini,
+		TranslationProvider: translation.ProviderOpenAI,
 		PhoneticProvider:    phonetic.ProviderOpenAI,
 		AutoPlay:            true, // Auto-play enabled by default
 	}
@@ -208,9 +208,8 @@ func New(config *Config) *Application {
 }
 
 // translationConfigForApp normalizes the GUI translation settings.
-// When no provider is explicitly configured, Gemini is preferred if a Google
-// API key is available; otherwise the GUI falls back to OpenAI so existing
-// OpenAI-only setups continue to work.
+// The GUI follows the shared translator defaults and stays on OpenAI unless a
+// provider is explicitly selected by the caller.
 func translationConfigForApp(config *Config) *translation.Config {
 	if config == nil {
 		config = DefaultConfig()
@@ -218,11 +217,7 @@ func translationConfigForApp(config *Config) *translation.Config {
 
 	provider := config.TranslationProvider
 	if provider == "" {
-		if strings.TrimSpace(config.GoogleAPIKey) != "" {
-			provider = translation.ProviderGemini
-		} else {
-			provider = translation.ProviderOpenAI
-		}
+		provider = translation.ProviderOpenAI
 	}
 
 	return &translation.Config{
