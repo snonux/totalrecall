@@ -50,6 +50,10 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected OpenAI speed 1.0, got %f", config.OpenAISpeed)
 	}
 
+	if config.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
+		t.Errorf("Expected Gemini TTS model 'gemini-2.5-flash-preview-tts', got '%s'", config.GeminiTTSModel)
+	}
+
 }
 
 func TestNewProvider(t *testing.T) {

@@ -24,7 +24,7 @@ func TestNewGeminiProvider(t *testing.T) {
 			name: "valid config",
 			config: &Config{
 				GoogleAPIKey:   "test-key",
-				GeminiTTSModel: "gemini-2.5-flash",
+				GeminiTTSModel: "gemini-2.5-flash-preview-tts",
 				GeminiVoice:    "Kore",
 				GeminiSpeed:    1.0,
 			},

@@ -32,7 +32,7 @@ type Config struct {
 
 	// Gemini-specific settings
 	GoogleAPIKey   string
-	GeminiTTSModel string  // "gemini-2.5-flash"
+	GeminiTTSModel string  // "gemini-2.5-flash-preview-tts"
 	GeminiVoice    string  // Prebuilt Gemini TTS voice name, or empty for the model default
 	GeminiSpeed    float64 // Prompt hint for desired speech speed
 }
@@ -48,7 +48,7 @@ func DefaultProviderConfig() *Config {
 		OpenAISpeed:  1.0,
 		// OpenAISpeed:       0.98, // Default speed for clarity
 		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		GeminiTTSModel:    "gemini-2.5-flash",
+		GeminiTTSModel:    "gemini-2.5-flash-preview-tts",
 		GeminiSpeed:       1.0,
 	}
 }
