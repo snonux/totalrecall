@@ -93,9 +93,10 @@ After installation, you may need to log out and log back in for the icon to appe
 
 ## Quick Start
 
-**Note:** By default, totalrecall uses OpenAI for both audio and images. Make sure to set your OpenAI API key:
+**Note:** By default, totalrecall uses OpenAI for audio and Nano Banana for images in the GUI. Make sure to set your OpenAI API key and Google API key:
 ```bash
 export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."
 ```
 
 ### GUI Mode
@@ -115,7 +116,7 @@ Key features:
 
 ### CLI Mode
 
-1. Generate materials for a single word (uses OpenAI by default):
+1. Generate materials for a single word (explicit CLI runs use OpenAI for images unless you override `--image-api`):
    ```bash
    totalrecall ябълка
    ```

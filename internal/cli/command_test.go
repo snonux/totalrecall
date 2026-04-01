@@ -23,11 +23,11 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Short, "Bulgarian Anki Flashcard Generator") {
 		t.Errorf("Expected Short description to contain 'Bulgarian Anki Flashcard Generator'")
 	}
-	if !strings.Contains(cmd.Long, "currently supported OpenAI image provider") {
-		t.Errorf("Expected Long description to describe the supported OpenAI image provider")
+	if !strings.Contains(cmd.Long, "uses Nano Banana for images by default") {
+		t.Errorf("Expected Long description to describe the Nano Banana GUI default")
 	}
-	if strings.Contains(cmd.Long, "OpenAI or Gemini Nano Banana") {
-		t.Errorf("Long description should not imply Nano Banana runtime support")
+	if !strings.Contains(cmd.Long, "Use --image-api to override the image backend") {
+		t.Errorf("Expected Long description to explain the image backend override")
 	}
 
 	// Test that flags are set up
@@ -109,8 +109,8 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag.DefValue != "openai" {
 		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
 	}
-	if imageAPIFlag.Usage != "Image source (currently openai)" {
-		t.Errorf("Expected image-api help to describe only the current OpenAI provider, got %q", imageAPIFlag.Usage)
+	if imageAPIFlag.Usage != "Image source override (GUI no-arg path defaults to Nano Banana; explicit CLI default is OpenAI)" {
+		t.Errorf("Expected image-api help to describe the GUI Nano Banana default and explicit CLI override, got %q", imageAPIFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")

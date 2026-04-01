@@ -20,7 +20,7 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
 It creates audio pronunciation files using OpenAI TTS and downloads
-representative images using the currently supported OpenAI image provider.
+representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Use --image-api to override the image backend for explicit runs.
 
 Nano Banana model and text-model flags are exposed for upcoming runtime wiring.
 
@@ -57,7 +57,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source (currently openai)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source override (GUI no-arg path defaults to Nano Banana; explicit CLI default is OpenAI)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
