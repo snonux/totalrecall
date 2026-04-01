@@ -3,6 +3,8 @@ package cli
 import (
 	"reflect"
 	"testing"
+
+	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
 func TestNewFlags(t *testing.T) {
@@ -15,6 +17,7 @@ func TestNewFlags(t *testing.T) {
 		expected interface{}
 	}{
 		{"AudioFormat", flags.AudioFormat, "mp3"},
+		{"AudioProvider", flags.AudioProvider, audio.DefaultProviderConfig().Provider},
 		{"ImageAPI", flags.ImageAPI, "openai"},
 		{"ImageAPISpecified", flags.ImageAPISpecified, false},
 		{"NanoBananaModelSpecified", flags.NanoBananaModelSpecified, false},
@@ -26,6 +29,8 @@ func TestNewFlags(t *testing.T) {
 		{"OpenAIImageSize", flags.OpenAIImageSize, "512x512"},
 		{"OpenAIImageQuality", flags.OpenAIImageQuality, "standard"},
 		{"OpenAIImageStyle", flags.OpenAIImageStyle, "natural"},
+		{"GeminiTTSModel", flags.GeminiTTSModel, audio.DefaultProviderConfig().GeminiTTSModel},
+		{"GeminiVoice", flags.GeminiVoice, ""},
 		{"NanoBananaModel", flags.NanoBananaModel, "gemini-3.1-flash-image-preview"},
 		{"NanoBananaTextModel", flags.NanoBananaTextModel, "gemini-2.5-flash"},
 	}
@@ -87,11 +92,12 @@ func TestFlagsStructure(t *testing.T) {
 	flagsType := reflect.TypeOf(*flags)
 
 	expectedFields := []string{
-		"CfgFile", "OutputDir", "AudioFormat", "ImageAPI", "ImageAPISpecified", "BatchFile",
+		"CfgFile", "OutputDir", "AudioFormat", "AudioProvider", "ImageAPI", "ImageAPISpecified", "BatchFile",
 		"SkipAudio", "SkipImages", "GenerateAnki", "AnkiCSV", "DeckName",
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",
 		"OpenAIImageModel", "OpenAIImageSize", "OpenAIImageQuality", "OpenAIImageStyle",
+		"GeminiTTSModel", "GeminiVoice",
 		"NanoBananaModel", "NanoBananaModelSpecified", "NanoBananaTextModel", "NanoBananaTextModelSpecified",
 	}
 

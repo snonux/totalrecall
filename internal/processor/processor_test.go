@@ -284,6 +284,7 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	flags.OutputDir = tempDir
 	flags.AudioFormat = "mp3"
 	flags.AllVoices = true
+	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
 
@@ -333,6 +334,7 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = tempDir
 	flags.AudioFormat = "mp3"
+	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
 	if err := p.generateAudioBgBg("ябълка", "круша"); err != nil {
@@ -379,6 +381,7 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = tempDir
 	flags.AudioFormat = "mp3"
+	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
 	err := p.generateAudio("ябълка")
@@ -387,6 +390,62 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "provider factory failed") {
 		t.Fatalf("generateAudio() error = %q, want it to contain %q", err.Error(), "provider factory failed")
+	}
+}
+
+func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+	viper.Set("audio.gemini_tts_model", "gemini-2.5-flash-preview-tts")
+	viper.Set("audio.gemini_voice", "Kore")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioFormat = "mp3"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudio("ябълка"); err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.Provider != "gemini" {
+		t.Fatalf("captured provider = %q, want %q", capturedConfig.Provider, "gemini")
+	}
+	if capturedConfig.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
+		t.Fatalf("captured GeminiTTSModel = %q, want %q", capturedConfig.GeminiTTSModel, "gemini-2.5-flash-preview-tts")
+	}
+	if capturedConfig.GeminiVoice != "Kore" {
+		t.Fatalf("captured GeminiVoice = %q, want %q", capturedConfig.GeminiVoice, "Kore")
+	}
+	if capturedConfig.OutputFormat != "wav" {
+		t.Fatalf("captured OutputFormat = %q, want %q", capturedConfig.OutputFormat, "wav")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.wav") {
+		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
 	}
 }
 

@@ -1,5 +1,7 @@
 package cli
 
+import "codeberg.org/snonux/totalrecall/internal/audio"
+
 const (
 	defaultNanoBananaModel     = "gemini-3.1-flash-image-preview"
 	defaultNanoBananaTextModel = "gemini-2.5-flash"
@@ -8,9 +10,11 @@ const (
 // Flags holds all command-line flag values
 type Flags struct {
 	// General flags
-	CfgFile           string
-	OutputDir         string
-	AudioFormat       string
+	CfgFile     string
+	OutputDir   string
+	AudioFormat string
+	// AudioProvider selects the text-to-speech backend ("gemini" or "openai").
+	AudioProvider     string
 	ImageAPI          string
 	ImageAPISpecified bool
 	BatchFile         string
@@ -36,6 +40,12 @@ type Flags struct {
 	OpenAIImageQuality string
 	OpenAIImageStyle   string
 
+	// Gemini audio flags
+	// GeminiTTSModel is the Gemini TTS model used when Gemini audio is selected.
+	GeminiTTSModel string
+	// GeminiVoice selects a specific Gemini voice; empty uses the model default.
+	GeminiVoice string
+
 	// NanoBananaModel is the Gemini image model used for Nano Banana generation.
 	NanoBananaModel string
 	// NanoBananaModelSpecified records whether the Nano Banana image model was explicitly set on the CLI.
@@ -48,8 +58,11 @@ type Flags struct {
 
 // NewFlags creates a new Flags instance with default values
 func NewFlags() *Flags {
+	defaults := audio.DefaultProviderConfig()
+
 	return &Flags{
 		AudioFormat:         "mp3",
+		AudioProvider:       defaults.Provider,
 		ImageAPI:            "openai",
 		DeckName:            "Bulgarian Vocabulary",
 		OpenAIModel:         "gpt-4o-mini-tts",
@@ -58,6 +71,7 @@ func NewFlags() *Flags {
 		OpenAIImageSize:     "512x512",
 		OpenAIImageQuality:  "standard",
 		OpenAIImageStyle:    "natural",
+		GeminiTTSModel:      defaults.GeminiTTSModel,
 		NanoBananaModel:     defaultNanoBananaModel,
 		NanoBananaTextModel: defaultNanoBananaTextModel,
 	}

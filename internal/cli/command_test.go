@@ -58,6 +58,9 @@ func TestCreateRootCommand(t *testing.T) {
 		{"openai-image-size", true},
 		{"openai-image-quality", true},
 		{"openai-image-style", true},
+		{"audio-provider", true},
+		{"gemini-tts-model", true},
+		{"gemini-voice", true},
 		{"nanobanana-model", true},
 		{"nanobanana-text-model", true},
 	}
@@ -122,6 +125,33 @@ func TestSetupFlags(t *testing.T) {
 	expectedOpenAIVoiceUsage := "OpenAI voice: " + strings.Join(audio.OpenAIVoices, ", ") + " (default: random)"
 	if openAIVoiceFlag.Usage != expectedOpenAIVoiceUsage {
 		t.Errorf("Expected openai-voice help to derive from shared voice list, got %q", openAIVoiceFlag.Usage)
+	}
+
+	audioProviderFlag := cmd.Flags().Lookup("audio-provider")
+	if audioProviderFlag == nil {
+		t.Fatal("audio-provider flag not found")
+	}
+	if audioProviderFlag.DefValue != audio.DefaultProviderConfig().Provider {
+		t.Errorf("Expected default audio-provider to be %s, got %s", audio.DefaultProviderConfig().Provider, audioProviderFlag.DefValue)
+	}
+
+	geminiTTSModelFlag := cmd.Flags().Lookup("gemini-tts-model")
+	if geminiTTSModelFlag == nil {
+		t.Fatal("gemini-tts-model flag not found")
+	}
+	if geminiTTSModelFlag.DefValue != audio.DefaultProviderConfig().GeminiTTSModel {
+		t.Errorf("Expected default gemini-tts-model to be %s, got %s", audio.DefaultProviderConfig().GeminiTTSModel, geminiTTSModelFlag.DefValue)
+	}
+
+	geminiVoiceFlag := cmd.Flags().Lookup("gemini-voice")
+	if geminiVoiceFlag == nil {
+		t.Fatal("gemini-voice flag not found")
+	}
+	if geminiVoiceFlag.DefValue != "" {
+		t.Errorf("Expected default gemini-voice to be empty, got %q", geminiVoiceFlag.DefValue)
+	}
+	if !strings.Contains(geminiVoiceFlag.Usage, "default: model default") {
+		t.Errorf("Expected gemini-voice help to describe the model default voice, got %q", geminiVoiceFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
@@ -413,6 +443,15 @@ func TestBindFlagsToViper(t *testing.T) {
 	if err := cmd.Flags().Set("openai-model", "tts-1-hd"); err != nil {
 		t.Fatalf("Failed to set openai-model flag: %v", err)
 	}
+	if err := cmd.Flags().Set("audio-provider", "gemini"); err != nil {
+		t.Fatalf("Failed to set audio-provider flag: %v", err)
+	}
+	if err := cmd.Flags().Set("gemini-tts-model", "gemini-2.5-flash-preview-tts"); err != nil {
+		t.Fatalf("Failed to set gemini-tts-model flag: %v", err)
+	}
+	if err := cmd.Flags().Set("gemini-voice", "Kore"); err != nil {
+		t.Fatalf("Failed to set gemini-voice flag: %v", err)
+	}
 	if err := cmd.Flags().Set("nanobanana-model", "gemini-3.1-flash-image-preview"); err != nil {
 		t.Fatalf("Failed to set nanobanana-model flag: %v", err)
 	}
@@ -435,6 +474,15 @@ func TestBindFlagsToViper(t *testing.T) {
 
 	if viper.GetString("audio.openai_model") != "tts-1-hd" {
 		t.Errorf("Expected audio.openai_model to be tts-1-hd, got %s", viper.GetString("audio.openai_model"))
+	}
+	if viper.GetString("audio.provider") != "gemini" {
+		t.Errorf("Expected audio.provider to be gemini, got %s", viper.GetString("audio.provider"))
+	}
+	if viper.GetString("audio.gemini_tts_model") != "gemini-2.5-flash-preview-tts" {
+		t.Errorf("Expected audio.gemini_tts_model to be gemini-2.5-flash-preview-tts, got %s", viper.GetString("audio.gemini_tts_model"))
+	}
+	if viper.GetString("audio.gemini_voice") != "Kore" {
+		t.Errorf("Expected audio.gemini_voice to be Kore, got %s", viper.GetString("audio.gemini_voice"))
 	}
 	if viper.GetString("image.nanobanana_model") != "gemini-3.1-flash-image-preview" {
 		t.Errorf("Expected image.nanobanana_model to be gemini-3.1-flash-image-preview, got %s", viper.GetString("image.nanobanana_model"))

@@ -241,21 +241,66 @@ func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation 
 	return nil
 }
 
+func (p *Processor) audioProviderName() string {
+	if provider := strings.ToLower(strings.TrimSpace(viper.GetString("audio.provider"))); provider != "" {
+		return provider
+	}
+	if p != nil && p.flags != nil {
+		return strings.ToLower(strings.TrimSpace(p.flags.AudioProvider))
+	}
+	return ""
+}
+
+func (p *Processor) geminiTTSModel() string {
+	if model := strings.TrimSpace(viper.GetString("audio.gemini_tts_model")); model != "" {
+		return model
+	}
+	if p != nil && p.flags != nil {
+		return strings.TrimSpace(p.flags.GeminiTTSModel)
+	}
+	return ""
+}
+
+func (p *Processor) geminiVoice() string {
+	if voice := strings.TrimSpace(viper.GetString("audio.gemini_voice")); voice != "" {
+		return voice
+	}
+	if p != nil && p.flags != nil {
+		return strings.TrimSpace(p.flags.GeminiVoice)
+	}
+	return ""
+}
+
 // generateAudio generates audio files for a word
 func (p *Processor) generateAudio(word string) error {
-	// Get list of voices to use
+	provider := p.audioProviderName()
+
+	// Get list of voices to use.
 	var voices []string
-	if p.flags.AllVoices {
-		voices = audio.OpenAIVoices
-	} else if p.flags.OpenAIVoice != "" {
-		// Use explicitly specified voice
-		voices = []string{p.flags.OpenAIVoice}
-		fmt.Printf("  Using specified voice: %s\n", p.flags.OpenAIVoice)
-	} else {
-		// Select a random voice
-		randomVoice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
-		voices = []string{randomVoice}
-		fmt.Printf("  Using random voice: %s\n", randomVoice)
+	switch provider {
+	case "gemini":
+		if p.flags.AllVoices {
+			voices = audio.GeminiVoices
+		} else if voice := p.geminiVoice(); voice != "" {
+			voices = []string{voice}
+			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
+		} else {
+			voices = []string{""}
+			fmt.Printf("  Using Gemini model default voice\n")
+		}
+	default:
+		if p.flags.AllVoices {
+			voices = audio.OpenAIVoices
+		} else if p.flags.OpenAIVoice != "" {
+			// Use explicitly specified voice
+			voices = []string{p.flags.OpenAIVoice}
+			fmt.Printf("  Using specified voice: %s\n", p.flags.OpenAIVoice)
+		} else {
+			// Select a random voice
+			randomVoice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
+			voices = []string{randomVoice}
+			fmt.Printf("  Using random voice: %s\n", randomVoice)
+		}
 	}
 
 	// Generate audio for each voice
@@ -273,12 +318,25 @@ func (p *Processor) generateAudio(word string) error {
 
 // generateAudioBgBg generates audio files for both sides of a bg-bg card
 func (p *Processor) generateAudioBgBg(front, back string) error {
-	// Select a random voice (same voice for both sides for consistency)
-	voice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
-	if p.flags.OpenAIVoice != "" {
-		voice = p.flags.OpenAIVoice
+	provider := p.audioProviderName()
+
+	voice := ""
+	switch provider {
+	case "gemini":
+		voice = p.geminiVoice()
+		if voice != "" {
+			fmt.Printf("  Using Gemini voice: %s\n", voice)
+		} else {
+			fmt.Printf("  Using Gemini model default voice\n")
+		}
+	default:
+		// Select a random voice (same voice for both sides for consistency)
+		voice = audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
+		if p.flags.OpenAIVoice != "" {
+			voice = p.flags.OpenAIVoice
+		}
+		fmt.Printf("  Using voice: %s\n", voice)
 	}
-	fmt.Printf("  Using voice: %s\n", voice)
 
 	// Find or create the word directory ONCE (for the front word)
 	// Both audio files will be saved to this same directory
@@ -312,36 +370,49 @@ func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase 
 
 // generateAudioWithVoiceAndFilenameInDir generates audio for a word and saves it to a specific directory
 func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir string) error {
+	audioProvider := p.audioProviderName()
+
 	// Generate random speed between 0.90 and 1.00 if not explicitly set
 	speed := p.flags.OpenAISpeed
-	if p.flags.OpenAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
+	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
 		// Default was used, generate random speed
 		speed = 0.90 + rand.Float64()*0.10
 	}
 
 	// Create audio provider configuration
-	providerConfig := &audio.Config{
-		Provider:     "openai",
-		OutputDir:    p.flags.OutputDir,
-		OutputFormat: p.flags.AudioFormat,
+	providerConfig := audio.DefaultProviderConfig()
+	providerConfig.Provider = audioProvider
+	providerConfig.OutputDir = p.flags.OutputDir
+	providerConfig.OpenAIKey = cli.GetOpenAIKey()
+	providerConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
 
-		// OpenAI settings
-		OpenAIKey:         cli.GetOpenAIKey(),
-		OpenAIModel:       p.flags.OpenAIModel,
-		OpenAIVoice:       voice,
-		OpenAISpeed:       speed,
-		OpenAIInstruction: p.flags.OpenAIInstruction,
-	}
+	switch audioProvider {
+	case "gemini":
+		providerConfig.OutputFormat = "wav"
+		providerConfig.GeminiTTSModel = p.geminiTTSModel()
+		if voice != "" {
+			providerConfig.GeminiVoice = voice
+		} else {
+			providerConfig.GeminiVoice = p.geminiVoice()
+		}
+		providerConfig.GeminiSpeed = 1.0
+	default:
+		providerConfig.OutputFormat = p.flags.AudioFormat
+		providerConfig.OpenAIModel = p.flags.OpenAIModel
+		providerConfig.OpenAIVoice = voice
+		providerConfig.OpenAISpeed = speed
+		providerConfig.OpenAIInstruction = p.flags.OpenAIInstruction
 
-	// Use config file values if not overridden by flags
-	if p.flags.OpenAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
-		providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
-	}
-	if p.flags.OpenAISpeed == 0.9 && viper.IsSet("audio.openai_speed") {
-		providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
-	}
-	if p.flags.OpenAIInstruction == "" && viper.IsSet("audio.openai_instruction") {
-		providerConfig.OpenAIInstruction = viper.GetString("audio.openai_instruction")
+		// Use config file values if not overridden by flags
+		if p.flags.OpenAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
+			providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
+		}
+		if p.flags.OpenAISpeed == 0.9 && viper.IsSet("audio.openai_speed") {
+			providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
+		}
+		if p.flags.OpenAIInstruction == "" && viper.IsSet("audio.openai_instruction") {
+			providerConfig.OpenAIInstruction = viper.GetString("audio.openai_instruction")
+		}
 	}
 
 	// Create the audio provider
@@ -354,11 +425,15 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	ctx := context.Background()
 
 	// Build filename using the provided base
+	outputFormat := p.flags.AudioFormat
+	if providerConfig.Provider == "gemini" {
+		outputFormat = "wav"
+	}
 	var outputFile string
 	if p.flags.AllVoices && filenameBase == "audio" {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filenameBase, voice, p.flags.AudioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filenameBase, voice, outputFormat))
 	} else {
-		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s.%s", filenameBase, p.flags.AudioFormat))
+		outputFile = filepath.Join(wordDir, fmt.Sprintf("%s.%s", filenameBase, outputFormat))
 	}
 
 	// Generate the audio
@@ -811,15 +886,28 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 		cleanedWord = strings.ReplaceAll(cleanedWord, punct, "")
 	}
 	processedText := fmt.Sprintf("%s...", strings.TrimSpace(cleanedWord))
-	attribution := audio.BuildOpenAIAttribution(audio.AttributionParams{
-		Word:          word,
-		Model:         config.OpenAIModel,
-		Voice:         config.OpenAIVoice,
-		Speed:         config.OpenAISpeed,
-		Instruction:   config.OpenAIInstruction,
-		ProcessedText: processedText,
-		GeneratedAt:   time.Now(),
-	})
+	var attribution string
+	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
+	case "gemini":
+		attribution = audio.BuildGeminiAttribution(audio.AttributionParams{
+			Word:          word,
+			Model:         config.GeminiTTSModel,
+			Voice:         config.GeminiVoice,
+			Speed:         config.GeminiSpeed,
+			ProcessedText: processedText,
+			GeneratedAt:   time.Now(),
+		})
+	default:
+		attribution = audio.BuildOpenAIAttribution(audio.AttributionParams{
+			Word:          word,
+			Model:         config.OpenAIModel,
+			Voice:         config.OpenAIVoice,
+			Speed:         config.OpenAISpeed,
+			Instruction:   config.OpenAIInstruction,
+			ProcessedText: processedText,
+			GeneratedAt:   time.Now(),
+		})
+	}
 
 	// Save to file
 	attrPath := audio.AttributionPath(audioFile)

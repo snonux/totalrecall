@@ -21,10 +21,10 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Short: "Bulgarian Anki Flashcard Generator",
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
-It creates audio pronunciation files using OpenAI TTS and downloads
-representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Explicit CLI runs can use OpenAI or Nano Banana via --image-api, and config files can set image.provider too.
+It creates audio pronunciation files using Gemini TTS by default and downloads
+representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Explicit CLI runs can use OpenAI or Nano Banana via --image-api, and audio can be switched between Gemini and OpenAI with --audio-provider.
 
-Nano Banana model and text-model flags are available for Nano Banana image generation.
+Gemini audio model and voice flags are available for Gemini TTS generation.
 
 Examples:
   totalrecall                     # Launch interactive GUI (default)
@@ -58,7 +58,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
-	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3)")
+	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3; Gemini TTS always writes wav)")
 	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
@@ -76,6 +76,11 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.OpenAIVoice, "openai-voice", "", openAIVoiceUsage())
 	cmd.Flags().Float64Var(&flags.OpenAISpeed, "openai-speed", flags.OpenAISpeed, "OpenAI speech speed (0.25 to 4.0, may be ignored by gpt-4o-mini-tts)")
 	cmd.Flags().StringVar(&flags.OpenAIInstruction, "openai-instruction", "", "Voice instructions for gpt-4o-mini-tts model (e.g., 'speak slowly with a Bulgarian accent')")
+
+	// Gemini audio flags
+	cmd.Flags().StringVar(&flags.AudioProvider, "audio-provider", flags.AudioProvider, "Audio provider (gemini or openai; config file audio.provider also applies)")
+	cmd.Flags().StringVar(&flags.GeminiTTSModel, "gemini-tts-model", flags.GeminiTTSModel, "Gemini TTS model (config file audio.gemini_tts_model also applies)")
+	cmd.Flags().StringVar(&flags.GeminiVoice, "gemini-voice", flags.GeminiVoice, geminiVoiceUsage())
 
 	// OpenAI Image Generation flags
 	cmd.Flags().StringVar(&flags.OpenAIImageModel, "openai-image-model", flags.OpenAIImageModel, "OpenAI image model: dall-e-2 or dall-e-3")
@@ -103,10 +108,13 @@ func MarkExplicitFlagValues(cmd *cobra.Command, flags *Flags) {
 func bindFlagsToViper(cmd *cobra.Command) error {
 	bindings := map[string]string{
 		"audio.format":                "format",
+		"audio.provider":              "audio-provider",
 		"audio.openai_model":          "openai-model",
 		"audio.openai_voice":          "openai-voice",
 		"audio.openai_speed":          "openai-speed",
 		"audio.openai_instruction":    "openai-instruction",
+		"audio.gemini_tts_model":      "gemini-tts-model",
+		"audio.gemini_voice":          "gemini-voice",
 		"output.directory":            "output",
 		"image.provider":              "image-api",
 		"image.openai_model":          "openai-image-model",
@@ -192,4 +200,8 @@ func GetGoogleAPIKey() string {
 
 func openAIVoiceUsage() string {
 	return "OpenAI voice: " + strings.Join(audio.OpenAIVoices, ", ") + " (default: random)"
+}
+
+func geminiVoiceUsage() string {
+	return "Gemini voice: " + strings.Join(audio.GeminiVoices, ", ") + " (default: model default)"
 }
