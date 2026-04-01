@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"net/http"
@@ -52,6 +53,12 @@ type NanoBananaClient struct {
 var _ ImageSearcher = (*NanoBananaClient)(nil)
 
 var newNanoBananaClient = genai.NewClient
+var nanoBananaGenerateText = func(ctx context.Context, c *NanoBananaClient, model, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
+	return c.generateText(ctx, model, systemPrompt, userPrompt, temperature, maxOutputTokens)
+}
+var nanoBananaGenerateImage = func(ctx context.Context, c *NanoBananaClient, prompt string) ([]byte, string, error) {
+	return c.generateImage(ctx, prompt)
+}
 
 // NewNanoBananaClient creates a new Nano Banana client.
 func NewNanoBananaClient(config *NanoBananaConfig) *NanoBananaClient {
@@ -88,12 +95,7 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 		}
 	}
 
-	translatedWord, err := c.resolveTranslation(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	prompt, err := c.resolvePrompt(ctx, opts, translatedWord)
+	prompt, translatedWord, err := c.buildPrompt(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +108,7 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 	fmt.Printf("Nano Banana Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
 	fmt.Printf("Nano Banana Image Generation: Using model '%s' with aspect ratio '%s'\n", c.modelName(), nanoBananaAspectRatio)
 
-	imageBytes, mimeType, err := c.generateImage(ctx, prompt)
+	imageBytes, mimeType, err := nanoBananaGenerateImage(ctx, c, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +248,36 @@ func (c *NanoBananaClient) resolvePrompt(ctx context.Context, opts *SearchOption
 	return c.createEducationalPrompt(ctx, opts.Query, translatedWord), nil
 }
 
+func (c *NanoBananaClient) buildPrompt(ctx context.Context, opts *SearchOptions) (string, string, error) {
+	if opts == nil {
+		return "", "", &SearchError{
+			Provider: nanoBananaSource,
+			Code:     "INVALID_OPTIONS",
+			Message:  "search options are required",
+		}
+	}
+
+	if customPrompt := strings.TrimSpace(opts.CustomPrompt); customPrompt != "" {
+		if len(customPrompt) > 1000 {
+			customPrompt = customPrompt[:997] + "..."
+		}
+		fmt.Printf("Using custom prompt: %s\n", customPrompt)
+		return customPrompt, "", nil
+	}
+
+	translatedWord, err := c.resolveTranslation(ctx, opts)
+	if err != nil {
+		return "", "", err
+	}
+
+	prompt, err := c.resolvePrompt(ctx, opts, translatedWord)
+	if err != nil {
+		return "", "", err
+	}
+
+	return prompt, translatedWord, nil
+}
+
 func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgarianWord, englishTranslation string) string {
 	scene, err := c.generateSceneDescription(ctx, bulgarianWord, englishTranslation)
 	if err != nil {
@@ -317,8 +349,9 @@ func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgaria
 func (c *NanoBananaClient) translateBulgarianToEnglish(ctx context.Context, word string) (string, error) {
 	fmt.Printf("Nano Banana Translation: Using model '%s' to translate '%s'\n", c.textModelName(), word)
 
-	translation, err := c.generateText(
+	translation, err := nanoBananaGenerateText(
 		ctx,
+		c,
 		c.textModelName(),
 		"You are a Bulgarian language expert. Translate the Bulgarian word into English. Respond with only the English translation, nothing else.",
 		fmt.Sprintf("Translate the Bulgarian word '%s' to English. Respond with only the English translation, nothing else.", word),
@@ -336,8 +369,9 @@ func (c *NanoBananaClient) translateBulgarianToEnglish(ctx context.Context, word
 func (c *NanoBananaClient) generateSceneDescription(ctx context.Context, bulgarianWord, englishTranslation string) (string, error) {
 	fmt.Printf("Nano Banana Scene Generation: Creating scene for '%s' (%s)\n", bulgarianWord, englishTranslation)
 
-	scene, err := c.generateText(
+	scene, err := nanoBananaGenerateText(
 		ctx,
+		c,
 		c.textModelName(),
 		"You are helping create educational flashcards for language learning. Generate a brief, vivid scene description that incorporates the given English word in a memorable, contextual way. The scene should be visually interesting and help with memory retention. Keep it to 1-2 sentences, focusing on visual elements that can be illustrated. The subject (the English word) should be the clear focal point of the image, prominent and centered.",
 		fmt.Sprintf("Create a scene description for the English word '%s' that would make a memorable flashcard image. Make sure '%s' is the main focus and most prominent element in the scene.", englishTranslation, englishTranslation),
