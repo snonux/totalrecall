@@ -26,8 +26,8 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Long, "uses Nano Banana for images by default") {
 		t.Errorf("Expected Long description to describe the Nano Banana GUI default")
 	}
-	if !strings.Contains(cmd.Long, "Use --image-api to override the image backend") {
-		t.Errorf("Expected Long description to explain the image backend override")
+	if !strings.Contains(cmd.Long, "Use --image-api for explicit CLI runs; it currently supports OpenAI only") {
+		t.Errorf("Expected Long description to explain the current explicit CLI image-provider matrix")
 	}
 
 	// Test that flags are set up
@@ -109,8 +109,8 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag.DefValue != "openai" {
 		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
 	}
-	if imageAPIFlag.Usage != "Image source override (GUI no-arg path defaults to Nano Banana; explicit CLI default is OpenAI)" {
-		t.Errorf("Expected image-api help to describe the GUI Nano Banana default and explicit CLI override, got %q", imageAPIFlag.Usage)
+	if imageAPIFlag.Usage != "Image source for explicit CLI runs (OpenAI only for now; GUI no-arg path defaults to Nano Banana)" {
+		t.Errorf("Expected image-api help to describe the GUI Nano Banana default and OpenAI-only CLI image path, got %q", imageAPIFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")

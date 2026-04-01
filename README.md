@@ -8,7 +8,7 @@
 
 It has mainly been vibe coded using Claude Code CLI.
 
-⚠️ **Important:** This tool uses OpenAI services for audio and image generation, which requires an API key. See [Quick Start](#quick-start) for setup instructions.
+⚠️ **Important:** Audio generation uses OpenAI services. The no-arg GUI image path uses Google Gemini Nano Banana by default, while explicit CLI image generation currently remains OpenAI-only. See [Quick Start](#quick-start) for setup instructions.
 
 [<img src="assets/totalrecall.png" alt="TotalRecall screenshot">](assets/totalrecall.png)
 [🔊 Computer / Компютър audio example](assets/audio.mp3) (Download raw file, and then play locally)
@@ -27,7 +27,8 @@ It has mainly been vibe coded using Claude Code CLI.
 - Automatic Bulgarian to English translation
   - Saves translations to separate text files
 - Image generation:
-  - **OpenAI DALL-E**: AI-generated educational images with contextual scenes and random art styles
+  - **Google Gemini Nano Banana**: Default image path for the no-arg GUI launch
+  - **OpenAI DALL-E**: Explicit CLI image generation path for now
   - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
 - Anki-compatible export
@@ -93,7 +94,7 @@ After installation, you may need to log out and log back in for the icon to appe
 
 ## Quick Start
 
-**Note:** By default, totalrecall uses OpenAI for audio and Nano Banana for images in the GUI. Make sure to set your OpenAI API key and Google API key:
+**Note:** By default, totalrecall uses OpenAI for audio. The no-arg GUI image path uses Nano Banana, while explicit CLI image generation remains OpenAI-only until `z8` lands. Make sure to set your OpenAI API key and Google API key:
 ```bash
 export OPENAI_API_KEY="sk-..."
 export GOOGLE_API_KEY="..."
@@ -116,7 +117,7 @@ Key features:
 
 ### CLI Mode
 
-1. Generate materials for a single word (explicit CLI runs use OpenAI for images unless you override `--image-api`):
+1. Generate materials for a single word (explicit CLI image generation uses OpenAI only for now; Nano Banana CLI selection is pending `z8`):
    ```bash
    totalrecall ябълка
    ```
