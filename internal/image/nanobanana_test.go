@@ -523,6 +523,9 @@ func TestNanoBananaClient_GetAttribution(t *testing.T) {
 }
 
 func TestNanoBananaClient_Integration(t *testing.T) {
+	if os.Getenv("TOTALRECALL_IMAGE_INTEGRATION") == "" {
+		t.Skip("TOTALRECALL_IMAGE_INTEGRATION not set, skipping integration test")
+	}
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
 		t.Skip("GOOGLE_API_KEY not set, skipping integration test")
