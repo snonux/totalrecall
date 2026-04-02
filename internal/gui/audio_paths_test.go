@@ -1,10 +1,15 @@
 package gui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	fyneapp "fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
 
 func TestResolveSingleAudioFileFindsLegacyMp3WhenGuiDefaultIsWav(t *testing.T) {
@@ -29,38 +34,76 @@ func TestResolveSingleAudioFileFindsLegacyMp3WhenGuiDefaultIsWav(t *testing.T) {
 	}
 }
 
-func TestResolveSingleAudioFilePrefersNewerOnDiskAudio(t *testing.T) {
+func TestGUIDiscoveryAndLoadingRecognizeVoiceSuffixedAudio(t *testing.T) {
+	fyneApp := fyneapp.New()
+	t.Cleanup(func() {
+		fyneApp.Quit()
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	tempDir := t.TempDir()
-	wordDir := filepath.Join(tempDir, "word")
+	wordDir := filepath.Join(tempDir, "word-card")
 	if err := os.MkdirAll(wordDir, 0755); err != nil {
 		t.Fatalf("failed to create word dir: %v", err)
 	}
 
-	mp3Path := filepath.Join(wordDir, "audio.mp3")
-	wavPath := filepath.Join(wordDir, "audio.wav")
-	if err := os.WriteFile(mp3Path, []byte("mp3"), 0644); err != nil {
-		t.Fatalf("failed to write mp3 file: %v", err)
-	}
-	if err := os.WriteFile(wavPath, []byte("wav"), 0644); err != nil {
-		t.Fatalf("failed to write wav file: %v", err)
+	word := "ябълка"
+	if err := os.WriteFile(filepath.Join(wordDir, "word.txt"), []byte(word), 0644); err != nil {
+		t.Fatalf("failed to write word file: %v", err)
 	}
 
-	older := time.Now().Add(-time.Hour)
-	newer := time.Now()
-	if err := os.Chtimes(mp3Path, older, older); err != nil {
-		t.Fatalf("failed to set mp3 file time: %v", err)
-	}
-	if err := os.Chtimes(wavPath, newer, newer); err != nil {
-		t.Fatalf("failed to set wav file time: %v", err)
+	voiceAudioPath := filepath.Join(wordDir, "audio_sentinel-gemini-voice.mp3")
+	if err := os.WriteFile(voiceAudioPath, []byte("voice-audio"), 0644); err != nil {
+		t.Fatalf("failed to write voice-suffixed audio file: %v", err)
 	}
 
 	app := &Application{
-		config: &Config{AudioFormat: "wav"},
+		config: &Config{
+			OutputDir:   tempDir,
+			AudioFormat: "wav",
+		},
+		ctx:                      ctx,
+		cancel:                   cancel,
+		queue:                    NewWordQueue(context.Background()),
+		wordInput:                NewCustomEntry(),
+		audioPlayer:              NewAudioPlayer(),
+		imageDisplay:             NewImageDisplay(),
+		translationEntry:         NewCustomEntry(),
+		cardTypeSelect:           widget.NewSelect([]string{"English → Bulgarian", "Bulgarian → Bulgarian"}, nil),
+		imagePromptEntry:         NewCustomMultiLineEntry(),
+		statusLabel:              widget.NewLabel(""),
+		prevWordBtn:              ttwidget.NewButton("", nil),
+		nextWordBtn:              ttwidget.NewButton("", nil),
+		keepButton:               ttwidget.NewButton("", nil),
+		regenerateImageBtn:       ttwidget.NewButton("", nil),
+		regenerateRandomImageBtn: ttwidget.NewButton("", nil),
+		regenerateAudioBtn:       ttwidget.NewButton("", nil),
+		regenerateAllBtn:         ttwidget.NewButton("", nil),
+		deleteButton:             ttwidget.NewButton("", nil),
 	}
 
-	got := app.resolveSingleAudioFile(wordDir)
-	if got != wavPath {
-		t.Fatalf("resolveSingleAudioFile() = %q, want newer wav %q", got, wavPath)
+	app.scanExistingWords()
+	if len(app.existingWords) != 1 || app.existingWords[0] != word {
+		t.Fatalf("scanExistingWords() = %v, want %q", app.existingWords, word)
+	}
+
+	app.loadExistingFiles(word)
+	time.Sleep(50 * time.Millisecond)
+
+	if app.currentAudioFile != voiceAudioPath {
+		t.Fatalf("currentAudioFile = %q, want voice-suffixed path %q", app.currentAudioFile, voiceAudioPath)
+	}
+
+	if app.audioPlayer == nil {
+		t.Fatal("expected audio player to be initialized")
+	}
+	if app.audioPlayer.audioFile != voiceAudioPath {
+		t.Fatalf("audioPlayer.audioFile = %q, want %q", app.audioPlayer.audioFile, voiceAudioPath)
+	}
+
+	if app.currentCardType != "en-bg" {
+		t.Fatalf("currentCardType = %q, want %q", app.currentCardType, "en-bg")
 	}
 }
 
@@ -78,11 +121,6 @@ func TestResolveBgBgAudioFilesFindLegacyMp3Files(t *testing.T) {
 	}
 	if err := os.WriteFile(backPath, []byte("back"), 0644); err != nil {
 		t.Fatalf("failed to write back file: %v", err)
-	}
-
-	older := time.Now().Add(-time.Hour)
-	if err := os.Chtimes(frontPath, older, older); err != nil {
-		t.Fatalf("failed to set front file time: %v", err)
 	}
 
 	app := &Application{

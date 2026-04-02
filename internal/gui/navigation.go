@@ -444,9 +444,13 @@ func (a *Application) loadExistingFiles(word string) {
 		if frontAudio != "" {
 			a.currentAudioFile = frontAudio
 			fmt.Printf("DEBUG (loadExistingFiles): Found front audio: %s\n", frontAudio)
-			fyne.Do(func() {
+			if a.window == nil {
 				a.audioPlayer.SetAudioFile(frontAudio)
-			})
+			} else {
+				fyne.Do(func() {
+					a.audioPlayer.SetAudioFile(frontAudio)
+				})
+			}
 		} else {
 			fmt.Printf("DEBUG (loadExistingFiles): Front audio not found: %s\n", frontAudio)
 		}
@@ -454,9 +458,13 @@ func (a *Application) loadExistingFiles(word string) {
 		if backAudio != "" {
 			a.currentAudioFileBack = backAudio
 			fmt.Printf("DEBUG (loadExistingFiles): Found back audio: %s\n", backAudio)
-			fyne.Do(func() {
+			if a.window == nil {
 				a.audioPlayer.SetBackAudioFile(backAudio)
-			})
+			} else {
+				fyne.Do(func() {
+					a.audioPlayer.SetBackAudioFile(backAudio)
+				})
+			}
 		} else {
 			fmt.Printf("DEBUG (loadExistingFiles): Back audio not found: %s\n", backAudio)
 		}
@@ -467,18 +475,26 @@ func (a *Application) loadExistingFiles(word string) {
 		if audioFile != "" {
 			a.currentAudioFile = audioFile
 			fmt.Printf("DEBUG (loadExistingFiles): Found audio: %s\n", audioFile)
-			fyne.Do(func() {
+			if a.window == nil {
 				a.audioPlayer.SetAudioFile(audioFile)
-			})
+			} else {
+				fyne.Do(func() {
+					a.audioPlayer.SetAudioFile(audioFile)
+				})
+			}
 		} else {
 			fmt.Printf("DEBUG (loadExistingFiles): Audio not found: %s\n", audioFile)
 		}
 		// Hide back audio button for en-bg cards
 		a.currentAudioFileBack = ""
 		fmt.Printf("DEBUG (loadExistingFiles): Clearing back audio for en-bg card\n")
-		fyne.Do(func() {
+		if a.window == nil {
 			a.audioPlayer.SetBackAudioFile("")
-		})
+		} else {
+			fyne.Do(func() {
+				a.audioPlayer.SetBackAudioFile("")
+			})
+		}
 	}
 
 	// Load image file
