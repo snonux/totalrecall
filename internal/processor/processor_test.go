@@ -737,6 +737,48 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	}
 }
 
+func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+	audio.GeminiVoices = []string{"Charon"}
+
+	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return &fakeAudioProvider{
+			generateFunc: func(_ string, _ string) error {
+				return audio.ErrGeminiNoAudioData
+			},
+		}, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioProvider = "gemini"
+
+	p := NewProcessor(flags)
+	err := p.generateAudio("ябълка")
+	if !errors.Is(err, audio.ErrGeminiNoAudioData) {
+		t.Fatalf("generateAudio() error = %v, want wrapped ErrGeminiNoAudioData", err)
+	}
+	if got, want := err.Error(), "Gemini returned no audio for voices Charon: no audio data returned from Gemini"; got != want {
+		t.Fatalf("generateAudio() error text = %q, want %q", got, want)
+	}
+}
+
 func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	originalFactory := newAudioProvider
 	t.Cleanup(func() {

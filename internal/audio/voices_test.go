@@ -105,4 +105,24 @@ func TestRunWithVoiceFallbacks(t *testing.T) {
 			t.Fatalf("attempted voices = %#v, want %#v", got, want)
 		}
 	})
+
+	t.Run("wraps exhausted Gemini voices", func(t *testing.T) {
+		var attempted []string
+		usedVoice, err := RunWithVoiceFallbacks("Charon", func(voice string) error {
+			attempted = append(attempted, voice)
+			return ErrGeminiNoAudioData
+		})
+		if !errors.Is(err, ErrGeminiNoAudioData) {
+			t.Fatalf("error = %v, want wrapped ErrGeminiNoAudioData", err)
+		}
+		if usedVoice != "" {
+			t.Fatalf("used voice = %q, want empty", usedVoice)
+		}
+		if got, want := attempted, []string{"Charon", "Kore", "Leda"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("attempted voices = %#v, want %#v", got, want)
+		}
+		if got := err.Error(); got != "Gemini returned no audio for voices Charon, Kore, Leda: no audio data returned from Gemini" {
+			t.Fatalf("error text = %q, want wrapped attempted-voices summary", got)
+		}
+	})
 }

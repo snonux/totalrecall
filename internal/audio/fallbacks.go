@@ -22,7 +22,6 @@ func RunWithVoiceFallbacks(initialVoice string, generate func(voice string) erro
 		}
 
 		lastErr = err
-		fmt.Printf("Warning: Gemini returned no audio for voice %s\n", voice)
 	}
 
 	return "", fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)
