@@ -98,7 +98,7 @@ func TestNewProvider(t *testing.T) {
 			name:    "nil config uses defaults",
 			config:  nil,
 			wantErr: true,
-			errMsg:  "Google API key is required",
+			errMsg:  "google API key is required",
 		},
 		{
 			name: "openai provider without key",

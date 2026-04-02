@@ -212,7 +212,7 @@ func TestNewProcessor_ExplicitGeminiTranslationProvider(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for missing Google API key")
 	}
-	if err.Error() != "Google API key not found" {
+	if err.Error() != "google API key not found" {
 		t.Fatalf("Expected Gemini provider error, got: %v", err)
 	}
 }
@@ -1248,8 +1248,8 @@ func TestNewImageSearcherConfiguredNanoBananaRequiresGoogleAPIKey(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected error when Google API key is missing for Nano Banana")
 	}
-	if got := err.Error(); got != "Google API key is required for image generation" {
-		t.Fatalf("newImageSearcher() error = %q, want %q", got, "Google API key is required for image generation")
+	if got := err.Error(); got != "google API key is required for image generation" {
+		t.Fatalf("newImageSearcher() error = %q, want %q", got, "google API key is required for image generation")
 	}
 }
 

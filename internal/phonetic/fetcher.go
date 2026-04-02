@@ -88,7 +88,7 @@ var fetchGeminiPhonetic = func(ctx context.Context, client *genai.Client, word s
 		MaxOutputTokens:   phoneticMaxTokens,
 	})
 	if err != nil {
-		return "", fmt.Errorf("Gemini API error: %w", err)
+		return "", fmt.Errorf("gemini API error: %w", err)
 	}
 
 	phoneticInfo := strings.TrimSpace(resp.Text())
@@ -181,13 +181,13 @@ func (f *Fetcher) fetchWithOpenAI(ctx context.Context, word string) (string, err
 
 func (f *Fetcher) fetchWithGemini(ctx context.Context, word string) (string, error) {
 	if f.googleAPIKey == "" {
-		return "", fmt.Errorf("Google API key not configured")
+		return "", fmt.Errorf("google API key not configured")
 	}
 	if f.geminiInitErr != nil {
-		return "", fmt.Errorf("Gemini client initialization failed: %w", f.geminiInitErr)
+		return "", fmt.Errorf("gemini client initialization failed: %w", f.geminiInitErr)
 	}
 	if f.geminiClient == nil {
-		return "", fmt.Errorf("Gemini client not initialized")
+		return "", fmt.Errorf("gemini client not initialized")
 	}
 
 	return fetchGeminiPhonetic(ctx, f.geminiClient, word)

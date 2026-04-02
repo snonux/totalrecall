@@ -172,13 +172,13 @@ func (t *Translator) translateWithOpenAI(prompt string) (string, error) {
 
 func (t *Translator) translateWithGemini(prompt string) (string, error) {
 	if t.googleAPIKey == "" {
-		return "", fmt.Errorf("Google API key not found")
+		return "", fmt.Errorf("google API key not found")
 	}
 	if t.geminiInitErr != nil {
-		return "", fmt.Errorf("Gemini client initialization failed: %w", t.geminiInitErr)
+		return "", fmt.Errorf("gemini client initialization failed: %w", t.geminiInitErr)
 	}
 	if t.geminiClient == nil {
-		return "", fmt.Errorf("Gemini client not initialized")
+		return "", fmt.Errorf("gemini client not initialized")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), translationTimeout)
@@ -192,7 +192,7 @@ func (t *Translator) translateWithGemini(prompt string) (string, error) {
 		MaxOutputTokens: translationMaxTokens,
 	})
 	if err != nil {
-		return "", fmt.Errorf("Gemini API error: %w", err)
+		return "", fmt.Errorf("gemini API error: %w", err)
 	}
 
 	translation := strings.TrimSpace(resp.Text())

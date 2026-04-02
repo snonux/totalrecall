@@ -793,7 +793,7 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageSearcher, error) {
 	}
 
 	if nanoBananaConfig.APIKey == "" {
-		return nil, fmt.Errorf("Google API key is required for image generation")
+		return nil, fmt.Errorf("google API key is required for image generation")
 	}
 
 	return newNanoBananaImageClient(nanoBananaConfig), nil

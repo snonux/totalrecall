@@ -45,8 +45,8 @@ func TestFetchAndSave_NoGoogleAPIKey(t *testing.T) {
 		t.Fatal("expected error for missing Google API key")
 	}
 
-	if err.Error() != "Google API key not configured" {
-		t.Fatalf("expected Google API key error, got %v", err)
+	if err.Error() != "google API key not configured" {
+		t.Fatalf("expected google API key error, got %v", err)
 	}
 }
 
@@ -205,7 +205,7 @@ func TestFetchAndSave_GeminiInitFailure(t *testing.T) {
 		t.Fatal("expected Gemini init failure")
 	}
 
-	if err.Error() != "Gemini client initialization failed: context canceled" {
+	if err.Error() != "gemini client initialization failed: context canceled" {
 		t.Fatalf("unexpected Gemini init error: %v", err)
 	}
 }

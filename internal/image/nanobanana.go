@@ -419,7 +419,7 @@ func (c *NanoBananaClient) generateText(ctx context.Context, model, systemPrompt
 		MaxOutputTokens:   maxOutputTokens,
 	})
 	if err != nil {
-		return "", fmt.Errorf("Gemini API error: %w", err)
+		return "", fmt.Errorf("gemini API error: %w", err)
 	}
 
 	text := strings.TrimSpace(resp.Text())

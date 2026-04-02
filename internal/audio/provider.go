@@ -67,7 +67,7 @@ func NewProvider(config *Config) (Provider, error) {
 		return NewOpenAIProvider(config)
 	case "gemini":
 		if config.GoogleAPIKey == "" {
-			return nil, fmt.Errorf("Google API key is required")
+			return nil, fmt.Errorf("google API key is required")
 		}
 		return NewGeminiProvider(config)
 	default:

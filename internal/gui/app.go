@@ -629,8 +629,9 @@ func (a *Application) onSubmit() {
 		return
 	}
 
-	// Handle English to Bulgarian translation first if needed
-	if translationDirection == "en-to-bg" {
+	// Handle translation first if needed.
+	switch translationDirection {
+	case "en-to-bg":
 		a.updateStatus(fmt.Sprintf("Translating '%s' to Bulgarian...", secondaryText))
 		bulgarian, err := a.translateEnglishToBulgarian(secondaryText)
 		if err != nil {
@@ -643,7 +644,7 @@ func (a *Application) onSubmit() {
 		a.currentWord = bulgarian
 		a.saveTranslation()
 		needsTranslation = false
-	} else if translationDirection == "bg-to-en" {
+	case "bg-to-en":
 		a.updateStatus(fmt.Sprintf("Translating '%s' to English...", bulgarianText))
 		english, err := a.translateWord(bulgarianText)
 		if err != nil {

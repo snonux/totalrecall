@@ -89,8 +89,8 @@ func TestTranslateWord_ExplicitGeminiRequiresGoogleAPIKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for missing Google API key")
 	}
-	if err.Error() != "Google API key not found" {
-		t.Fatalf("Expected 'Google API key not found' error, got: %v", err)
+	if err.Error() != "google API key not found" {
+		t.Fatalf("Expected 'google API key not found' error, got: %v", err)
 	}
 }
 

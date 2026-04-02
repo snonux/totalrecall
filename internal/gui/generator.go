@@ -383,7 +383,7 @@ func (a *Application) newImageSearcher() (promptAwareImageClient, error) {
 			config = DefaultConfig()
 		}
 		if config.GoogleAPIKey == "" {
-			return nil, fmt.Errorf("Google API key is required for image generation")
+			return nil, fmt.Errorf("google API key is required for image generation")
 		}
 
 		nanoBananaConfig := &image.NanoBananaConfig{

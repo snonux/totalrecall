@@ -66,7 +66,9 @@ func (l *Lister) ListAvailableModels() error {
 		return fmt.Errorf("no API keys found. Set OPENAI_API_KEY and/or GOOGLE_API_KEY environment variable(s) or configure them in .totalrecall.yaml")
 	}
 
-	fmt.Fprintln(l.out, "Available Models:")
+	if err := l.writeLine("Available Models:"); err != nil {
+		return err
+	}
 
 	printedSection := false
 	if l.openAIKey != "" {
@@ -78,7 +80,9 @@ func (l *Lister) ListAvailableModels() error {
 
 	if l.geminiKey != "" {
 		if printedSection {
-			fmt.Fprintln(l.out)
+			if err := l.writeLine(""); err != nil {
+				return err
+			}
 		}
 		if err := l.printGeminiModels(); err != nil {
 			return err
@@ -118,26 +122,42 @@ func (l *Lister) printOpenAIModels() error {
 	sort.Strings(imageModels)
 	sort.Strings(chatModels)
 
-	fmt.Fprintln(l.out, "OpenAI Models:")
-	fmt.Fprintln(l.out, "  Text-to-Speech (TTS) Models:")
+	if err := l.writeLine("OpenAI Models:"); err != nil {
+		return err
+	}
+	if err := l.writeLine("  Text-to-Speech (TTS) Models:"); err != nil {
+		return err
+	}
 	if len(ttsModels) == 0 {
-		fmt.Fprintln(l.out, "    No TTS models found")
+		if err := l.writeLine("    No TTS models found"); err != nil {
+			return err
+		}
 	} else {
 		for _, model := range ttsModels {
-			fmt.Fprintf(l.out, "    %s\n", model)
+			if err := l.writeLine("    " + model); err != nil {
+				return err
+			}
 		}
 	}
 
-	fmt.Fprintln(l.out, "  Image Generation Models:")
+	if err := l.writeLine("  Image Generation Models:"); err != nil {
+		return err
+	}
 	if len(imageModels) == 0 {
-		fmt.Fprintln(l.out, "    No image models found")
+		if err := l.writeLine("    No image models found"); err != nil {
+			return err
+		}
 	} else {
 		for _, model := range imageModels {
-			fmt.Fprintf(l.out, "    %s\n", model)
+			if err := l.writeLine("    " + model); err != nil {
+				return err
+			}
 		}
 	}
 
-	fmt.Fprintln(l.out, "  Chat/Translation Models (for Bulgarian translation):")
+	if err := l.writeLine("  Chat/Translation Models (for Bulgarian translation):"); err != nil {
+		return err
+	}
 	if len(chatModels) > 10 {
 		// Show only relevant models
 		relevantModels := []string{}
@@ -147,12 +167,18 @@ func (l *Lister) printOpenAIModels() error {
 			}
 		}
 		for _, model := range relevantModels {
-			fmt.Fprintf(l.out, "    %s\n", model)
+			if err := l.writeLine("    " + model); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(l.out, "    ... and %d more models\n", len(chatModels)-len(relevantModels))
+		if err := l.writeFormatted("    ... and %d more models\n", len(chatModels)-len(relevantModels)); err != nil {
+			return err
+		}
 	} else {
 		for _, model := range chatModels {
-			fmt.Fprintf(l.out, "    %s\n", model)
+			if err := l.writeLine("    " + model); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -164,7 +190,7 @@ func (l *Lister) printGeminiModels() error {
 		return fmt.Errorf("failed to initialize Gemini client: %w", l.geminiInitErr)
 	}
 	if l.geminiClient == nil {
-		return fmt.Errorf("Gemini client not initialized")
+		return fmt.Errorf("gemini client not initialized")
 	}
 
 	ctx := context.Background()
@@ -189,14 +215,36 @@ func (l *Lister) printGeminiModels() error {
 
 	sort.Strings(geminiModels)
 
-	fmt.Fprintln(l.out, "Gemini Models:")
+	if err := l.writeLine("Gemini Models:"); err != nil {
+		return err
+	}
 	if len(geminiModels) == 0 {
-		fmt.Fprintln(l.out, "  No Gemini models found")
+		if err := l.writeLine("  No Gemini models found"); err != nil {
+			return err
+		}
 		return nil
 	}
 
 	for _, model := range geminiModels {
-		fmt.Fprintf(l.out, "  %s\n", model)
+		if err := l.writeLine("  " + model); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (l *Lister) writeLine(text string) error {
+	if _, err := fmt.Fprintln(l.out, text); err != nil {
+		return fmt.Errorf("write model list output: %w", err)
+	}
+
+	return nil
+}
+
+func (l *Lister) writeFormatted(format string, args ...any) error {
+	if _, err := fmt.Fprintf(l.out, format, args...); err != nil {
+		return fmt.Errorf("write model list output: %w", err)
 	}
 
 	return nil

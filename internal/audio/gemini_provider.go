@@ -33,7 +33,7 @@ var _ Provider = (*GeminiProvider)(nil)
 func NewGeminiProvider(config *Config) (Provider, error) {
 	normalized := normalizeGeminiConfig(config)
 	if normalized.GoogleAPIKey == "" {
-		return nil, errors.New("Google API key is required")
+		return nil, errors.New("google API key is required")
 	}
 
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
@@ -56,7 +56,7 @@ func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputF
 		return err
 	}
 	if p == nil || p.client == nil || p.config == nil {
-		return errors.New("Gemini client not initialized")
+		return errors.New("gemini client not initialized")
 	}
 
 	prompt := p.buildPrompt(text)
@@ -69,7 +69,7 @@ func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputF
 		genai.NewContentFromText(prompt, genai.RoleUser),
 	}, req)
 	if err != nil {
-		return fmt.Errorf("Gemini API error: %w", err)
+		return fmt.Errorf("gemini API error: %w", err)
 	}
 
 	audioData, mimeType, err := extractAudioData(response)
@@ -92,7 +92,7 @@ func (p *GeminiProvider) Name() string {
 // IsAvailable checks if the Google API key is configured.
 func (p *GeminiProvider) IsAvailable() error {
 	if p == nil || p.config == nil || strings.TrimSpace(p.config.GoogleAPIKey) == "" {
-		return errors.New("Google API key not configured")
+		return errors.New("google API key not configured")
 	}
 
 	return nil
@@ -183,7 +183,7 @@ func writeGeminiAudioFile(outputFile string, audioData []byte, mimeType string) 
 
 	ext := strings.ToLower(filepath.Ext(outputFile))
 	if ext != ".wav" {
-		return fmt.Errorf("Gemini TTS only supports .wav output files, got %q", outputFile)
+		return fmt.Errorf("gemini TTS only supports .wav output files, got %q", outputFile)
 	}
 
 	encoded, err := encodePCMAsWAV(audioData)
