@@ -390,7 +390,7 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 
 	p := NewProcessor(flags)
 
-	if err := p.generateAudio("ябълка"); err != nil {
+	if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -439,7 +439,7 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudioBgBg("ябълка", "круша"); err != nil {
+	if err := p.generateAudioBgBg(context.Background(), "ябълка", "круша"); err != nil {
 		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
 	}
 
@@ -520,7 +520,7 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
-	err := p.generateAudio("ябълка")
+	err := p.generateAudio(context.Background(), "ябълка")
 	if err == nil {
 		t.Fatal("generateAudio() expected error from provider factory")
 	}
@@ -558,7 +558,7 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	flags.AudioFormat = "mp3"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка!?"); err != nil {
+	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -657,7 +657,7 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка!?"); err != nil {
+	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -748,7 +748,7 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	p := NewProcessor(flags)
 	p.randomIntn = func(int) int { return 0 }
 	output := captureStdout(t, func() {
-		if err := p.generateAudio("ябълка"); err != nil {
+		if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
 			t.Fatalf("generateAudio() unexpected error: %v", err)
 		}
 	})
@@ -812,7 +812,7 @@ func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	err := p.generateAudio("ябълка")
+	err := p.generateAudio(context.Background(), "ябълка")
 	if !errors.Is(err, audio.ErrGeminiNoAudioData) {
 		t.Fatalf("generateAudio() error = %v, want wrapped ErrGeminiNoAudioData", err)
 	}
@@ -854,7 +854,7 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudioBgBg("ябълка!?", "круша."); err != nil {
+	if err := p.generateAudioBgBg(context.Background(), "ябълка!?", "круша."); err != nil {
 		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
 	}
 
@@ -916,7 +916,7 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 
 	p := NewProcessor(flags)
 	wordDir := p.findOrCreateWordDirectory("ябълка!?")
-	if err := p.generateAudioWithVoiceAndFilenameInDir("ябълка!?", "alloy", "audio", wordDir); err != nil {
+	if err := p.generateAudioWithVoiceAndFilenameInDir(context.Background(), "ябълка!?", "alloy", "audio", wordDir); err != nil {
 		t.Fatalf("generateAudioWithVoiceAndFilenameInDir() unexpected error: %v", err)
 	}
 
@@ -992,7 +992,7 @@ func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
 	flags.AudioFormat = "mp3"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка"); err != nil {
+	if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -1069,7 +1069,7 @@ func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
 	flags.OpenAIModel = "tts-1"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка!?"); err != nil {
+	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -1232,7 +1232,7 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	flags.ImageAPISpecified = true
 
 	p := NewProcessor(flags)
-	if err := p.downloadImagesWithTranslation("ябълка", "apple"); err != nil {
+	if err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple"); err != nil {
 		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
 	}
 
@@ -1287,7 +1287,7 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	flags.ImageAPISpecified = true
 
 	p := NewProcessor(flags)
-	err := p.downloadImagesWithTranslation("ябълка", "apple")
+	err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple")
 	if err == nil {
 		t.Fatal("downloadImagesWithTranslation() expected error from failed download")
 	}
@@ -1337,7 +1337,7 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	flags.ImageAPISpecified = false
 
 	p := NewProcessor(flags)
-	if err := p.downloadImagesWithTranslation("ябълка", "apple"); err != nil {
+	if err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple"); err != nil {
 		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
 	}
 

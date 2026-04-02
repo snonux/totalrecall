@@ -113,7 +113,12 @@ func (p *Processor) ProcessBatch() error {
 			continue
 		}
 
-		if err := p.ProcessWordWithTranslationAndType(entry.Bulgarian, entry.Translation, entry.CardType); err != nil {
+		// Create a per-word timeout so a single hung API call cannot stall the
+		// whole batch. 5 minutes is generous for audio TTS + image download.
+		wordCtx, wordCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		err := p.ProcessWordWithTranslationAndType(wordCtx, entry.Bulgarian, entry.Translation, entry.CardType)
+		wordCancel() // release resources even on success
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing '%s': %v\n", entry.Bulgarian, err)
 			errorCount++
 		} else {
@@ -152,11 +157,14 @@ func (p *Processor) ProcessSingleWord(word string) error {
 
 // ProcessWordWithTranslation processes a word with optional provided translation (en-bg mode)
 func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string) error {
-	return p.ProcessWordWithTranslationAndType(word, providedTranslation, internal.CardTypeEnBg)
+	return p.ProcessWordWithTranslationAndType(context.Background(), word, providedTranslation, internal.CardTypeEnBg)
 }
 
-// ProcessWordWithTranslationAndType processes a word with optional provided translation and card type
-func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation string, cardType internal.CardType) error {
+// ProcessWordWithTranslationAndType processes a word with optional provided translation and card type.
+// ctx is used for all downstream API calls (audio TTS, image generation) so the caller can
+// cancel or time out the whole operation. ProcessBatch passes a per-word deadline; callers
+// that do not need a deadline may pass context.Background().
+func (p *Processor) ProcessWordWithTranslationAndType(ctx context.Context, word, providedTranslation string, cardType internal.CardType) error {
 	var translationText string
 
 	// For bg-bg cards, translation is the back side (Bulgarian definition)
@@ -217,11 +225,11 @@ func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation 
 		fmt.Printf("  Generating audio...\n")
 		if cardType.IsBgBg() {
 			// Generate audio for both sides
-			if err := p.generateAudioBgBg(word, translationText); err != nil {
+			if err := p.generateAudioBgBg(ctx, word, translationText); err != nil {
 				return fmt.Errorf("audio generation failed: %w", err)
 			}
 		} else {
-			if err := p.generateAudio(word); err != nil {
+			if err := p.generateAudio(ctx, word); err != nil {
 				return fmt.Errorf("audio generation failed: %w", err)
 			}
 		}
@@ -230,7 +238,7 @@ func (p *Processor) ProcessWordWithTranslationAndType(word, providedTranslation 
 	// Download images - pass the translation for better image generation
 	if !p.flags.SkipImages {
 		fmt.Printf("  Downloading images...\n")
-		if err := p.downloadImagesWithTranslation(word, translationText); err != nil {
+		if err := p.downloadImagesWithTranslation(ctx, word, translationText); err != nil {
 			return fmt.Errorf("image download failed: %w", err)
 		}
 	}
@@ -353,8 +361,9 @@ func (p *Processor) logSelectedAudioVoice(provider, voice string) {
 	}
 }
 
-// generateAudio generates audio files for a word
-func (p *Processor) generateAudio(word string) error {
+// generateAudio generates audio files for a word using the configured provider.
+// ctx is threaded down to provider.GenerateAudio so the caller's deadline applies.
+func (p *Processor) generateAudio(ctx context.Context, word string) error {
 	provider := p.audioProviderName()
 
 	// Get the provider-specific voice list.
@@ -369,7 +378,7 @@ func (p *Processor) generateAudio(word string) error {
 				if candidate != voice {
 					fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
 				}
-				return p.generateAudioWithVoice(word, candidate)
+				return p.generateAudioWithVoice(ctx, word, candidate)
 			}, func(candidate string) {
 				fmt.Printf("  Warning: Gemini returned no audio for voice %s\n", candidate)
 			})
@@ -383,7 +392,7 @@ func (p *Processor) generateAudio(word string) error {
 		if p.flags.AllVoices {
 			fmt.Printf("  Generating audio %d/%d (voice: %s)...\n", i+1, len(voices), voice)
 		}
-		if err := p.generateAudioWithVoice(word, voice); err != nil {
+		if err := p.generateAudioWithVoice(ctx, word, voice); err != nil {
 			return fmt.Errorf("failed to generate audio with voice %s: %w", voice, err)
 		}
 	}
@@ -391,25 +400,26 @@ func (p *Processor) generateAudio(word string) error {
 	return nil
 }
 
-// generateAudioBgBg generates audio files for both sides of a bg-bg card
-func (p *Processor) generateAudioBgBg(front, back string) error {
+// generateAudioBgBg generates audio files for both sides of a bg-bg card.
+// ctx is threaded down to provider.GenerateAudio so the caller's deadline applies.
+func (p *Processor) generateAudioBgBg(ctx context.Context, front, back string) error {
 	provider := p.audioProviderName()
 
 	voice := p.audioVoiceForProvider()
 	p.logSelectedAudioVoice(provider, voice)
 
 	// Find or create the word directory ONCE (for the front word)
-	// Both audio files will be saved to this same directory
+	// Both audio files will be saved to this same directory.
 	wordDir := p.findOrCreateWordDirectory(front)
 
 	generatePair := func(candidate string) error {
 		fmt.Printf("  Generating front audio for '%s'...\n", front)
-		if err := p.generateAudioWithVoiceAndFilenameInDir(front, candidate, "audio_front", wordDir); err != nil {
+		if err := p.generateAudioWithVoiceAndFilenameInDir(ctx, front, candidate, "audio_front", wordDir); err != nil {
 			return fmt.Errorf("failed to generate front audio: %w", err)
 		}
 
 		fmt.Printf("  Generating back audio for '%s'...\n", back)
-		if err := p.generateAudioWithVoiceAndFilenameInDir(back, candidate, "audio_back", wordDir); err != nil {
+		if err := p.generateAudioWithVoiceAndFilenameInDir(ctx, back, candidate, "audio_back", wordDir); err != nil {
 			return fmt.Errorf("failed to generate back audio: %w", err)
 		}
 
@@ -435,19 +445,21 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 	return nil
 }
 
-// generateAudioWithVoice generates audio for a word with a specific voice
-func (p *Processor) generateAudioWithVoice(word, voice string) error {
-	return p.generateAudioWithVoiceAndFilename(word, voice, "audio")
+// generateAudioWithVoice generates audio for a word with a specific voice.
+func (p *Processor) generateAudioWithVoice(ctx context.Context, word, voice string) error {
+	return p.generateAudioWithVoiceAndFilename(ctx, word, voice, "audio")
 }
 
-// generateAudioWithVoiceAndFilename generates audio for a word with a specific voice and filename
-func (p *Processor) generateAudioWithVoiceAndFilename(word, voice, filenameBase string) error {
+// generateAudioWithVoiceAndFilename generates audio for a word with a specific voice and filename.
+func (p *Processor) generateAudioWithVoiceAndFilename(ctx context.Context, word, voice, filenameBase string) error {
 	wordDir := p.findOrCreateWordDirectory(word)
-	return p.generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir)
+	return p.generateAudioWithVoiceAndFilenameInDir(ctx, word, voice, filenameBase, wordDir)
 }
 
-// generateAudioWithVoiceAndFilenameInDir generates audio for a word and saves it to a specific directory
-func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filenameBase, wordDir string) error {
+// generateAudioWithVoiceAndFilenameInDir generates audio for a word and saves it to a specific directory.
+// ctx is passed directly to provider.GenerateAudio so the caller's cancellation and deadline apply
+// to the TTS API call; use context.Background() when no deadline is needed.
+func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, word, voice, filenameBase, wordDir string) error {
 	audioProvider := p.audioProviderName()
 	audioFormat := p.effectiveAudioFormat()
 
@@ -500,9 +512,6 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 		return err
 	}
 
-	// Generate audio file
-	ctx := context.Background()
-
 	// Build filename using the provided base
 	outputFormat := providerConfig.OutputFormat
 	var outputFile string
@@ -526,8 +535,10 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	return nil
 }
 
-// downloadImagesWithTranslation downloads images for a word
-func (p *Processor) downloadImagesWithTranslation(word, translationText string) error {
+// downloadImagesWithTranslation downloads images for a word.
+// ctx is passed to the image downloader so the caller's cancellation and deadline apply
+// to the image search and download API calls.
+func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, translationText string) error {
 	searcher, err := p.newImageSearcher()
 	if err != nil {
 		return err
@@ -568,8 +579,7 @@ func (p *Processor) downloadImagesWithTranslation(word, translationText string) 
 		})
 	}
 
-	// Download single image
-	ctx := context.Background()
+	// Download single image using the caller-provided context so deadlines propagate.
 	_, path, err := downloader.DownloadBestMatchWithOptions(ctx, searchOpts)
 	if err != nil {
 		return err
