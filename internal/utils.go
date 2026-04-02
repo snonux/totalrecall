@@ -14,11 +14,11 @@ func GenerateCardID(bulgarianWord string) string {
 	// Get current timestamp in milliseconds
 	now := time.Now()
 	epochMillis := now.UnixNano() / 1000000
-	
+
 	// Calculate MD5 hash of the word
 	hash := md5.Sum([]byte(bulgarianWord))
 	hashStr := hex.EncodeToString(hash[:])[:8] // Use first 8 chars of MD5
-	
+
 	// Combine timestamp and hash
 	return fmt.Sprintf("%d_%s", epochMillis, hashStr)
 }
@@ -40,7 +40,7 @@ func SanitizeFilename(s string) string {
 
 // isAlphaNumeric checks if a rune is alphanumeric
 func isAlphaNumeric(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
-	       (r >= '0' && r <= '9') || (r >= 'а' && r <= 'я') || 
-	       (r >= 'А' && r <= 'Я')
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') || (r >= 'а' && r <= 'я') ||
+		(r >= 'А' && r <= 'Я')
 }

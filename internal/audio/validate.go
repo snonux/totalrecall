@@ -11,7 +11,7 @@ func ValidateBulgarianText(text string) error {
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("text cannot be empty")
 	}
-	
+
 	hasCyrillic := false
 	for _, r := range text {
 		if unicode.In(r, unicode.Cyrillic) {
@@ -19,10 +19,10 @@ func ValidateBulgarianText(text string) error {
 			break
 		}
 	}
-	
+
 	if !hasCyrillic {
 		return fmt.Errorf("text must contain Cyrillic characters")
 	}
-	
+
 	return nil
 }

@@ -1,6 +1,9 @@
 package image
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 const maxImagePromptChars = 1000
 
@@ -90,6 +93,74 @@ func withTerminalPunctuation(text string) string {
 	default:
 		return text + "."
 	}
+}
+
+// buildEducationalPrompt assembles the final image-generation prompt from a
+// pre-chosen artistic style, an optional scene description, and the word subject.
+// Both OpenAIClient and NanoBananaClient share this logic so the prompt policy
+// has a single authoritative home. The scene parameter may be empty, in which
+// case a simpler fallback prompt is used. The result is always capped at
+// maxImagePromptChars characters.
+func buildEducationalPrompt(style, scene, subject string) string {
+	var prompt string
+
+	if scene != "" {
+		fullPrompt := fmt.Sprintf(
+			"Generate a %s educational flashcard image illustrating \"%s\". Scene: %s "+
+				"The image should be educational and suitable for language learning flashcards. "+
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the scene makes \"%s\" immediately identifiable. "+
+				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+			style, subject, withTerminalPunctuation(scene), subject,
+		)
+
+		if len(fullPrompt) <= maxImagePromptChars {
+			prompt = fullPrompt
+		} else {
+			// Try a shorter version without the IMPORTANT notice.
+			prompt = fmt.Sprintf(
+				"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
+					"The image should be educational and suitable for language learning flashcards. "+
+					"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+				style, subject, withTerminalPunctuation(scene),
+			)
+
+			// If still too long, truncate the scene to fit.
+			if len(prompt) > maxImagePromptChars {
+				template := fmt.Sprintf(
+					"Generate a %s flashcard image illustrating \"%s\". Scene:  "+
+						"The image should be educational and suitable for language learning flashcards. "+
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					style, subject,
+				)
+				maxSceneLen := maxImagePromptChars - len(template)
+				if maxSceneLen > 3 && len(scene) > maxSceneLen {
+					scene = scene[:maxSceneLen] + "..."
+				}
+				prompt = fmt.Sprintf(
+					"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
+						"The image should be educational and suitable for language learning flashcards. "+
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					style, subject, withTerminalPunctuation(scene),
+				)
+			}
+		}
+	} else {
+		// No scene available — use a simpler fallback prompt.
+		prompt = fmt.Sprintf(
+			"Generate a %s educational flashcard image illustrating \"%s\". %s "+
+				"The image should be educational and suitable for language learning flashcards. "+
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. Show it prominently centered with excellent lighting and sharp focus. "+
+				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+			style, subject, fallbackVisualDirection(subject),
+		)
+	}
+
+	// Hard cap at maxImagePromptChars.
+	if len(prompt) > maxImagePromptChars {
+		prompt = prompt[:997] + "..."
+	}
+
+	return prompt
 }
 
 func fallbackVisualDirection(subject string) string {

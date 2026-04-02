@@ -80,4 +80,3 @@ type RateLimitError struct {
 func (e *RateLimitError) Error() string {
 	return e.Provider + ": rate limit exceeded"
 }
-

@@ -243,10 +243,13 @@ func (c *OpenAIClient) SetPromptCallback(callback func(prompt string)) {
 	c.PromptCallback = callback
 }
 
-// createEducationalPrompt generates a prompt optimized for language learning
+// createEducationalPrompt generates a prompt optimized for language learning.
+// Scene generation and style selection are handled here; the shared
+// buildEducationalPrompt helper assembles the actual prompt text so that the
+// same policy is used by both OpenAIClient and NanoBananaClient.
 func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWord, englishTranslation string) string {
 	subject := promptSubject(englishTranslation, bulgarianWord)
-	// Generate a scene description for the word
+
 	scene, err := c.generateSceneDescription(ctx, bulgarianWord, englishTranslation)
 	if err != nil {
 		fmt.Printf("  Failed to generate scene: %v, using basic prompt\n", err)
@@ -260,76 +263,15 @@ func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWor
 		}
 	}
 
-	// Select a random style from the shared pool. Fall back to a generic style if
-	// the pool has been emptied by tests or future callers.
+	// Select a random style from the shared pool. Fall back to a generic style
+	// if the pool has been exhausted by tests or other callers.
 	selectedStyle := chooseArtisticStyle()
 	if selectedStyle == defaultArtisticStyle {
 		fmt.Printf("  No artistic styles available, using generic prompt\n")
 	}
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
-	// Define prompt components in order of importance
-	var prompt string
-
-	if scene != "" {
-		// Full prompt with scene
-		fullPrompt := fmt.Sprintf(
-			"Generate a %s educational flashcard image illustrating \"%s\". Scene: %s "+
-				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the scene makes \"%s\" immediately identifiable. "+
-				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-			selectedStyle, subject, withTerminalPunctuation(scene), subject,
-		)
-
-		// Check if full prompt exceeds 1000 characters
-		if len(fullPrompt) > maxImagePromptChars {
-			// Try without the IMPORTANT notice
-			prompt = fmt.Sprintf(
-				"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
-					"The image should be educational and suitable for language learning flashcards. "+
-					"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
-				selectedStyle, subject, withTerminalPunctuation(scene),
-			)
-
-			// If still too long, truncate the scene
-			if len(prompt) > maxImagePromptChars {
-				// Truncate scene to fit within limit
-				maxSceneLen := maxImagePromptChars - len(fmt.Sprintf(
-					"Generate a %s flashcard image illustrating \"%s\". Scene:  "+
-						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
-					selectedStyle, subject,
-				))
-				if maxSceneLen > 3 && len(scene) > maxSceneLen {
-					scene = scene[:maxSceneLen] + "..."
-				}
-				prompt = fmt.Sprintf(
-					"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
-						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
-					selectedStyle, subject, withTerminalPunctuation(scene),
-				)
-			}
-		} else {
-			prompt = fullPrompt
-		}
-	} else {
-		// Basic prompt without scene
-		prompt = fmt.Sprintf(
-			"Generate a %s educational flashcard image illustrating \"%s\". %s "+
-				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. Show it prominently centered with excellent lighting and sharp focus. "+
-				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-			selectedStyle, subject, fallbackVisualDirection(subject),
-		)
-	}
-
-	// Final check to ensure prompt is within 1000 characters
-	if len(prompt) > maxImagePromptChars {
-		prompt = prompt[:997] + "..."
-	}
-
-	return prompt
+	return buildEducationalPrompt(selectedStyle, scene, subject)
 }
 
 // translateBulgarianToEnglish translates a Bulgarian word to English using OpenAI

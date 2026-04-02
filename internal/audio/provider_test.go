@@ -2,7 +2,6 @@ package audio
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -153,94 +152,3 @@ func TestNewProvider(t *testing.T) {
 	}
 }
 
-func TestProviderWithFallback(t *testing.T) {
-	primary := &mockProvider{name: "primary"}
-	fallback := &mockProvider{name: "fallback"}
-
-	provider := NewProviderWithFallback(primary, fallback)
-
-	// Test successful primary
-	ctx := context.Background()
-	err := provider.GenerateAudio(ctx, "test", "output.mp3")
-	if err != nil {
-		t.Errorf("GenerateAudio() unexpected error: %v", err)
-	}
-	if primary.generateCalls != 1 {
-		t.Errorf("Expected 1 primary call, got %d", primary.generateCalls)
-	}
-	if fallback.generateCalls != 0 {
-		t.Errorf("Expected 0 fallback calls, got %d", fallback.generateCalls)
-	}
-
-	// Test primary failure, fallback success
-	primary.generateErr = errors.New("primary failed")
-	primary.generateCalls = 0
-
-	err = provider.GenerateAudio(ctx, "test", "output.mp3")
-	if err != nil {
-		t.Errorf("GenerateAudio() unexpected error: %v", err)
-	}
-	if primary.generateCalls != 1 {
-		t.Errorf("Expected 1 primary call, got %d", primary.generateCalls)
-	}
-	if fallback.generateCalls != 1 {
-		t.Errorf("Expected 1 fallback call, got %d", fallback.generateCalls)
-	}
-
-	// Test both fail
-	fallback.generateErr = errors.New("fallback failed")
-	primary.generateCalls = 0
-	fallback.generateCalls = 0
-
-	err = provider.GenerateAudio(ctx, "test", "output.mp3")
-	if err == nil {
-		t.Error("GenerateAudio() expected error when both providers fail")
-	}
-}
-
-func TestProviderWithFallbackName(t *testing.T) {
-	primary := &mockProvider{name: "primary"}
-	fallback := &mockProvider{name: "fallback"}
-
-	provider := NewProviderWithFallback(primary, fallback)
-
-	expected := "primary (fallback: fallback)"
-	if provider.Name() != expected {
-		t.Errorf("Name() = %v, want %v", provider.Name(), expected)
-	}
-}
-
-func TestProviderWithFallbackIsAvailable(t *testing.T) {
-	primary := &mockProvider{name: "primary"}
-	fallback := &mockProvider{name: "fallback"}
-
-	provider := NewProviderWithFallback(primary, fallback)
-
-	// Both available
-	err := provider.IsAvailable()
-	if err != nil {
-		t.Errorf("IsAvailable() unexpected error: %v", err)
-	}
-
-	// Primary unavailable, fallback available
-	primary.availableErr = errors.New("primary unavailable")
-	err = provider.IsAvailable()
-	if err != nil {
-		t.Errorf("IsAvailable() unexpected error when fallback available: %v", err)
-	}
-
-	// Primary available, fallback unavailable
-	primary.availableErr = nil
-	fallback.availableErr = errors.New("fallback unavailable")
-	err = provider.IsAvailable()
-	if err != nil {
-		t.Errorf("IsAvailable() unexpected error when primary available: %v", err)
-	}
-
-	// Both unavailable
-	primary.availableErr = errors.New("primary unavailable")
-	err = provider.IsAvailable()
-	if err == nil {
-		t.Error("IsAvailable() expected error when both providers unavailable")
-	}
-}

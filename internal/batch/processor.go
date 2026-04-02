@@ -31,10 +31,11 @@ func ReadBatchFile(filename string) ([]WordEntry, error) {
 	}
 
 	var entries []WordEntry
-	lines := string(content)
-
-	for _, line := range splitLines(lines) {
-		if line = trimSpace(line); line != "" {
+	// Normalize \r\n to \n before splitting so both Windows and Unix line
+	// endings are handled uniformly by strings.Split.
+	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
+	for _, line := range strings.Split(normalized, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
 			entry := parseBatchLine(line)
 			if entry != nil {
 				entries = append(entries, *entry)
@@ -103,43 +104,3 @@ func parseBatchLine(line string) *WordEntry {
 	}
 }
 
-// splitLines splits a string by newlines, handling both \n and \r\n line endings.
-// Uses strings.Builder to avoid per-character heap allocations from += concatenation.
-func splitLines(s string) []string {
-	var lines []string
-	var current strings.Builder
-	for _, r := range s {
-		if r == '\n' {
-			lines = append(lines, current.String())
-			current.Reset()
-		} else if r != '\r' {
-			current.WriteRune(r)
-		}
-	}
-	if current.Len() > 0 {
-		lines = append(lines, current.String())
-	}
-	return lines
-}
-
-// trimSpace trims whitespace from string
-func trimSpace(s string) string {
-	start := 0
-	end := len(s)
-
-	// Trim from start
-	for start < end && isSpace(rune(s[start])) {
-		start++
-	}
-
-	// Trim from end
-	for end > start && isSpace(rune(s[end-1])) {
-		end--
-	}
-
-	return s[start:end]
-}
-
-func isSpace(r rune) bool {
-	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
-}
