@@ -15,26 +15,26 @@ import (
 // Compile-time check that OpenAIProvider implements the Provider interface.
 var _ Provider = (*OpenAIProvider)(nil)
 
-// OpenAIProvider implements Provider interface for OpenAI TTS
+// OpenAIProvider implements Provider interface for OpenAI TTS.
+// It stores only the OpenAI-specific sub-config so it never sees Gemini fields.
 type OpenAIProvider struct {
-	client *openai.Client
-	config *Config
+	client       *openai.Client
+	config       OpenAIAudioConfig
+	outputFormat string
 }
 
-// NewOpenAIProvider creates a new OpenAI TTS provider
-func NewOpenAIProvider(config *Config) (Provider, error) {
-	if config.OpenAIKey == "" {
+// NewOpenAIProvider creates a new OpenAI TTS provider from the OpenAI-specific
+// sub-config. Callers that have a flat Config should use NewProvider instead.
+func NewOpenAIProvider(config OpenAIAudioConfig, outputFormat string) (Provider, error) {
+	if config.Key == "" {
 		return nil, errors.New("OpenAI API key is required")
 	}
 
-	client := openai.NewClient(config.OpenAIKey)
-
-	provider := &OpenAIProvider{
-		client: client,
-		config: config,
-	}
-
-	return provider, nil
+	return &OpenAIProvider{
+		client:       openai.NewClient(config.Key),
+		config:       config,
+		outputFormat: outputFormat,
+	}, nil
 }
 
 // GenerateAudio generates audio using OpenAI TTS
@@ -49,22 +49,22 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 
 	// Prepare the TTS request
 	// OpenAI TTS will automatically detect and pronounce Bulgarian text
-	fmt.Printf("OpenAI TTS: Using model '%s' with voice '%s' at speed %.2f\n", p.config.OpenAIModel, p.config.OpenAIVoice, p.config.OpenAISpeed)
-	if p.config.OpenAIInstruction != "" && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
-		fmt.Printf("OpenAI TTS Instruction: '%s'\n", p.config.OpenAIInstruction)
+	fmt.Printf("OpenAI TTS: Using model '%s' with voice '%s' at speed %.2f\n", p.config.Model, p.config.Voice, p.config.Speed)
+	if p.config.Instruction != "" && (p.config.Model == "gpt-4o-mini-tts" || p.config.Model == "gpt-4o-mini-audio-preview") {
+		fmt.Printf("OpenAI TTS Instruction: '%s'\n", p.config.Instruction)
 	}
 	fmt.Printf("OpenAI TTS Input: '%s'\n", processedText)
 
 	req := openai.CreateSpeechRequest{
-		Model: openai.SpeechModel(p.config.OpenAIModel),
+		Model: openai.SpeechModel(p.config.Model),
 		Input: processedText,
-		Voice: openai.SpeechVoice(p.config.OpenAIVoice),
-		Speed: p.config.OpenAISpeed,
+		Voice: openai.SpeechVoice(p.config.Voice),
+		Speed: p.config.Speed,
 	}
 
 	// Add instructions for gpt-4o-mini-tts model
-	if p.config.OpenAIInstruction != "" && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
-		req.Instructions = p.config.OpenAIInstruction
+	if p.config.Instruction != "" && (p.config.Model == "gpt-4o-mini-tts" || p.config.Model == "gpt-4o-mini-audio-preview") {
+		req.Instructions = p.config.Instruction
 	}
 
 	// Determine response format based on output file extension
@@ -92,8 +92,8 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 	if err != nil {
 		// Check if it's a model access error
 		errStr := err.Error()
-		if strings.Contains(errStr, "does not have access to model") && (p.config.OpenAIModel == "gpt-4o-mini-tts" || p.config.OpenAIModel == "gpt-4o-mini-audio-preview") {
-			return fmt.Errorf("OpenAI TTS API error: %w\nNote: The %s model requires access. Try using --openai-model tts-1-hd instead", err, p.config.OpenAIModel)
+		if strings.Contains(errStr, "does not have access to model") && (p.config.Model == "gpt-4o-mini-tts" || p.config.Model == "gpt-4o-mini-audio-preview") {
+			return fmt.Errorf("OpenAI TTS API error: %w\nNote: The %s model requires access. Try using --openai-model tts-1-hd instead", err, p.config.Model)
 		}
 		return err
 	}
@@ -138,7 +138,7 @@ func (p *OpenAIProvider) Name() string {
 
 // IsAvailable checks if the OpenAI API is accessible
 func (p *OpenAIProvider) IsAvailable() error {
-	if p.config.OpenAIKey == "" {
+	if p.config.Key == "" {
 		return errors.New("OpenAI API key not configured")
 	}
 

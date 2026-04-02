@@ -28,22 +28,24 @@ var execLookPath = exec.LookPath
 var execCommand = exec.Command
 
 // GeminiProvider implements Provider interface for Gemini TTS.
+// It stores only the Gemini-specific sub-config so it never sees OpenAI fields.
 type GeminiProvider struct {
 	client *genai.Client
-	config *Config
+	config GeminiAudioConfig
 }
 
 var _ Provider = (*GeminiProvider)(nil)
 
-// NewGeminiProvider creates a new Gemini TTS provider.
-func NewGeminiProvider(config *Config) (Provider, error) {
-	normalized := normalizeGeminiConfig(config)
-	if normalized.GoogleAPIKey == "" {
+// NewGeminiProvider creates a new Gemini TTS provider from the Gemini-specific
+// sub-config. Callers that have a flat Config should use NewProvider instead.
+func NewGeminiProvider(config GeminiAudioConfig, outputFormat string) (Provider, error) {
+	normalized := normalizeGeminiAudioConfig(config)
+	if normalized.APIKey == "" {
 		return nil, errors.New("google API key is required")
 	}
 
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  normalized.GoogleAPIKey,
+		APIKey:  normalized.APIKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
@@ -61,7 +63,7 @@ func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputF
 	if err := ValidateBulgarianText(text); err != nil {
 		return err
 	}
-	if p == nil || p.client == nil || p.config == nil {
+	if p == nil || p.client == nil {
 		return errors.New("gemini client not initialized")
 	}
 
@@ -71,7 +73,7 @@ func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputF
 		SpeechConfig:       p.speechConfig(),
 	}
 
-	response, err := p.client.Models.GenerateContent(ctx, p.config.GeminiTTSModel, []*genai.Content{
+	response, err := p.client.Models.GenerateContent(ctx, p.config.TTSModel, []*genai.Content{
 		genai.NewContentFromText(prompt, genai.RoleUser),
 	}, req)
 	if err != nil {
@@ -97,7 +99,7 @@ func (p *GeminiProvider) Name() string {
 
 // IsAvailable checks if the Google API key is configured.
 func (p *GeminiProvider) IsAvailable() error {
-	if p == nil || p.config == nil || strings.TrimSpace(p.config.GoogleAPIKey) == "" {
+	if p == nil || strings.TrimSpace(p.config.APIKey) == "" {
 		return errors.New("google API key not configured")
 	}
 
@@ -105,13 +107,8 @@ func (p *GeminiProvider) IsAvailable() error {
 }
 
 func (p *GeminiProvider) buildPrompt(text string) string {
-	config := p.config
-	if config == nil {
-		config = &Config{}
-	}
-
 	var prompt strings.Builder
-	prompt.WriteString(geminiPromptInstruction(config))
+	prompt.WriteString(geminiPromptInstruction(p.config))
 	prompt.WriteString("\n")
 	prompt.WriteString(strings.TrimSpace(text))
 
@@ -119,16 +116,11 @@ func (p *GeminiProvider) buildPrompt(text string) string {
 }
 
 func (p *GeminiProvider) speechConfig() *genai.SpeechConfig {
-	config := p.config
-	if config == nil {
-		config = &Config{}
-	}
-
 	speechConfig := &genai.SpeechConfig{
 		LanguageCode: geminiTTSLanguageCode,
 	}
 
-	if voice := strings.TrimSpace(config.GeminiVoice); voice != "" {
+	if voice := strings.TrimSpace(p.config.Voice); voice != "" {
 		speechConfig.VoiceConfig = &genai.VoiceConfig{
 			PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
 				VoiceName: voice,
@@ -139,24 +131,20 @@ func (p *GeminiProvider) speechConfig() *genai.SpeechConfig {
 	return speechConfig
 }
 
-func normalizeGeminiConfig(config *Config) *Config {
-	normalized := &Config{}
-	if config != nil {
-		*normalized = *config
+// normalizeGeminiAudioConfig applies defaults and trims whitespace from a GeminiAudioConfig.
+func normalizeGeminiAudioConfig(config GeminiAudioConfig) GeminiAudioConfig {
+	config.APIKey = strings.TrimSpace(config.APIKey)
+	config.TTSModel = strings.TrimSpace(config.TTSModel)
+	config.Voice = strings.TrimSpace(config.Voice)
+
+	if config.TTSModel == "" {
+		config.TTSModel = defaultGeminiTTSModel
+	}
+	if config.Speed <= 0 {
+		config.Speed = 1.0
 	}
 
-	normalized.GoogleAPIKey = strings.TrimSpace(normalized.GoogleAPIKey)
-	normalized.GeminiTTSModel = strings.TrimSpace(normalized.GeminiTTSModel)
-	normalized.GeminiVoice = strings.TrimSpace(normalized.GeminiVoice)
-
-	if normalized.GeminiTTSModel == "" {
-		normalized.GeminiTTSModel = defaultGeminiTTSModel
-	}
-	if normalized.GeminiSpeed <= 0 {
-		normalized.GeminiSpeed = 1.0
-	}
-
-	return normalized
+	return config
 }
 
 func extractAudioData(response *genai.GenerateContentResponse) ([]byte, string, error) {

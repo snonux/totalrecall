@@ -9,30 +9,26 @@ import (
 func TestNewOpenAIProvider(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *Config
+		config  OpenAIAudioConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
-			name: "missing API key",
-			config: &Config{
-				OpenAIKey: "",
-			},
+			name:    "missing API key",
+			config:  OpenAIAudioConfig{Key: ""},
 			wantErr: true,
 			errMsg:  "OpenAI API key is required",
 		},
 		{
-			name: "valid config",
-			config: &Config{
-				OpenAIKey: "test-key",
-			},
+			name:    "valid config",
+			config:  OpenAIAudioConfig{Key: "test-key"},
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewOpenAIProvider(tt.config)
+			provider, err := NewOpenAIProvider(tt.config, "mp3")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewOpenAIProvider() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -53,30 +49,24 @@ func TestNewOpenAIProvider(t *testing.T) {
 func TestOpenAIProviderIsAvailable(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *Config
+		config  OpenAIAudioConfig
 		wantErr bool
 	}{
 		{
-			name: "with API key",
-			config: &Config{
-				OpenAIKey: "test-key",
-			},
+			name:    "with API key",
+			config:  OpenAIAudioConfig{Key: "test-key"},
 			wantErr: false,
 		},
 		{
-			name: "without API key",
-			config: &Config{
-				OpenAIKey: "",
-			},
+			name:    "without API key",
+			config:  OpenAIAudioConfig{Key: ""},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := &OpenAIProvider{
-				config: tt.config,
-			}
+			provider := &OpenAIProvider{config: tt.config}
 			err := provider.IsAvailable()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("IsAvailable() error = %v, wantErr %v", err, tt.wantErr)
@@ -86,9 +76,7 @@ func TestOpenAIProviderIsAvailable(t *testing.T) {
 }
 
 func TestPreprocessBulgarianText(t *testing.T) {
-	provider := &OpenAIProvider{
-		config: &Config{},
-	}
+	provider := &OpenAIProvider{}
 
 	tests := []struct {
 		name     string
@@ -133,11 +121,7 @@ func TestPreprocessBulgarianText(t *testing.T) {
 }
 
 func TestGenerateAudioValidation(t *testing.T) {
-	provider := &OpenAIProvider{
-		config: &Config{
-			OpenAIKey: "test-key",
-		},
-	}
+	provider := &OpenAIProvider{config: OpenAIAudioConfig{Key: "test-key"}}
 
 	ctx := context.Background()
 

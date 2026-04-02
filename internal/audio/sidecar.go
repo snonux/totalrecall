@@ -48,12 +48,13 @@ func ProcessedTextForProvider(provider, text string) string {
 }
 
 // InstructionForProvider returns the provider-specific instruction semantics written to attribution files.
+// It accepts the flat Config and extracts the relevant sub-config internally.
 func InstructionForProvider(provider string, config *Config) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "openai":
-		return openAIInstructionForAttribution(config)
+		return openAIInstructionForAttribution(openAIAudioConfigFrom(config))
 	case "gemini":
-		return geminiPromptInstruction(config)
+		return geminiPromptInstruction(geminiAudioConfigFrom(config))
 	default:
 		return ""
 	}
@@ -69,16 +70,12 @@ func openAIProcessedText(text string) string {
 	return strings.TrimSpace(cleanedText)
 }
 
-func openAIInstructionForAttribution(config *Config) string {
-	if config == nil {
+func openAIInstructionForAttribution(config OpenAIAudioConfig) string {
+	if !openAIModelUsesInstructions(config.Model) {
 		return ""
 	}
 
-	if !openAIModelUsesInstructions(config.OpenAIModel) {
-		return ""
-	}
-
-	return strings.TrimSpace(config.OpenAIInstruction)
+	return strings.TrimSpace(config.Instruction)
 }
 
 func openAIModelUsesInstructions(model string) bool {
@@ -90,23 +87,19 @@ func openAIModelUsesInstructions(model string) bool {
 	}
 }
 
-func geminiPromptInstruction(config *Config) string {
-	if config == nil {
-		config = &Config{}
-	}
-
+func geminiPromptInstruction(config GeminiAudioConfig) string {
 	var prompt strings.Builder
 	prompt.WriteString("You are speaking Bulgarian language (български език). ")
 	prompt.WriteString("Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian.")
 
-	if speedHint := geminiSpeedHint(config.GeminiSpeed); speedHint != "" {
+	if speedHint := geminiSpeedHint(config.Speed); speedHint != "" {
 		prompt.WriteString(" ")
 		prompt.WriteString(speedHint)
 	}
 
 	prompt.WriteString("\n\nSpeak the following Bulgarian text:")
 
-	if voice := strings.TrimSpace(config.GeminiVoice); voice != "" {
+	if voice := strings.TrimSpace(config.Voice); voice != "" {
 		prompt.WriteString("\n\nUse a clear, natural delivery that matches the voice named ")
 		prompt.WriteString(voice)
 		prompt.WriteString(".")
