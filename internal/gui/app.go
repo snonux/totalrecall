@@ -555,9 +555,9 @@ func (a *Application) setupUI() {
 	// Now that tooltip layer is created, set all tooltips
 	a.setupTooltips()
 
-	// Set tooltips for export, archive and help buttons with a delay
-	go func() {
-		time.Sleep(500 * time.Millisecond)
+	// Set tooltips for export, archive and help buttons after the tooltip layer
+	// has had time to initialize. AfterFunc avoids blocking a goroutine.
+	time.AfterFunc(500*time.Millisecond, func() {
 		fyne.Do(func() {
 			if exportButton != nil {
 				exportButton.SetToolTip("Export to Anki (x)")
@@ -569,7 +569,7 @@ func (a *Application) setupUI() {
 				helpButton.SetToolTip("Show hotkeys (?)")
 			}
 		})
-	}()
+	})
 
 	a.window.SetOnClosed(func() {
 		// Stop file check ticker
@@ -1962,12 +1962,10 @@ func (a *Application) clearUI() {
 	a.setActionButtonsEnabled(false)
 }
 
-// setupTooltips sets up all tooltips after the tooltip layer has been created
+// setupTooltips sets up all tooltips after the tooltip layer has been created.
+// AfterFunc fires after the tooltip layer is initialized without blocking a goroutine.
 func (a *Application) setupTooltips() {
-	// Use a goroutine with a delay to ensure the tooltip layer is fully initialized
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-
+	time.AfterFunc(500*time.Millisecond, func() {
 		fyne.Do(func() {
 			// Navigation button tooltips
 			if a.submitButton != nil {
@@ -2014,7 +2012,7 @@ func (a *Application) setupTooltips() {
 				a.audioPlayer.stopButton.SetToolTip("Stop audio")
 			}
 		})
-	}()
+	})
 }
 
 // processNextInQueue processes the next word in the queue

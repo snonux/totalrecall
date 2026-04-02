@@ -827,19 +827,33 @@ func (a *Application) deleteCurrentWord() {
 		a.deleteButton.Enable()
 	}
 
-	// Start a cleanup goroutine to remove directory after any pending operations complete
+	// Start a cleanup goroutine to guard against directory recreation by racing
+	// in-flight operations. Instead of a fixed sleep, poll hasActiveOperations
+	// so the cleanup runs as soon as all operations for this word complete.
 	go func() {
-		// Wait a bit for any ongoing operations to notice cancellation
-		time.Sleep(500 * time.Millisecond)
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		timeout := time.NewTimer(5 * time.Second)
+		defer timeout.Stop()
 
-		// Check if the directory was somehow recreated (by a racing operation)
+		// Wait until all active operations for this word finish or timeout elapses.
+		for {
+			select {
+			case <-timeout.C:
+				// Proceed even if some operations are still pending.
+			case <-ticker.C:
+				if a.hasActiveOperations(deletedWord) {
+					continue
+				}
+			}
+			break
+		}
+
+		// Check if a racing operation recreated the directory.
 		recreatedDir := a.findCardDirectory(deletedWord)
 		if recreatedDir != "" {
-			// Directory was recreated, try to delete it again
 			timestamp := time.Now().Format("20060102_150405")
 			trashWordDir := filepath.Join(trashDir, fmt.Sprintf("%s_%s_cleanup", filepath.Base(recreatedDir), timestamp))
-
-			// Move to trash again
 			if err := os.Rename(recreatedDir, trashWordDir); err == nil {
 				fmt.Printf("Cleanup: moved recreated directory for '%s' to trash\n", deletedWord)
 			}

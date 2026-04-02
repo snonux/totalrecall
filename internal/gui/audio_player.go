@@ -156,16 +156,12 @@ func (p *AudioPlayer) setAudioFileInternal(audioFile string, allowAutoPlay bool)
 		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
 		p.statusLabel.SetText(statusText)
 
-		// Auto-play if enabled and allowed
+		// Auto-play if enabled and allowed. AfterFunc fires the callback after
+		// the UI has had a chance to render without blocking a goroutine.
 		if allowAutoPlay && p.autoPlayEnabled != nil && *p.autoPlayEnabled {
-			// Small delay to ensure UI is ready
-			go func() {
-				// Wait a tiny bit for UI to be ready
-				time.Sleep(100 * time.Millisecond)
-				fyne.Do(func() {
-					p.onPlay()
-				})
-			}()
+			time.AfterFunc(100*time.Millisecond, func() {
+				fyne.Do(p.onPlay)
+			})
 		}
 	} else {
 		p.Clear()
