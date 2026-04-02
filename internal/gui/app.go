@@ -1879,6 +1879,26 @@ func (a *Application) setActionButtonsEnabled(enabled bool) {
 	}
 }
 
+func (a *Application) syncCardTypeSelection(cardType internal.CardType) {
+	if a.cardTypeSelect == nil {
+		return
+	}
+
+	selected := "English → Bulgarian"
+	if cardType.IsBgBg() {
+		selected = "Bulgarian → Bulgarian"
+	}
+
+	if a.window == nil {
+		a.cardTypeSelect.SetSelected(selected)
+		return
+	}
+
+	fyne.Do(func() {
+		a.cardTypeSelect.SetSelected(selected)
+	})
+}
+
 func (a *Application) showProgress(message string) {
 	// Check if we're already processing something
 	a.mu.Lock()

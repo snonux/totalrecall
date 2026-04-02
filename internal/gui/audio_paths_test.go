@@ -173,6 +173,9 @@ func TestCompletedBgBgJobKeepsBackAudioForSessionNavigation(t *testing.T) {
 	if app.currentCardType != "bg-bg" {
 		t.Fatalf("currentCardType = %q, want %q", app.currentCardType, "bg-bg")
 	}
+	if got := app.cardTypeSelect.Selected; got != "Bulgarian → Bulgarian" {
+		t.Fatalf("cardTypeSelect.Selected = %q, want %q", got, "Bulgarian → Bulgarian")
+	}
 }
 
 func TestResolveBgBgAudioFilesFindLegacyMp3Files(t *testing.T) {

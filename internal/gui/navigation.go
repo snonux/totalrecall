@@ -301,6 +301,7 @@ func (a *Application) loadWordByIndex(index int) {
 			a.currentAudioFileBack = job.AudioFileBack
 			a.currentImage = job.ImageFile
 			a.currentCardType = job.CardType
+			a.syncCardTypeSelection(internal.CardType(job.CardType))
 
 			fyne.Do(func() {
 				if job.Translation != "" {
@@ -425,15 +426,8 @@ func (a *Application) loadExistingFiles(word string) {
 	fmt.Printf("DEBUG (loadExistingFiles): Loaded card type: %s (isBgBg: %v)\n", cardType, cardType.IsBgBg())
 
 	// Update UI card type selector
-	fyne.Do(func() {
-		if cardType.IsBgBg() {
-			fmt.Printf("DEBUG (loadExistingFiles): Setting UI to bg-bg (Bulgarian → Bulgarian)\n")
-			a.cardTypeSelect.SetSelected("Bulgarian → Bulgarian")
-		} else {
-			fmt.Printf("DEBUG (loadExistingFiles): Setting UI to en-bg (English → Bulgarian)\n")
-			a.cardTypeSelect.SetSelected("English → Bulgarian")
-		}
-	})
+	fmt.Printf("DEBUG (loadExistingFiles): Syncing UI card type selector to %s\n", cardType)
+	a.syncCardTypeSelection(cardType)
 
 	// Load audio file(s)
 	if cardType.IsBgBg() {

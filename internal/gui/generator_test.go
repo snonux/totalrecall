@@ -191,6 +191,7 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 			Provider:          "openai",
 			OutputDir:         tempDir,
 			OpenAIModel:       "gpt-4o-mini-tts",
+			GeminiTTSModel:    "sentinel-gemini-model",
 			OpenAIInstruction: "Speak clearly.",
 		},
 	}
@@ -217,6 +218,18 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.HasSuffix(outputPath, "audio.mp3") {
 		t.Fatalf("outputPath = %q, want shared audio filename", outputPath)
+	}
+
+	metadataData, err := os.ReadFile(filepath.Join(cardDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	if !strings.Contains(metadata, "model=gpt-4o-mini-tts") {
+		t.Fatalf("openai metadata missing active model: %q", metadata)
+	}
+	if strings.Contains(metadata, "sentinel-gemini-model") {
+		t.Fatalf("openai metadata should not use Gemini model when provider is OpenAI: %q", metadata)
 	}
 }
 

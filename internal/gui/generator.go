@@ -473,10 +473,19 @@ func (a *Application) saveAudioMetadata(cardDir string, audioConfig audio.Config
 	metadata := strings.Builder{}
 
 	fmt.Fprintf(&metadata, "provider=%s\n", audioConfig.Provider)
-	if strings.TrimSpace(audioConfig.GeminiTTSModel) != "" {
-		fmt.Fprintf(&metadata, "model=%s\n", audioConfig.GeminiTTSModel)
-	} else if strings.TrimSpace(audioConfig.OpenAIModel) != "" {
-		fmt.Fprintf(&metadata, "model=%s\n", audioConfig.OpenAIModel)
+	switch strings.ToLower(strings.TrimSpace(audioConfig.Provider)) {
+	case "gemini":
+		model := strings.TrimSpace(audioConfig.GeminiTTSModel)
+		if model == "" {
+			model = audio.DefaultProviderConfig().GeminiTTSModel
+		}
+		fmt.Fprintf(&metadata, "model=%s\n", model)
+	default:
+		model := strings.TrimSpace(audioConfig.OpenAIModel)
+		if model == "" {
+			model = audio.DefaultProviderConfig().OpenAIModel
+		}
+		fmt.Fprintf(&metadata, "model=%s\n", model)
 	}
 	fmt.Fprintf(&metadata, "voice=%s\n", voice)
 	fmt.Fprintf(&metadata, "speed=%.2f\n", speed)
