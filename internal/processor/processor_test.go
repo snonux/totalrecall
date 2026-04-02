@@ -274,7 +274,7 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	flags.ImageAPISpecified = false
 	p := NewProcessor(flags)
 
-	guiConfig := p.guiConfigForRunMode()
+	guiConfig := p.GUIConfig()
 	if guiConfig.ImageProvider != gui.DefaultConfig().ImageProvider {
 		t.Fatalf("guiConfig.ImageProvider = %q, want GUI default %q", guiConfig.ImageProvider, gui.DefaultConfig().ImageProvider)
 	}
@@ -314,7 +314,7 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	flags.ImageAPISpecified = true
 	p := NewProcessor(flags)
 
-	guiConfig := p.guiConfigForRunMode()
+	guiConfig := p.GUIConfig()
 	if guiConfig.ImageProvider != "openai" {
 		t.Fatalf("guiConfig.ImageProvider = %q, want %q", guiConfig.ImageProvider, "openai")
 	}
@@ -348,7 +348,7 @@ func TestGUIConfigForRunModeHonorsExplicitNanoBananaModelFlags(t *testing.T) {
 	flags.NanoBananaTextModelSpecified = true
 	p := NewProcessor(flags)
 
-	guiConfig := p.guiConfigForRunMode()
+	guiConfig := p.GUIConfig()
 	if guiConfig.NanoBananaModel != "flag-image-model" {
 		t.Fatalf("guiConfig.NanoBananaModel = %q, want %q", guiConfig.NanoBananaModel, "flag-image-model")
 	}
@@ -1218,7 +1218,7 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return stubSearcher
 	}
@@ -1274,7 +1274,7 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 
 	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{downloadErr: errors.New("download failed")}
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		return stubSearcher
 	}
 	t.Cleanup(func() {
@@ -1323,7 +1323,7 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return stubSearcher
 	}
@@ -1429,7 +1429,7 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 
 	originalConstructor := newNanoBananaImageClient
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return &stubImageSearcher{}
 	}

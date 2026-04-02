@@ -16,7 +16,6 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/batch"
 	"codeberg.org/snonux/totalrecall/internal/cli"
-	appconfig "codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
@@ -32,11 +31,11 @@ type Processor struct {
 	randomIntn       func(n int) int
 }
 
-var newOpenAIImageClient = func(config *image.OpenAIConfig) image.ImageSearcher {
+var newOpenAIImageClient = func(config *image.OpenAIConfig) image.ImageClient {
 	return image.NewOpenAIClient(config)
 }
 
-var newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+var newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 	return image.NewNanoBananaClient(config)
 }
 
@@ -681,34 +680,11 @@ func (p *Processor) GenerateAnkiFile() (string, error) {
 	return outputPath, nil
 }
 
-// RunGUIMode launches the GUI application
-func (p *Processor) RunGUIMode() error {
-	guiConfig := p.guiConfigForRunMode()
-
-	// Only set OutputDir if it was explicitly provided via flag
-	// Check if the outputDir is different from the default
-	home, err := appconfig.HomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-	}
-	defaultOutputDir := filepath.Join(home, "Downloads")
-	if p.flags.OutputDir != defaultOutputDir {
-		// User explicitly set a different output directory
-		guiConfig.OutputDir = p.flags.OutputDir
-	}
-	if guiConfig.GoogleAPIKey == "" {
-		guiConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
-	}
-	// Otherwise, gui.New will use its own default (XDG state directory)
-
-	// Create and run GUI application
-	app := gui.New(guiConfig)
-	app.Run()
-
-	return nil
-}
-
-func (p *Processor) guiConfigForRunMode() *gui.Config {
+// GUIConfig returns a gui.Config populated from the processor's flags and
+// Viper settings. Callers (typically cmd/main.go) use this to construct the
+// GUI application so that gui.New() lives outside the processor package and
+// the processor→gui dependency is limited to the Config type only.
+func (p *Processor) GUIConfig() *gui.Config {
 	imageProvider := p.flags.ImageAPI
 	if !p.flags.ImageAPISpecified {
 		imageProvider = gui.DefaultConfig().ImageProvider
@@ -790,7 +766,7 @@ func (p *Processor) nanoBananaTextModelForRunMode() string {
 	return image.DefaultNanoBananaTextModel
 }
 
-func (p *Processor) newImageSearcher() (image.ImageSearcher, error) {
+func (p *Processor) newImageSearcher() (image.ImageClient, error) {
 	provider := p.imageProviderForRunMode()
 
 	switch provider {
@@ -815,7 +791,7 @@ func (p *Processor) imageProviderForRunMode() string {
 	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 }
 
-func (p *Processor) newOpenAIImageSearcher() (image.ImageSearcher, error) {
+func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 	openaiConfig := &image.OpenAIConfig{
 		APIKey:  cli.GetOpenAIKey(),
 		Model:   p.flags.OpenAIImageModel,
@@ -844,7 +820,7 @@ func (p *Processor) newOpenAIImageSearcher() (image.ImageSearcher, error) {
 	return newOpenAIImageClient(openaiConfig), nil
 }
 
-func (p *Processor) newNanoBananaImageSearcher() (image.ImageSearcher, error) {
+func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
 	nanoBananaConfig := &image.NanoBananaConfig{
 		APIKey:    cli.GetGoogleAPIKey(),
 		Model:     p.flags.NanoBananaModel,
@@ -865,7 +841,7 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageSearcher, error) {
 	return newNanoBananaImageClient(nanoBananaConfig), nil
 }
 
-func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageSearcher) {
+func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageClient) {
 	type promptGetter interface {
 		GetLastPrompt() string
 	}

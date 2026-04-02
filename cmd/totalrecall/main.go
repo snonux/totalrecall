@@ -9,6 +9,8 @@ import (
 
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/cli"
+	appconfig "codeberg.org/snonux/totalrecall/internal/config"
+	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
 )
@@ -77,7 +79,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		}
 	} else {
 		// No input provided - launch GUI mode by default
-		return proc.RunGUIMode()
+		return runGUIMode(proc, flags)
 	}
 
 	// Generate Anki file if requested
@@ -92,5 +94,30 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	}
 
 	fmt.Printf("\nDone! Materials saved to: %s\n", flags.OutputDir)
+	return nil
+}
+
+// runGUIMode launches the GUI application. It lives in cmd/main.go so that
+// gui.New() is called from the composition root rather than from the
+// processor package, reducing the processor→gui import coupling.
+func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
+	guiConfig := proc.GUIConfig()
+
+	// Only override OutputDir when the user explicitly set a non-default path.
+	home, err := appconfig.HomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+	defaultOutputDir := filepath.Join(home, "Downloads")
+	if flags.OutputDir != defaultOutputDir {
+		guiConfig.OutputDir = flags.OutputDir
+	}
+	if guiConfig.GoogleAPIKey == "" {
+		guiConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
+	}
+
+	app := gui.New(guiConfig)
+	app.Run()
+
 	return nil
 }
