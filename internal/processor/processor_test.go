@@ -922,6 +922,22 @@ func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
 		t.Fatalf("captured OpenAIInstruction = %q, want %q", capturedConfig.OpenAIInstruction, "Speak clearly.")
 	}
 
+	wordDir := p.findCardDirectory("ябълка!?")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	if strings.Contains(metadata, "instruction=Speak clearly.") {
+		t.Fatalf("openai metadata unexpectedly recorded unsupported instructions: %q", metadata)
+	}
+	if !strings.Contains(metadata, "provider=openai") || !strings.Contains(metadata, "model=tts-1") {
+		t.Fatalf("openai metadata missing provider/model semantics: %q", metadata)
+	}
+
 	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
 	attributionData, err := os.ReadFile(attrPath)
 	if err != nil {

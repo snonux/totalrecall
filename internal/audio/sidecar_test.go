@@ -113,9 +113,10 @@ func TestInstructionForProvider(t *testing.T) {
 
 func TestBuildSidecarMetadata(t *testing.T) {
 	tests := []struct {
-		name string
-		got  string
-		want []string
+		name    string
+		got     string
+		want    []string
+		wantNot []string
 	}{
 		{
 			name: "gemini bg-bg",
@@ -163,6 +164,26 @@ func TestBuildSidecarMetadata(t *testing.T) {
 				"audio_file=audio.mp3",
 			},
 		},
+		{
+			name: "openai unsupported model omits instruction",
+			got: BuildSidecarMetadata(SidecarMetadataParams{
+				Provider:          "openai",
+				OutputFormat:      "mp3",
+				CardType:          "en-bg",
+				AudioFile:         "audio.mp3",
+				OpenAIModel:       "tts-1",
+				OpenAIInstruction: "Speak clearly.",
+			}),
+			want: []string{
+				"provider=openai",
+				"model=tts-1",
+				"speed=1.00",
+				"format=mp3",
+				"cardtype=en-bg",
+				"audio_file=audio.mp3",
+			},
+			wantNot: []string{"instruction=Speak clearly."},
+		},
 	}
 
 	for _, tt := range tests {
@@ -170,6 +191,11 @@ func TestBuildSidecarMetadata(t *testing.T) {
 			for _, want := range tt.want {
 				if !strings.Contains(tt.got, want) {
 					t.Fatalf("metadata = %q, missing %q", tt.got, want)
+				}
+			}
+			for _, want := range tt.wantNot {
+				if strings.Contains(tt.got, want) {
+					t.Fatalf("metadata = %q, unexpectedly contained %q", tt.got, want)
 				}
 			}
 		})

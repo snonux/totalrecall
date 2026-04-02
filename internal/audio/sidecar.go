@@ -167,8 +167,10 @@ func BuildSidecarMetadata(params SidecarMetadataParams) string {
 			speed = DefaultProviderConfig().OpenAISpeed
 		}
 		fmt.Fprintf(&b, "speed=%.2f\n", speed)
-		if instruction := strings.TrimSpace(params.OpenAIInstruction); instruction != "" {
-			fmt.Fprintf(&b, "instruction=%s\n", instruction)
+		if openAIModelUsesInstructions(model) {
+			if instruction := strings.TrimSpace(params.OpenAIInstruction); instruction != "" {
+				fmt.Fprintf(&b, "instruction=%s\n", instruction)
+			}
 		}
 	}
 
