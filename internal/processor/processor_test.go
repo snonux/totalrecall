@@ -580,6 +580,105 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	}
 }
 
+func TestGenerateAudioUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+
+	audio.GeminiVoices = []string{"sentinel-gemini-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioFormat = "mp3"
+	flags.AudioProvider = "gemini"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudio("ябълка"); err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.GeminiVoice != "sentinel-gemini-voice" {
+		t.Fatalf("captured GeminiVoice = %q, want %q", capturedConfig.GeminiVoice, "sentinel-gemini-voice")
+	}
+}
+
+func TestGenerateAudioBgBgUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+
+	audio.GeminiVoices = []string{"sentinel-bg-gemini-voice"}
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfigs []*audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfigs = append(capturedConfigs, &copyConfig)
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioFormat = "mp3"
+	flags.AudioProvider = "gemini"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudioBgBg("ябълка", "круша"); err != nil {
+		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
+	}
+
+	if len(capturedConfigs) != 2 {
+		t.Fatalf("captured config count = %d, want %d", len(capturedConfigs), 2)
+	}
+	for i, capturedConfig := range capturedConfigs {
+		if capturedConfig.GeminiVoice != "sentinel-bg-gemini-voice" {
+			t.Fatalf("captured config %d GeminiVoice = %q, want %q", i, capturedConfig.GeminiVoice, "sentinel-bg-gemini-voice")
+		}
+	}
+	if fakeProvider.generateCalls != 2 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 2)
+	}
+}
+
 func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *testing.T) {
 	originalFactory := newAudioProvider
 	t.Cleanup(func() {

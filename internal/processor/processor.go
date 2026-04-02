@@ -291,36 +291,56 @@ func (p *Processor) geminiVoice() string {
 	return ""
 }
 
+func (p *Processor) audioVoicesForProvider() []string {
+	switch p.audioProviderName() {
+	case "gemini":
+		return audio.GeminiVoices
+	default:
+		return audio.OpenAIVoices
+	}
+}
+
+func (p *Processor) audioVoiceForProvider() string {
+	switch p.audioProviderName() {
+	case "gemini":
+		if voice := p.geminiVoice(); voice != "" {
+			return voice
+		}
+	default:
+		if p.flags.OpenAIVoice != "" {
+			return p.flags.OpenAIVoice
+		}
+	}
+
+	voices := p.audioVoicesForProvider()
+	return voices[rand.Intn(len(voices))]
+}
+
 // generateAudio generates audio files for a word
 func (p *Processor) generateAudio(word string) error {
 	provider := p.audioProviderName()
 
-	// Get list of voices to use.
+	// Get the provider-specific voice list.
 	var voices []string
-	switch provider {
-	case "gemini":
-		if p.flags.AllVoices {
-			voices = audio.GeminiVoices
-		} else if voice := p.geminiVoice(); voice != "" {
-			voices = []string{voice}
-			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
-		} else {
-			voices = []string{""}
-			fmt.Printf("  Using Gemini model default voice\n")
+	if p.flags.AllVoices {
+		voices = p.audioVoicesForProvider()
+	} else {
+		voice := p.audioVoiceForProvider()
+		switch provider {
+		case "gemini":
+			if p.geminiVoice() != "" {
+				fmt.Printf("  Using specified Gemini voice: %s\n", voice)
+			} else {
+				fmt.Printf("  Using random Gemini voice: %s\n", voice)
+			}
+		default:
+			if p.flags.OpenAIVoice != "" {
+				fmt.Printf("  Using specified voice: %s\n", voice)
+			} else {
+				fmt.Printf("  Using random voice: %s\n", voice)
+			}
 		}
-	default:
-		if p.flags.AllVoices {
-			voices = audio.OpenAIVoices
-		} else if p.flags.OpenAIVoice != "" {
-			// Use explicitly specified voice
-			voices = []string{p.flags.OpenAIVoice}
-			fmt.Printf("  Using specified voice: %s\n", p.flags.OpenAIVoice)
-		} else {
-			// Select a random voice
-			randomVoice := audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
-			voices = []string{randomVoice}
-			fmt.Printf("  Using random voice: %s\n", randomVoice)
-		}
+		voices = []string{voice}
 	}
 
 	// Generate audio for each voice
@@ -340,22 +360,20 @@ func (p *Processor) generateAudio(word string) error {
 func (p *Processor) generateAudioBgBg(front, back string) error {
 	provider := p.audioProviderName()
 
-	voice := ""
+	voice := p.audioVoiceForProvider()
 	switch provider {
 	case "gemini":
-		voice = p.geminiVoice()
-		if voice != "" {
-			fmt.Printf("  Using Gemini voice: %s\n", voice)
+		if p.geminiVoice() != "" {
+			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
 		} else {
-			fmt.Printf("  Using Gemini model default voice\n")
+			fmt.Printf("  Using random Gemini voice: %s\n", voice)
 		}
 	default:
-		// Select a random voice (same voice for both sides for consistency)
-		voice = audio.OpenAIVoices[rand.Intn(len(audio.OpenAIVoices))]
 		if p.flags.OpenAIVoice != "" {
-			voice = p.flags.OpenAIVoice
+			fmt.Printf("  Using specified voice: %s\n", voice)
+		} else {
+			fmt.Printf("  Using random voice: %s\n", voice)
 		}
-		fmt.Printf("  Using voice: %s\n", voice)
 	}
 
 	// Find or create the word directory ONCE (for the front word)
