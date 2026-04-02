@@ -81,9 +81,3 @@ func (e *RateLimitError) Error() string {
 	return e.Provider + ": rate limit exceeded"
 }
 
-// DownloadImage is a utility function to download an image to a file
-func DownloadImage(ctx context.Context, searcher ImageSearcher, url string, outputPath string) error {
-	// Implementation will be in a separate download.go file
-	// This is just the interface definition
-	return nil
-}

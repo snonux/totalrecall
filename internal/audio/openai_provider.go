@@ -12,6 +12,9 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+// Compile-time check that OpenAIProvider implements the Provider interface.
+var _ Provider = (*OpenAIProvider)(nil)
+
 // OpenAIProvider implements Provider interface for OpenAI TTS
 type OpenAIProvider struct {
 	client *openai.Client

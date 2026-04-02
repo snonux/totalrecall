@@ -75,6 +75,9 @@ func NewProvider(config *Config) (Provider, error) {
 	}
 }
 
+// Compile-time check that ProviderWithFallback implements the Provider interface.
+var _ Provider = (*ProviderWithFallback)(nil)
+
 // ProviderWithFallback wraps a primary provider with a fallback option
 type ProviderWithFallback struct {
 	primary  Provider

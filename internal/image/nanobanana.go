@@ -157,7 +157,7 @@ func (c *NanoBananaClient) Download(ctx context.Context, url string) (io.ReadClo
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := imageHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

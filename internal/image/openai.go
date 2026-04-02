@@ -13,6 +13,14 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+// Compile-time check that OpenAIClient implements the ImageSearcher interface.
+var _ ImageSearcher = (*OpenAIClient)(nil)
+
+// imageHTTPClient is a shared HTTP client with a generous timeout for image
+// downloads. http.DefaultClient has no timeout, which can block goroutines
+// indefinitely on slow or unresponsive servers.
+var imageHTTPClient = &http.Client{Timeout: 60 * time.Second}
+
 // OpenAIClient implements ImageSearcher for OpenAI DALL-E image generation
 type OpenAIClient struct {
 	client     *openai.Client
@@ -190,7 +198,7 @@ func (c *OpenAIClient) Download(ctx context.Context, url string) (io.ReadCloser,
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := imageHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
