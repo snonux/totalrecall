@@ -963,13 +963,7 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	return true // All required files exist
 }
 func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config) error {
-	// Add preprocessing information
-	cleanedWord := strings.TrimSpace(word)
-	punctuationToRemove := []string{"!", "?", ".", ",", ";", ":", "\"", "'", "(", ")", "[", "]", "{", "}", "-", "—", "–"}
-	for _, punct := range punctuationToRemove {
-		cleanedWord = strings.ReplaceAll(cleanedWord, punct, "")
-	}
-	processedText := fmt.Sprintf("%s...", strings.TrimSpace(cleanedWord))
+	processedText := audio.ProcessedTextForWord(word)
 	var attribution string
 	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
 	case "gemini":
@@ -1012,47 +1006,20 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 }
 
 func (p *Processor) buildAudioMetadata(config *audio.Config, audioFile string) string {
-	var b strings.Builder
-	provider := strings.ToLower(strings.TrimSpace(config.Provider))
-	if provider == "" {
-		provider = "openai"
-	}
-
-	fmt.Fprintf(&b, "provider=%s\n", provider)
-	switch provider {
-	case "gemini":
-		fmt.Fprintf(&b, "model=%s\n", config.GeminiTTSModel)
-		voice := strings.TrimSpace(config.GeminiVoice)
-		if voice == "" {
-			voice = "model-default"
-		}
-		fmt.Fprintf(&b, "voice=%s\n", voice)
-		fmt.Fprintf(&b, "speed=%.2f\n", config.GeminiSpeed)
-	default:
-		fmt.Fprintf(&b, "model=%s\n", config.OpenAIModel)
-		voice := strings.TrimSpace(config.OpenAIVoice)
-		if voice != "" {
-			fmt.Fprintf(&b, "voice=%s\n", voice)
-		}
-		fmt.Fprintf(&b, "speed=%.2f\n", config.OpenAISpeed)
-		if instruction := strings.TrimSpace(config.OpenAIInstruction); instruction != "" {
-			fmt.Fprintf(&b, "instruction=%s\n", instruction)
-		}
-	}
-	format := strings.TrimSpace(config.OutputFormat)
-	if format == "" {
-		format = p.effectiveAudioFormat()
-	}
-	fmt.Fprintf(&b, "format=%s\n", format)
 	audioFileHint, audioFileBackHint := p.audioMetadataFileHints(audioFile)
-	if audioFileHint != "" {
-		fmt.Fprintf(&b, "audio_file=%s\n", filepath.Base(audioFileHint))
-	}
-	if audioFileBackHint != "" {
-		fmt.Fprintf(&b, "audio_file_back=%s\n", filepath.Base(audioFileBackHint))
-	}
-
-	return b.String()
+	return audio.BuildSidecarMetadata(audio.SidecarMetadataParams{
+		Provider:          config.Provider,
+		OutputFormat:      config.OutputFormat,
+		AudioFile:         audioFileHint,
+		AudioFileBack:     audioFileBackHint,
+		OpenAIModel:       config.OpenAIModel,
+		OpenAIVoice:       config.OpenAIVoice,
+		OpenAISpeed:       config.OpenAISpeed,
+		OpenAIInstruction: config.OpenAIInstruction,
+		GeminiTTSModel:    config.GeminiTTSModel,
+		GeminiVoice:       config.GeminiVoice,
+		GeminiSpeed:       config.GeminiSpeed,
+	})
 }
 
 func (p *Processor) audioMetadataFileHints(audioFile string) (string, string) {

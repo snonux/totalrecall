@@ -421,6 +421,7 @@ func (a *Application) imagePromptCallback(cardDir, word string) func(prompt stri
 
 // saveAudioAttribution saves attribution info for generated audio
 func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed float64) error {
+	processedText := audio.ProcessedTextForWord(word)
 	var attribution string
 	switch a.audioProviderName() {
 	case "gemini":
@@ -429,11 +430,12 @@ func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed 
 			model = a.audioConfig.GeminiTTSModel
 		}
 		attribution = audio.BuildGeminiAttribution(audio.AttributionParams{
-			Word:        word,
-			Model:       model,
-			Voice:       voice,
-			Speed:       speed,
-			GeneratedAt: time.Now(),
+			Word:          word,
+			Model:         model,
+			Voice:         voice,
+			Speed:         speed,
+			ProcessedText: processedText,
+			GeneratedAt:   time.Now(),
 		})
 	default:
 		model := audio.DefaultProviderConfig().OpenAIModel
@@ -447,12 +449,13 @@ func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed 
 			}
 		}
 		attribution = audio.BuildOpenAIAttribution(audio.AttributionParams{
-			Word:        word,
-			Model:       model,
-			Voice:       voice,
-			Speed:       speed,
-			Instruction: instruction,
-			GeneratedAt: time.Now(),
+			Word:          word,
+			Model:         model,
+			Voice:         voice,
+			Speed:         speed,
+			Instruction:   instruction,
+			ProcessedText: processedText,
+			GeneratedAt:   time.Now(),
 		})
 	}
 
@@ -476,39 +479,22 @@ func (a *Application) saveAudioMetadata(cardDir string, audioConfig audio.Config
 		}
 	}
 
-	metadata := strings.Builder{}
+	metadata := audio.BuildSidecarMetadata(audio.SidecarMetadataParams{
+		Provider:          audioConfig.Provider,
+		OutputFormat:      audioConfig.OutputFormat,
+		CardType:          cardType,
+		AudioFile:         audioFile,
+		AudioFileBack:     audioFileBack,
+		OpenAIModel:       audioConfig.OpenAIModel,
+		OpenAIVoice:       voice,
+		OpenAISpeed:       speed,
+		OpenAIInstruction: audioConfig.OpenAIInstruction,
+		GeminiTTSModel:    audioConfig.GeminiTTSModel,
+		GeminiVoice:       voice,
+		GeminiSpeed:       speed,
+	})
 
-	fmt.Fprintf(&metadata, "provider=%s\n", audioConfig.Provider)
-	switch strings.ToLower(strings.TrimSpace(audioConfig.Provider)) {
-	case "gemini":
-		model := strings.TrimSpace(audioConfig.GeminiTTSModel)
-		if model == "" {
-			model = audio.DefaultProviderConfig().GeminiTTSModel
-		}
-		fmt.Fprintf(&metadata, "model=%s\n", model)
-	default:
-		model := strings.TrimSpace(audioConfig.OpenAIModel)
-		if model == "" {
-			model = audio.DefaultProviderConfig().OpenAIModel
-		}
-		fmt.Fprintf(&metadata, "model=%s\n", model)
-	}
-	voiceLine := strings.TrimSpace(voice)
-	if voiceLine == "" && strings.ToLower(strings.TrimSpace(audioConfig.Provider)) == "gemini" {
-		voiceLine = "model-default"
-	}
-	fmt.Fprintf(&metadata, "voice=%s\n", voiceLine)
-	fmt.Fprintf(&metadata, "speed=%.2f\n", speed)
-	fmt.Fprintf(&metadata, "format=%s\n", audioConfig.OutputFormat)
-	fmt.Fprintf(&metadata, "cardtype=%s\n", cardType)
-	if audioFile != "" {
-		fmt.Fprintf(&metadata, "audio_file=%s\n", filepath.Base(audioFile))
-	}
-	if audioFileBack != "" {
-		fmt.Fprintf(&metadata, "audio_file_back=%s\n", filepath.Base(audioFileBack))
-	}
-
-	if err := os.WriteFile(metadataFile, []byte(metadata.String()), 0644); err != nil {
+	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
 		return fmt.Errorf("failed to write audio metadata file: %w", err)
 	}
 

@@ -436,11 +436,25 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	metadata := string(metadataData)
 	for _, want := range []string{
 		"provider=openai",
+		"cardtype=bg-bg",
 		"audio_file=audio_front.mp3",
 		"audio_file_back=audio_back.mp3",
 	} {
 		if !strings.Contains(metadata, want) {
 			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
+
+	for i, outputFile := range fakeProvider.outputFiles {
+		attrPath := audio.AttributionPath(outputFile)
+		attributionData, err := os.ReadFile(attrPath)
+		if err != nil {
+			t.Fatalf("expected attribution file %q: %v", attrPath, err)
+		}
+		attribution := string(attributionData)
+		wantText := []string{"ябълка...", "круша..."}[i]
+		if !strings.Contains(attribution, "Processed text sent to TTS: "+wantText) {
+			t.Fatalf("bg-bg attribution missing processed text %q: %q", wantText, attribution)
 		}
 	}
 }
@@ -548,10 +562,21 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		"speed=1.00",
 		"format=wav",
 		"audio_file=audio.wav",
+		"cardtype=en-bg",
 	} {
 		if !strings.Contains(metadata, want) {
 			t.Fatalf("metadata = %q, missing %q", metadata, want)
 		}
+	}
+
+	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
+		t.Fatalf("gemini attribution missing processed text: %q", attribution)
 	}
 }
 
@@ -612,10 +637,21 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 		"model=gpt-4o-mini-tts",
 		"voice=alloy",
 		"format=mp3",
+		"cardtype=en-bg",
 	} {
 		if !strings.Contains(metadata, want) {
 			t.Fatalf("metadata = %q, missing %q", metadata, want)
 		}
+	}
+
+	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
+		t.Fatalf("openai attribution missing processed text: %q", attribution)
 	}
 }
 

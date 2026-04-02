@@ -239,6 +239,19 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	if strings.Contains(metadata, "sentinel-gemini-model") {
 		t.Fatalf("openai metadata should not use Gemini model when provider is OpenAI: %q", metadata)
 	}
+	if !strings.Contains(metadata, "cardtype=en-bg") {
+		t.Fatalf("openai metadata missing card type: %q", metadata)
+	}
+
+	attrPath := audio.AttributionPath(outputPath)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
+		t.Fatalf("openai attribution missing processed text: %q", attribution)
+	}
 }
 
 func TestGenerateAudioUsesGeminiModelDefaultVoiceAndAttribution(t *testing.T) {
@@ -317,6 +330,9 @@ func TestGenerateAudioUsesGeminiModelDefaultVoiceAndAttribution(t *testing.T) {
 	}
 	if strings.Contains(attribution, "sentinel-gemini-voice") {
 		t.Fatalf("gemini attribution should not use the shared voice list when voice is unset: %q", attribution)
+	}
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
+		t.Fatalf("gemini attribution missing processed text: %q", attribution)
 	}
 
 	metadataData, err := os.ReadFile(filepath.Join(cardDir, "audio_metadata.txt"))
@@ -421,6 +437,24 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.Contains(metadata, "cardtype=bg-bg") {
 		t.Fatalf("bg-bg metadata missing card type: %q", metadata)
+	}
+
+	for _, tc := range []struct {
+		audioPath string
+		wantText  string
+	}{
+		{audioPath: frontPath, wantText: "ябълка..."},
+		{audioPath: backPath, wantText: "круша..."},
+	} {
+		attrPath := audio.AttributionPath(tc.audioPath)
+		attributionData, err := os.ReadFile(attrPath)
+		if err != nil {
+			t.Fatalf("expected attribution file %q: %v", attrPath, err)
+		}
+		attribution := string(attributionData)
+		if !strings.Contains(attribution, "Processed text sent to TTS: "+tc.wantText) {
+			t.Fatalf("bg-bg attribution missing processed text %q: %q", tc.wantText, attribution)
+		}
 	}
 }
 
