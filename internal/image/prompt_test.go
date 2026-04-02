@@ -6,18 +6,21 @@ import (
 )
 
 func TestPromptSubjectUsesTranslationFirst(t *testing.T) {
+	t.Parallel()
 	if got := promptSubject(" apple ", "ябълка"); got != "apple" {
 		t.Fatalf("promptSubject() = %q, want %q", got, "apple")
 	}
 }
 
 func TestPromptSubjectFallsBackToOriginalWord(t *testing.T) {
+	t.Parallel()
 	if got := promptSubject("   ", "ябълка"); got != "ябълка" {
 		t.Fatalf("promptSubject() = %q, want %q", got, "ябълка")
 	}
 }
 
 func TestSanitizeSceneDescriptionRemovesLabelsAndFences(t *testing.T) {
+	t.Parallel()
 	scene := "```text\nScene: A bright apple sits centered on a wooden table.\n```"
 	if got := sanitizeSceneDescription(scene); got != "A bright apple sits centered on a wooden table" {
 		t.Fatalf("sanitizeSceneDescription() = %q", got)
@@ -25,6 +28,7 @@ func TestSanitizeSceneDescriptionRemovesLabelsAndFences(t *testing.T) {
 }
 
 func TestUsableSceneDescriptionRejectsTrivialContent(t *testing.T) {
+	t.Parallel()
 	if usableSceneDescription("A") {
 		t.Fatal("usableSceneDescription() unexpectedly accepted trivial scene")
 	}
@@ -34,6 +38,7 @@ func TestUsableSceneDescriptionRejectsTrivialContent(t *testing.T) {
 }
 
 func TestFallbackVisualDirectionForPhrase(t *testing.T) {
+	t.Parallel()
 	got := fallbackVisualDirection("to indulge someone")
 	if got == "" || !usableSceneDescription(got) {
 		t.Fatalf("fallbackVisualDirection() returned unusable phrase direction: %q", got)
@@ -41,6 +46,7 @@ func TestFallbackVisualDirectionForPhrase(t *testing.T) {
 }
 
 func TestFallbackVisualDirectionForSingleWord(t *testing.T) {
+	t.Parallel()
 	got := fallbackVisualDirection("apple")
 	if got == "" || !strings.Contains(got, "single apple") {
 		t.Fatalf("fallbackVisualDirection() = %q", got)

@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidateBulgarianText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		text    string
@@ -50,6 +51,7 @@ func TestValidateBulgarianText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := ValidateBulgarianText(tt.text)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateBulgarianText() error = %v, wantErr %v", err, tt.wantErr)

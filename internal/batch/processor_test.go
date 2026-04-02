@@ -10,6 +10,7 @@ import (
 )
 
 func TestReadBatchFile(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		fileContent string
@@ -136,6 +137,7 @@ func TestReadBatchFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// Create temp file
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.txt")
@@ -157,6 +159,7 @@ func TestReadBatchFile(t *testing.T) {
 }
 
 func TestReadBatchFile_FileNotFound(t *testing.T) {
+	t.Parallel()
 	_, err := ReadBatchFile("/nonexistent/file.txt")
 	if err == nil {
 		t.Error("Expected error for non-existent file")
