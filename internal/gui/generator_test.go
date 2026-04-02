@@ -107,9 +107,11 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 	tempDir := t.TempDir()
 	app := &Application{
 		config: &Config{
-			ImageProvider: imageProviderNanoBanana,
-			GoogleAPIKey:  "google-key",
-			OutputDir:     tempDir,
+			ImageProvider:       imageProviderNanoBanana,
+			GoogleAPIKey:        "google-key",
+			NanoBananaModel:     "custom-image-model",
+			NanoBananaTextModel: "custom-text-model",
+			OutputDir:           tempDir,
 		},
 		currentWord: "друго",
 	}
@@ -124,6 +126,12 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 	}
 	if capturedConfig.APIKey != "google-key" {
 		t.Fatalf("Nano Banana API key = %q, want %q", capturedConfig.APIKey, "google-key")
+	}
+	if capturedConfig.Model != "custom-image-model" {
+		t.Fatalf("Nano Banana model = %q, want %q", capturedConfig.Model, "custom-image-model")
+	}
+	if capturedConfig.TextModel != "custom-text-model" {
+		t.Fatalf("Nano Banana text model = %q, want %q", capturedConfig.TextModel, "custom-text-model")
 	}
 	if fakeClient.searchOpts == nil {
 		t.Fatal("expected search options to be captured")
@@ -318,6 +326,9 @@ func TestGenerateAudioUsesGeminiModelDefaultVoiceAndAttribution(t *testing.T) {
 	metadata := string(metadataData)
 	if !strings.Contains(metadata, "audio_file=audio.wav") {
 		t.Fatalf("gemini metadata missing fresh audio file reference: %q", metadata)
+	}
+	if !strings.Contains(metadata, "voice=model-default") {
+		t.Fatalf("gemini metadata missing model-default voice marker: %q", metadata)
 	}
 	if !strings.Contains(metadata, "format=wav") {
 		t.Fatalf("gemini metadata missing format: %q", metadata)

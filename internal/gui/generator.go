@@ -378,12 +378,18 @@ func (a *Application) newImageSearcher() (promptAwareImageClient, error) {
 
 		return newOpenAIImageClient(openaiConfig), nil
 	case imageProviderNanoBanana:
-		if a.config.GoogleAPIKey == "" {
+		config := a.config
+		if config == nil {
+			config = DefaultConfig()
+		}
+		if config.GoogleAPIKey == "" {
 			return nil, fmt.Errorf("Google API key is required for image generation")
 		}
 
 		nanoBananaConfig := &image.NanoBananaConfig{
-			APIKey: a.config.GoogleAPIKey,
+			APIKey:    config.GoogleAPIKey,
+			Model:     config.NanoBananaModel,
+			TextModel: config.NanoBananaTextModel,
 		}
 
 		return newNanoBananaImageClient(nanoBananaConfig), nil
@@ -487,7 +493,11 @@ func (a *Application) saveAudioMetadata(cardDir string, audioConfig audio.Config
 		}
 		fmt.Fprintf(&metadata, "model=%s\n", model)
 	}
-	fmt.Fprintf(&metadata, "voice=%s\n", voice)
+	voiceLine := strings.TrimSpace(voice)
+	if voiceLine == "" && strings.ToLower(strings.TrimSpace(audioConfig.Provider)) == "gemini" {
+		voiceLine = "model-default"
+	}
+	fmt.Fprintf(&metadata, "voice=%s\n", voiceLine)
 	fmt.Fprintf(&metadata, "speed=%.2f\n", speed)
 	fmt.Fprintf(&metadata, "format=%s\n", audioConfig.OutputFormat)
 	fmt.Fprintf(&metadata, "cardtype=%s\n", cardType)

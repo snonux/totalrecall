@@ -215,6 +215,8 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 		*viper.GetViper() = *originalConfig
 	}()
 	viper.Reset()
+	viper.Set("image.nanobanana_model", "config-image-model")
+	viper.Set("image.nanobanana_text_model", "config-text-model")
 
 	flags := cli.NewFlags()
 	flags.AudioFormat = "wav"
@@ -231,6 +233,12 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	}
 	if guiConfig.AudioFormat != "wav" {
 		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "wav")
+	}
+	if guiConfig.NanoBananaModel != "config-image-model" {
+		t.Fatalf("guiConfig.NanoBananaModel = %q, want %q", guiConfig.NanoBananaModel, "config-image-model")
+	}
+	if guiConfig.NanoBananaTextModel != "config-text-model" {
+		t.Fatalf("guiConfig.NanoBananaTextModel = %q, want %q", guiConfig.NanoBananaTextModel, "config-text-model")
 	}
 	if guiConfig.GeminiTTSModel != "gemini-2.5-flash-preview-tts" {
 		t.Fatalf("guiConfig.GeminiTTSModel = %q, want %q", guiConfig.GeminiTTSModel, "gemini-2.5-flash-preview-tts")
@@ -262,6 +270,40 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	}
 	if guiConfig.AudioProvider != "gemini" {
 		t.Fatalf("guiConfig.AudioProvider = %q, want %q", guiConfig.AudioProvider, "gemini")
+	}
+	if guiConfig.GoogleAPIKey != "test-google-key" {
+		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")
+	}
+}
+
+func TestGUIConfigForRunModeHonorsExplicitNanoBananaModelFlags(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.nanobanana_model", "config-image-model")
+	viper.Set("image.nanobanana_text_model", "config-text-model")
+
+	flags := cli.NewFlags()
+	flags.ImageAPI = "openai"
+	flags.ImageAPISpecified = false
+	flags.NanoBananaModel = "flag-image-model"
+	flags.NanoBananaModelSpecified = true
+	flags.NanoBananaTextModel = "flag-text-model"
+	flags.NanoBananaTextModelSpecified = true
+	p := NewProcessor(flags)
+
+	guiConfig := p.guiConfigForRunMode()
+	if guiConfig.NanoBananaModel != "flag-image-model" {
+		t.Fatalf("guiConfig.NanoBananaModel = %q, want %q", guiConfig.NanoBananaModel, "flag-image-model")
+	}
+	if guiConfig.NanoBananaTextModel != "flag-text-model" {
+		t.Fatalf("guiConfig.NanoBananaTextModel = %q, want %q", guiConfig.NanoBananaTextModel, "flag-text-model")
 	}
 	if guiConfig.GoogleAPIKey != "test-google-key" {
 		t.Fatalf("guiConfig.GoogleAPIKey = %q, want %q", guiConfig.GoogleAPIKey, "test-google-key")

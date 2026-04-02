@@ -634,12 +634,54 @@ func (p *Processor) guiConfigForRunMode() *gui.Config {
 		ImageProvider:       imageProvider,
 		OpenAIKey:           cli.GetOpenAIKey(),
 		GoogleAPIKey:        cli.GetGoogleAPIKey(),
+		NanoBananaModel:     p.nanoBananaModelForRunMode(),
+		NanoBananaTextModel: p.nanoBananaTextModelForRunMode(),
 		GeminiTTSModel:      p.geminiTTSModel(),
 		GeminiVoice:         p.geminiVoice(),
 		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
 		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
 		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
 	}
+}
+
+func (p *Processor) nanoBananaModelForRunMode() string {
+	if p != nil && p.flags != nil && p.flags.NanoBananaModelSpecified {
+		if model := strings.TrimSpace(p.flags.NanoBananaModel); model != "" {
+			return model
+		}
+	}
+
+	if model := strings.TrimSpace(viper.GetString("image.nanobanana_model")); model != "" {
+		return model
+	}
+
+	if p != nil && p.flags != nil {
+		if model := strings.TrimSpace(p.flags.NanoBananaModel); model != "" {
+			return model
+		}
+	}
+
+	return image.DefaultNanoBananaModel
+}
+
+func (p *Processor) nanoBananaTextModelForRunMode() string {
+	if p != nil && p.flags != nil && p.flags.NanoBananaTextModelSpecified {
+		if model := strings.TrimSpace(p.flags.NanoBananaTextModel); model != "" {
+			return model
+		}
+	}
+
+	if model := strings.TrimSpace(viper.GetString("image.nanobanana_text_model")); model != "" {
+		return model
+	}
+
+	if p != nil && p.flags != nil {
+		if model := strings.TrimSpace(p.flags.NanoBananaTextModel); model != "" {
+			return model
+		}
+	}
+
+	return image.DefaultNanoBananaTextModel
 }
 
 func (p *Processor) newImageSearcher() (image.ImageSearcher, error) {

@@ -24,6 +24,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
@@ -114,6 +115,10 @@ type Config struct {
 	ImageProvider string
 	OpenAIKey     string
 	GoogleAPIKey  string
+	// NanoBananaModel selects the Gemini image model for Nano Banana generation.
+	NanoBananaModel string
+	// NanoBananaTextModel selects the Gemini text model for Nano Banana prompt generation.
+	NanoBananaTextModel string
 	// GeminiTTSModel selects the Gemini TTS model when Gemini audio is active.
 	GeminiTTSModel string
 	// GeminiVoice selects a specific Gemini voice; empty uses the model default.
@@ -139,6 +144,8 @@ func DefaultConfig() *Config {
 		OutputDir:           outputDir,
 		AudioFormat:         audioDefaults.OutputFormat,
 		AudioProvider:       audioDefaults.Provider,
+		NanoBananaModel:     image.DefaultNanoBananaModel,
+		NanoBananaTextModel: image.DefaultNanoBananaTextModel,
 		GeminiTTSModel:      audioDefaults.GeminiTTSModel,
 		ImageProvider:       imageProviderNanoBanana,
 		TranslationProvider: translation.ProviderOpenAI,
@@ -169,6 +176,12 @@ func New(config *Config) *Application {
 		}
 		if config.ImageProvider == "" {
 			config.ImageProvider = defaults.ImageProvider
+		}
+		if config.NanoBananaModel == "" {
+			config.NanoBananaModel = defaults.NanoBananaModel
+		}
+		if config.NanoBananaTextModel == "" {
+			config.NanoBananaTextModel = defaults.NanoBananaTextModel
 		}
 		if config.GeminiTTSModel == "" {
 			config.GeminiTTSModel = defaults.GeminiTTSModel

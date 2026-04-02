@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
@@ -22,6 +23,12 @@ func TestDefaultConfigUsesOpenAITranslationProvider(t *testing.T) {
 	}
 	if config.AudioFormat != audioDefaults.OutputFormat {
 		t.Fatalf("DefaultConfig() audio format = %q, want %q", config.AudioFormat, audioDefaults.OutputFormat)
+	}
+	if config.NanoBananaModel != image.DefaultNanoBananaModel {
+		t.Fatalf("DefaultConfig() NanoBananaModel = %q, want %q", config.NanoBananaModel, image.DefaultNanoBananaModel)
+	}
+	if config.NanoBananaTextModel != image.DefaultNanoBananaTextModel {
+		t.Fatalf("DefaultConfig() NanoBananaTextModel = %q, want %q", config.NanoBananaTextModel, image.DefaultNanoBananaTextModel)
 	}
 	if config.GeminiTTSModel != audioDefaults.GeminiTTSModel {
 		t.Fatalf("DefaultConfig() GeminiTTSModel = %q, want %q", config.GeminiTTSModel, audioDefaults.GeminiTTSModel)
