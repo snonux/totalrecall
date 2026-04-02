@@ -486,7 +486,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	}
 
 	// Save audio attribution
-	if err := p.saveAudioAttribution(word, outputFile, providerConfig, word); err != nil {
+	if err := p.saveAudioAttribution(word, outputFile, providerConfig); err != nil {
 		fmt.Printf("  Warning: Failed to save audio attribution: %v\n", err)
 	}
 
@@ -987,7 +987,10 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	}
 	return true // All required files exist
 }
-func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config, processedText string) error {
+func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config) error {
+	processedText := audio.ProcessedTextForProvider(config.Provider, word)
+	instruction := audio.InstructionForProvider(config.Provider, config)
+
 	var attribution string
 	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
 	case "gemini":
@@ -996,6 +999,7 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 			Model:         config.GeminiTTSModel,
 			Voice:         config.GeminiVoice,
 			Speed:         config.GeminiSpeed,
+			Instruction:   instruction,
 			ProcessedText: processedText,
 			GeneratedAt:   time.Now(),
 		})
@@ -1005,7 +1009,7 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 			Model:         config.OpenAIModel,
 			Voice:         config.OpenAIVoice,
 			Speed:         config.OpenAISpeed,
-			Instruction:   config.OpenAIInstruction,
+			Instruction:   instruction,
 			ProcessedText: processedText,
 			GeneratedAt:   time.Now(),
 		})

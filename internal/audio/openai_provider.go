@@ -146,21 +146,5 @@ func (p *OpenAIProvider) IsAvailable() error {
 
 // preprocessBulgarianText prepares Bulgarian text for clearer TTS pronunciation
 func (p *OpenAIProvider) preprocessBulgarianText(text string) string {
-	// First, clean the text and remove punctuation that shouldn't be spoken
-	cleanedText := strings.TrimSpace(text)
-
-	// Remove common punctuation marks that shouldn't be pronounced
-	punctuationToRemove := []string{"!", "?", ".", ",", ";", ":", "\"", "'", "(", ")", "[", "]", "{", "}", "-", "—", "–"}
-	for _, punct := range punctuationToRemove {
-		cleanedText = strings.ReplaceAll(cleanedText, punct, "")
-	}
-
-	// Trim any remaining whitespace
-	cleanedText = strings.TrimSpace(cleanedText)
-
-	// For single words, we add subtle punctuation to create natural pauses
-	// This helps the TTS engine pronounce it more carefully
-	processedText := cleanedText // fmt.Sprintf("%s...", cleanedText)
-
-	return processedText
+	return openAIProcessedText(text)
 }

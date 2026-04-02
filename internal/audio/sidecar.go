@@ -35,6 +35,97 @@ func ProcessedTextForWord(text string) string {
 	return fmt.Sprintf("%s...", strings.TrimSpace(cleanedText))
 }
 
+// ProcessedTextForProvider returns the exact text shape the provider path sends to TTS.
+func ProcessedTextForProvider(provider, text string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "openai":
+		return openAIProcessedText(text)
+	case "gemini":
+		return strings.TrimSpace(text)
+	default:
+		return strings.TrimSpace(text)
+	}
+}
+
+// InstructionForProvider returns the provider-specific instruction semantics written to attribution files.
+func InstructionForProvider(provider string, config *Config) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "openai":
+		return openAIInstructionForAttribution(config)
+	case "gemini":
+		return geminiPromptInstruction(config)
+	default:
+		return ""
+	}
+}
+
+func openAIProcessedText(text string) string {
+	cleanedText := strings.TrimSpace(text)
+	punctuationToRemove := []string{"!", "?", ".", ",", ";", ":", "\"", "'", "(", ")", "[", "]", "{", "}", "-", "—", "–"}
+	for _, punct := range punctuationToRemove {
+		cleanedText = strings.ReplaceAll(cleanedText, punct, "")
+	}
+
+	return strings.TrimSpace(cleanedText)
+}
+
+func openAIInstructionForAttribution(config *Config) string {
+	if config == nil {
+		return ""
+	}
+
+	if !openAIModelUsesInstructions(config.OpenAIModel) {
+		return ""
+	}
+
+	return strings.TrimSpace(config.OpenAIInstruction)
+}
+
+func openAIModelUsesInstructions(model string) bool {
+	switch strings.TrimSpace(model) {
+	case "gpt-4o-mini-tts", "gpt-4o-mini-audio-preview":
+		return true
+	default:
+		return false
+	}
+}
+
+func geminiPromptInstruction(config *Config) string {
+	if config == nil {
+		config = &Config{}
+	}
+
+	var prompt strings.Builder
+	prompt.WriteString("You are speaking Bulgarian language (български език). ")
+	prompt.WriteString("Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian.")
+
+	if speedHint := geminiSpeedHint(config.GeminiSpeed); speedHint != "" {
+		prompt.WriteString(" ")
+		prompt.WriteString(speedHint)
+	}
+
+	prompt.WriteString("\n\nSpeak the following Bulgarian text:")
+
+	if voice := strings.TrimSpace(config.GeminiVoice); voice != "" {
+		prompt.WriteString("\n\nUse a clear, natural delivery that matches the voice named ")
+		prompt.WriteString(voice)
+		prompt.WriteString(".")
+	}
+
+	return prompt.String()
+}
+
+func geminiSpeedHint(speed float64) string {
+	switch {
+	case speed < 0.95:
+		return "Speak slowly and clearly for language learners."
+	case speed > 1.05:
+		return "Speak slightly faster than normal while staying clear."
+	default:
+		return "Speak at a natural pace."
+	}
+}
+
 // BuildSidecarMetadata formats the audio metadata written for GUI reloads and batch exports.
 func BuildSidecarMetadata(params SidecarMetadataParams) string {
 	var b strings.Builder

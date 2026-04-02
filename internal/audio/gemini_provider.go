@@ -105,22 +105,9 @@ func (p *GeminiProvider) buildPrompt(text string) string {
 	}
 
 	var prompt strings.Builder
-	prompt.WriteString("You are speaking Bulgarian language (български език). ")
-	prompt.WriteString("Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian.")
-
-	if speedHint := geminiSpeedHint(config.GeminiSpeed); speedHint != "" {
-		prompt.WriteString(" ")
-		prompt.WriteString(speedHint)
-	}
-
-	prompt.WriteString("\n\nSpeak the following Bulgarian text:\n")
+	prompt.WriteString(geminiPromptInstruction(config))
+	prompt.WriteString("\n")
 	prompt.WriteString(strings.TrimSpace(text))
-
-	if voice := strings.TrimSpace(config.GeminiVoice); voice != "" {
-		prompt.WriteString("\n\nUse a clear, natural delivery that matches the voice named ")
-		prompt.WriteString(voice)
-		prompt.WriteString(".")
-	}
 
 	return prompt.String()
 }
@@ -164,17 +151,6 @@ func normalizeGeminiConfig(config *Config) *Config {
 	}
 
 	return normalized
-}
-
-func geminiSpeedHint(speed float64) string {
-	switch {
-	case speed < 0.95:
-		return "Speak slowly and clearly for language learners."
-	case speed > 1.05:
-		return "Speak slightly faster than normal while staying clear."
-	default:
-		return "Speak at a natural pace."
-	}
 }
 
 func extractAudioData(response *genai.GenerateContentResponse) ([]byte, string, error) {

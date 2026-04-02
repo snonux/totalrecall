@@ -520,7 +520,7 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	flags.AudioFormat = "mp3"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка"); err != nil {
+	if err := p.generateAudio("ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
 	}
 
-	wordDir := p.findCardDirectory("ябълка")
+	wordDir := p.findCardDirectory("ябълка!?")
 	if wordDir == "" {
 		t.Fatal("expected generated word directory")
 	}
@@ -575,8 +575,14 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		t.Fatalf("expected attribution file %q: %v", attrPath, err)
 	}
 	attribution := string(attributionData)
-	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка!?") {
 		t.Fatalf("gemini attribution missing exact processed text: %q", attribution)
+	}
+	if !strings.Contains(attribution, "Speak at a natural pace.") {
+		t.Fatalf("gemini attribution missing speed hint semantics: %q", attribution)
+	}
+	if !strings.Contains(attribution, "voice named Kore") {
+		t.Fatalf("gemini attribution missing voice semantics: %q", attribution)
 	}
 }
 
@@ -608,7 +614,7 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudio("ябълка"); err != nil {
+	if err := p.generateAudio("ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
 
@@ -625,7 +631,7 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
 	}
 
-	wordDir := p.findCardDirectory("ябълка")
+	wordDir := p.findCardDirectory("ябълка!?")
 	if wordDir == "" {
 		t.Fatal("expected generated word directory")
 	}
@@ -651,8 +657,11 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 		t.Fatalf("expected attribution file %q: %v", attrPath, err)
 	}
 	attribution := string(attributionData)
-	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка!?") {
 		t.Fatalf("gemini attribution missing exact processed text: %q", attribution)
+	}
+	if !strings.Contains(attribution, "Speak at a natural pace.") {
+		t.Fatalf("gemini attribution missing speed hint semantics: %q", attribution)
 	}
 }
 
@@ -684,7 +693,7 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if err := p.generateAudioBgBg("ябълка", "круша"); err != nil {
+	if err := p.generateAudioBgBg("ябълка!?", "круша."); err != nil {
 		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
 	}
 
@@ -706,9 +715,12 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 			t.Fatalf("expected attribution file %q: %v", attrPath, err)
 		}
 		attribution := string(attributionData)
-		wantText := []string{"ябълка", "круша"}[i]
+		wantText := []string{"ябълка!?", "круша."}[i]
 		if !strings.Contains(attribution, "Processed text sent to TTS: "+wantText) {
 			t.Fatalf("bg-bg attribution missing exact processed text %q: %q", wantText, attribution)
+		}
+		if !strings.Contains(attribution, "Speak at a natural pace.") {
+			t.Fatalf("bg-bg attribution missing speed hint semantics: %q", attribution)
 		}
 	}
 }
@@ -742,8 +754,8 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 	flags.AudioFormat = "wav"
 
 	p := NewProcessor(flags)
-	wordDir := p.findOrCreateWordDirectory("ябълка")
-	if err := p.generateAudioWithVoiceAndFilenameInDir("ябълка", "alloy", "audio", wordDir); err != nil {
+	wordDir := p.findOrCreateWordDirectory("ябълка!?")
+	if err := p.generateAudioWithVoiceAndFilenameInDir("ябълка!?", "alloy", "audio", wordDir); err != nil {
 		t.Fatalf("generateAudioWithVoiceAndFilenameInDir() unexpected error: %v", err)
 	}
 
@@ -785,6 +797,9 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 	attribution := string(attributionData)
 	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
 		t.Fatalf("openai attribution missing exact processed text: %q", attribution)
+	}
+	if strings.Contains(attribution, "Voice instructions:") {
+		t.Fatalf("openai attribution unexpectedly recorded instructions: %q", attribution)
 	}
 }
 
@@ -860,6 +875,64 @@ func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
 	attribution := string(attributionData)
 	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
 		t.Fatalf("openai attribution missing exact processed text: %q", attribution)
+	}
+}
+
+func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "openai")
+	viper.Set("audio.openai_instruction", "Speak clearly.")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioProvider = "openai"
+	flags.AudioFormat = "mp3"
+	flags.OpenAIModel = "tts-1"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudio("ябълка!?"); err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIModel != "tts-1" {
+		t.Fatalf("captured OpenAIModel = %q, want %q", capturedConfig.OpenAIModel, "tts-1")
+	}
+	if capturedConfig.OpenAIInstruction != "Speak clearly." {
+		t.Fatalf("captured OpenAIInstruction = %q, want %q", capturedConfig.OpenAIInstruction, "Speak clearly.")
+	}
+
+	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if strings.Contains(attribution, "Voice instructions:") {
+		t.Fatalf("openai attribution unexpectedly recorded unsupported instructions: %q", attribution)
+	}
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+		t.Fatalf("openai attribution missing cleaned processed text: %q", attribution)
 	}
 }
 
