@@ -127,6 +127,11 @@ type Config struct {
 	TranslationProvider translation.Provider
 	PhoneticProvider    phonetic.Provider
 	AutoPlay            bool // Whether to automatically play audio when generated or navigated to
+
+	// Injectable dependencies — when non-nil, New() uses them directly instead of
+	// constructing new instances from the provider/key fields above.
+	PhoneticFetcher *phonetic.Fetcher
+	Translator      *translation.Translator
 }
 
 const (
@@ -221,12 +226,24 @@ func New(config *Config) *Application {
 
 	// Set up audio configuration
 	app.audioConfig = audioConfigForApp(config)
-	app.phoneticFetcher = phonetic.NewFetcher(&phonetic.Config{
-		Provider:     config.PhoneticProvider,
-		OpenAIKey:    config.OpenAIKey,
-		GoogleAPIKey: config.GoogleAPIKey,
-	})
-	app.translator = translation.NewTranslator(translationConfigForApp(config))
+
+	// Use injected phonetic fetcher when provided; otherwise construct from config fields.
+	if config.PhoneticFetcher != nil {
+		app.phoneticFetcher = config.PhoneticFetcher
+	} else {
+		app.phoneticFetcher = phonetic.NewFetcher(&phonetic.Config{
+			Provider:     config.PhoneticProvider,
+			OpenAIKey:    config.OpenAIKey,
+			GoogleAPIKey: config.GoogleAPIKey,
+		})
+	}
+
+	// Use injected translator when provided; otherwise construct from config fields.
+	if config.Translator != nil {
+		app.translator = config.Translator
+	} else {
+		app.translator = translation.NewTranslator(translationConfigForApp(config))
+	}
 
 	app.setupUI()
 

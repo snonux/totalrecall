@@ -714,19 +714,39 @@ func (p *Processor) guiConfigForRunMode() *gui.Config {
 		imageProvider = gui.DefaultConfig().ImageProvider
 	}
 
+	openAIKey := cli.GetOpenAIKey()
+	googleAPIKey := cli.GetGoogleAPIKey()
+	translationProvider := translation.Provider(viper.GetString("translation.provider"))
+	phoneticProvider := phonetic.Provider(viper.GetString("phonetic.provider"))
+
+	// Construct and inject phonetic/translation dependencies at the composition root
+	// so gui.New() receives ready-to-use instances rather than raw config strings.
+	phoneticFetcher := phonetic.NewFetcher(&phonetic.Config{
+		Provider:     phoneticProvider,
+		OpenAIKey:    openAIKey,
+		GoogleAPIKey: googleAPIKey,
+	})
+	translator := translation.NewTranslator(&translation.Config{
+		Provider:    translationProvider,
+		OpenAIKey:   openAIKey,
+		GeminiModel: viper.GetString("translation.gemini_model"),
+	})
+
 	return &gui.Config{
 		AudioFormat:         p.effectiveAudioFormat(),
 		AudioProvider:       p.audioProviderName(),
 		ImageProvider:       imageProvider,
-		OpenAIKey:           cli.GetOpenAIKey(),
-		GoogleAPIKey:        cli.GetGoogleAPIKey(),
+		OpenAIKey:           openAIKey,
+		GoogleAPIKey:        googleAPIKey,
 		NanoBananaModel:     p.nanoBananaModelForRunMode(),
 		NanoBananaTextModel: p.nanoBananaTextModelForRunMode(),
 		GeminiTTSModel:      p.geminiTTSModel(),
 		GeminiVoice:         p.geminiVoice(),
-		TranslationProvider: translation.Provider(viper.GetString("translation.provider")),
-		PhoneticProvider:    phonetic.Provider(viper.GetString("phonetic.provider")),
+		TranslationProvider: translationProvider,
+		PhoneticProvider:    phoneticProvider,
 		AutoPlay:            !p.flags.NoAutoPlay, // Invert the flag (--no-auto-play disables auto-play)
+		PhoneticFetcher:     phoneticFetcher,
+		Translator:          translator,
 	}
 }
 
