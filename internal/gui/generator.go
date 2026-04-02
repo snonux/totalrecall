@@ -133,31 +133,6 @@ func (a *Application) generateAudioFile(ctx context.Context, text, outputFile, v
 	return provider.GenerateAudio(ctx, text, outputFile)
 }
 
-func (a *Application) generateGeminiAudioWithFallbacks(initialVoice string, generate func(voice string) error) (string, error) {
-	attempted := make([]string, 0, len(audio.GeminiVoices))
-	var lastErr error
-
-	for i, voice := range audio.GeminiVoiceFallbacks(initialVoice) {
-		if i > 0 {
-			fmt.Printf("Retrying Gemini audio with voice: %s\n", voice)
-		}
-
-		attempted = append(attempted, voice)
-		err := generate(voice)
-		if err == nil {
-			return voice, nil
-		}
-		if !audio.IsGeminiNoAudioDataError(err) {
-			return "", err
-		}
-
-		lastErr = err
-		fmt.Printf("Warning: Gemini returned no audio for voice %s\n", voice)
-	}
-
-	return "", fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)
-}
-
 // translateWord translates a Bulgarian word to English
 func (a *Application) translateWord(word string) (string, error) {
 	if a.translator == nil {
@@ -207,7 +182,10 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	finalVoice := voice
 	var err error
 	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
-		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+		finalVoice, err = audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+			if candidate != voice {
+				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
+			}
 			return a.generateAudioFile(ctx, word, outputFile, candidate, speed)
 		})
 	} else {
@@ -246,7 +224,10 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	finalVoice := voice
 	var err error
 	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
-		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+		finalVoice, err = audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+			if candidate != voice {
+				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
+			}
 			return a.generateAudioFile(ctx, word, frontFile, candidate, speed)
 		})
 	} else {
@@ -283,7 +264,10 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 	finalVoice := voice
 	var err error
 	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
-		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+		finalVoice, err = audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+			if candidate != voice {
+				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
+			}
 			return a.generateAudioFile(ctx, text, backFile, candidate, speed)
 		})
 	} else {
@@ -336,7 +320,12 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 	finalVoice := voice
 	var err error
 	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
-		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, runPair)
+		finalVoice, err = audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+			if candidate != voice {
+				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
+			}
+			return runPair(candidate)
+		})
 	} else {
 		err = runPair(voice)
 	}

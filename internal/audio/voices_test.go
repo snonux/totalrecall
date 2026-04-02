@@ -1,9 +1,12 @@
 package audio
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
+
+var errTestSentinel = errors.New("test sentinel error")
 
 func TestVoiceLists(t *testing.T) {
 	t.Parallel()
@@ -54,6 +57,52 @@ func TestGeminiVoiceFallbacks(t *testing.T) {
 		got := GeminiVoiceFallbacks("")
 		if !reflect.DeepEqual(got, GeminiVoices) {
 			t.Fatalf("GeminiVoiceFallbacks() mismatch\nwant: %#v\ngot:  %#v", GeminiVoices, got)
+		}
+	})
+}
+
+func TestRunWithVoiceFallbacks(t *testing.T) {
+	originalVoices := append([]string(nil), GeminiVoices...)
+	t.Cleanup(func() {
+		GeminiVoices = originalVoices
+	})
+	GeminiVoices = []string{"Charon", "Kore", "Leda"}
+
+	t.Run("retries no-audio errors until success", func(t *testing.T) {
+		var attempted []string
+		usedVoice, err := RunWithVoiceFallbacks("Charon", func(voice string) error {
+			attempted = append(attempted, voice)
+			if voice == "Charon" {
+				return ErrGeminiNoAudioData
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("RunWithVoiceFallbacks() unexpected error: %v", err)
+		}
+		if usedVoice != "Kore" {
+			t.Fatalf("used voice = %q, want %q", usedVoice, "Kore")
+		}
+		if got, want := attempted, []string{"Charon", "Kore"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("attempted voices = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("returns non-retryable errors immediately", func(t *testing.T) {
+		sentinel := errTestSentinel
+		var attempted []string
+		usedVoice, err := RunWithVoiceFallbacks("Charon", func(voice string) error {
+			attempted = append(attempted, voice)
+			return sentinel
+		})
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("error = %v, want %v", err, sentinel)
+		}
+		if usedVoice != "" {
+			t.Fatalf("used voice = %q, want empty", usedVoice)
+		}
+		if got, want := attempted, []string{"Charon"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("attempted voices = %#v, want %#v", got, want)
 		}
 	})
 }

@@ -344,31 +344,6 @@ func (p *Processor) logSelectedAudioVoice(provider, voice string) {
 	}
 }
 
-func (p *Processor) generateGeminiAudioWithFallbacks(initialVoice string, generate func(voice string) error) error {
-	attempted := make([]string, 0, len(audio.GeminiVoices))
-	var lastErr error
-
-	for i, voice := range audio.GeminiVoiceFallbacks(initialVoice) {
-		if i > 0 {
-			fmt.Printf("  Retrying Gemini audio with voice: %s\n", voice)
-		}
-
-		attempted = append(attempted, voice)
-		err := generate(voice)
-		if err == nil {
-			return nil
-		}
-		if !audio.IsGeminiNoAudioDataError(err) {
-			return err
-		}
-
-		lastErr = err
-		fmt.Printf("  Warning: Gemini returned no audio for voice %s\n", voice)
-	}
-
-	return fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)
-}
-
 // generateAudio generates audio files for a word
 func (p *Processor) generateAudio(word string) error {
 	provider := p.audioProviderName()
@@ -381,9 +356,13 @@ func (p *Processor) generateAudio(word string) error {
 		voice := p.audioVoiceForProvider()
 		p.logSelectedAudioVoice(provider, voice)
 		if provider == "gemini" && p.geminiVoice() == "" {
-			return p.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+			_, err := audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+				if candidate != voice {
+					fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
+				}
 				return p.generateAudioWithVoice(word, candidate)
 			})
+			return err
 		}
 		voices = []string{voice}
 	}
@@ -427,7 +406,13 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 	}
 
 	if provider == "gemini" && p.geminiVoice() == "" {
-		return p.generateGeminiAudioWithFallbacks(voice, generatePair)
+		_, err := audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
+			if candidate != voice {
+				fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
+			}
+			return generatePair(candidate)
+		})
+		return err
 	}
 
 	if err := generatePair(voice); err != nil {

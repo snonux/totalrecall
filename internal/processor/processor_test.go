@@ -712,10 +712,10 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if err := p.generateGeminiAudioWithFallbacks("Charon", func(voice string) error {
+	if _, err := audio.RunWithVoiceFallbacks("Charon", func(voice string) error {
 		return p.generateAudioWithVoice("ябълка", voice)
 	}); err != nil {
-		t.Fatalf("generateGeminiAudioWithFallbacks() unexpected error: %v", err)
+		t.Fatalf("RunWithVoiceFallbacks() unexpected error: %v", err)
 	}
 
 	if got, want := strings.Join(attemptedVoices, ","), "Charon,Kore"; got != want {
