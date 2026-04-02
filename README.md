@@ -8,7 +8,7 @@
 
 It has mainly been vibe coded using Claude Code CLI.
 
-⚠️ **Important:** Audio generation uses OpenAI services. The no-arg GUI image path uses Google Gemini Nano Banana by default, and explicit CLI runs can also use Nano Banana through `--image-api nanobanana` or `image.provider: nanobanana`. See [Quick Start](#quick-start) for setup instructions.
+⚠️ **Important:** TotalRecall now uses Google Gemini APIs by default for audio, image generation, translation, and phonetic lookup. Optional OpenAI paths are still available when explicitly selected. See [Quick Start](#quick-start) for setup instructions.
 
 [<img src="assets/totalrecall.png" alt="TotalRecall screenshot">](assets/totalrecall.png)
 [🔊 Computer / Компютър audio example](assets/audio.mp3) (Download raw file, and then play locally)
@@ -19,16 +19,19 @@ It has mainly been vibe coded using Claude Code CLI.
 
 ## Features
 
-- Audio generation using **OpenAI TTS**: High-quality, natural-sounding voices (requires API key)
-  - Random voice selection by default for variety
-  - Option to generate in all 11 available voices
+- Audio generation using **Google Gemini TTS** by default
+  - Uses a random Gemini voice by default unless you select a specific one
+  - Option to generate in all available voices
+  - Defaults to `mp3` output and auto-converts Gemini audio with `ffmpeg` to save space
 - Phoenetic pronunciation:
   - Fetches IPA (International Phonetic Alphabet) for each word
+  - Uses Gemini by default
 - Automatic Bulgarian to English translation
   - Saves translations to separate text files
+  - Uses Gemini by default
 - Image generation:
-  - **Google Gemini Nano Banana**: Default image path for the no-arg GUI launch
-  - **OpenAI DALL-E**: Explicit CLI image generation path
+  - **Google Gemini Nano Banana**: Default image path for GUI, CLI, and batch runs
+  - **OpenAI DALL-E**: Optional explicit CLI image generation path
   - **Config-driven selection**: Set `image.provider` to `openai` or `nanobanana`
   - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
@@ -39,12 +42,15 @@ It has mainly been vibe coded using Claude Code CLI.
 
 ### Prerequisites
 
-1. **For OpenAI TTS** (required for audio generation):
+1. **For Gemini defaults** (audio, images, translation, phonetics):
+   - Create a Google AI Studio API key
+   - Set it with `export GOOGLE_API_KEY="..."`
+   - Install `ffmpeg` if you want the default space-saving `mp3` audio output
+
+2. **For optional OpenAI paths**:
    - Create an account at https://platform.openai.com
    - Generate an API key at https://platform.openai.com/api-keys
-   - Set the key using one of these methods:
-     - Environment variable: `export OPENAI_API_KEY="sk-..."`
-     - Configuration file: Add to `.totalrecall.yaml`
+   - Set it with `export OPENAI_API_KEY="sk-..."`
 
 ### Building from Source
 
@@ -95,7 +101,7 @@ After installation, you may need to log out and log back in for the icon to appe
 
 ## Quick Start
 
-**Note:** By default, totalrecall uses OpenAI for audio. The no-arg GUI image path uses Nano Banana, and explicit CLI runs can use either OpenAI or Nano Banana. Make sure to set your OpenAI API key and Google API key:
+**Note:** By default, totalrecall uses Gemini TTS for audio, Nano Banana for images, and Gemini-backed translation/phonetic lookup. If you want the optional OpenAI paths, set your OpenAI API key too:
 ```bash
 export OPENAI_API_KEY="sk-..."
 export GOOGLE_API_KEY="..."
@@ -118,7 +124,7 @@ Key features:
 
 ### CLI Mode
 
-1. Generate materials for a single word. Explicit CLI image generation supports Nano Banana when selected via `--image-api nanobanana` or `image.provider: nanobanana`:
+1. Generate materials for a single word. Explicit CLI image generation uses Nano Banana by default, and you can switch to OpenAI with `--image-api openai`:
    ```bash
    totalrecall ябълка
    ```

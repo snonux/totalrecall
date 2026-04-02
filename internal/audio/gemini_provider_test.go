@@ -219,16 +219,50 @@ func TestWriteGeminiAudioFileWritesWAV(t *testing.T) {
 	}
 }
 
-func TestWriteGeminiAudioFileRejectsUnsupportedFormats(t *testing.T) {
+func TestWriteGeminiAudioFileWritesMP3ViaFFmpeg(t *testing.T) {
 	dir := t.TempDir()
 	outputFile := filepath.Join(dir, "output.mp3")
 
-	err := writeGeminiAudioFile(outputFile, []byte{0x11, 0x22}, "audio/pcm")
-	if err == nil {
-		t.Fatal("writeGeminiAudioFile() expected error for non-wav output")
+	ffmpegScript := filepath.Join(dir, "ffmpeg")
+	script := "#!/bin/sh\nout=\"\"\nfor arg in \"$@\"; do out=\"$arg\"; done\ncat >/dev/null\nprintf 'mp3' > \"$out\"\n"
+	if err := os.WriteFile(ffmpegScript, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake ffmpeg script: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "only supports .wav output files") {
+	originalLookPath := execLookPath
+	execLookPath = func(file string) (string, error) {
+		if file == "ffmpeg" {
+			return ffmpegScript, nil
+		}
+		return originalLookPath(file)
+	}
+	t.Cleanup(func() {
+		execLookPath = originalLookPath
+	})
+
+	if err := writeGeminiAudioFile(outputFile, []byte{0x11, 0x22}, "audio/pcm"); err != nil {
+		t.Fatalf("writeGeminiAudioFile() unexpected error: %v", err)
+	}
+
+	fileData, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("ReadFile() unexpected error: %v", err)
+	}
+	if string(fileData) != "mp3" {
+		t.Fatalf("output file = %q, want fake mp3 payload", string(fileData))
+	}
+}
+
+func TestWriteGeminiAudioFileRejectsUnsupportedFormats(t *testing.T) {
+	dir := t.TempDir()
+	outputFile := filepath.Join(dir, "output.flac")
+
+	err := writeGeminiAudioFile(outputFile, []byte{0x11, 0x22}, "audio/pcm")
+	if err == nil {
+		t.Fatal("writeGeminiAudioFile() expected error for unsupported output")
+	}
+
+	if !strings.Contains(err.Error(), "only supports .wav and .mp3 output files") {
 		t.Fatalf("writeGeminiAudioFile() error = %v, want unsupported-format message", err)
 	}
 

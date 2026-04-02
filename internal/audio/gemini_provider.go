@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -20,6 +21,11 @@ const (
 	geminiTTSSampleRate    = 24000
 	geminiTTSBitsPerSample = 16
 )
+
+var ErrGeminiNoAudioData = errors.New("no audio data returned from Gemini")
+
+var execLookPath = exec.LookPath
+var execCommand = exec.Command
 
 // GeminiProvider implements Provider interface for Gemini TTS.
 type GeminiProvider struct {
@@ -173,7 +179,12 @@ func extractAudioData(response *genai.GenerateContentResponse) ([]byte, string, 
 		}
 	}
 
-	return nil, "", errors.New("no audio data returned from Gemini")
+	return nil, "", ErrGeminiNoAudioData
+}
+
+// IsGeminiNoAudioDataError reports whether the error means Gemini returned no audio payload.
+func IsGeminiNoAudioDataError(err error) bool {
+	return errors.Is(err, ErrGeminiNoAudioData)
 }
 
 func writeGeminiAudioFile(outputFile string, audioData []byte, mimeType string) error {
@@ -182,20 +193,22 @@ func writeGeminiAudioFile(outputFile string, audioData []byte, mimeType string) 
 	}
 
 	ext := strings.ToLower(filepath.Ext(outputFile))
-	if ext != ".wav" {
-		return fmt.Errorf("gemini TTS only supports .wav output files, got %q", outputFile)
-	}
-
 	encoded, err := encodePCMAsWAV(audioData)
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(outputFile, encoded, 0644); err != nil {
-		return fmt.Errorf("failed to write output file: %w", err)
+	switch ext {
+	case ".wav":
+		if err := os.WriteFile(outputFile, encoded, 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
+		return nil
+	case ".mp3":
+		return transcodeWAVToMP3(encoded, outputFile)
+	default:
+		return fmt.Errorf("gemini TTS only supports .wav and .mp3 output files, got %q", outputFile)
 	}
-
-	return nil
 }
 
 func ensureOutputDirectory(outputFile string) error {
@@ -262,4 +275,36 @@ func encodePCMAsWAV(pcmData []byte) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func transcodeWAVToMP3(wavData []byte, outputFile string) error {
+	ffmpegPath, err := execLookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg is required to convert Gemini audio to mp3: %w", err)
+	}
+
+	cmd := execCommand(
+		ffmpegPath,
+		"-nostdin",
+		"-hide_banner",
+		"-loglevel", "error",
+		"-y",
+		"-f", "wav",
+		"-i", "pipe:0",
+		"-codec:a", "libmp3lame",
+		"-q:a", "4",
+		outputFile,
+	)
+	cmd.Stdin = bytes.NewReader(wavData)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			message = err.Error()
+		}
+		return fmt.Errorf("failed to convert Gemini audio to mp3: %s", message)
+	}
+
+	return nil
 }

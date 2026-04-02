@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,6 +38,11 @@ type AudioPlayer struct {
 	playCmd         *exec.Cmd
 	voiceInfo       string // Stores voice and speed info
 	autoPlayEnabled *bool  // Pointer to parent's auto-play state
+}
+
+type audioCommandCandidate struct {
+	name string
+	args []string
 }
 
 // NewAudioPlayer creates a new audio player widget
@@ -349,33 +355,9 @@ func (p *AudioPlayer) startPlayback() error {
 // startPlaybackForFile starts playback of a specific audio file
 // This allows playing either front or back audio without modifying state
 func (p *AudioPlayer) startPlaybackForFile(audioFile string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "darwin": // macOS
-		cmd = exec.Command("afplay", audioFile)
-	case "linux":
-		// Try multiple commands in order of preference
-		// mpg123 first since it handles MP3 files best
-		if _, err := exec.LookPath("mpg123"); err == nil {
-			cmd = exec.Command("mpg123", "-q", audioFile) // -q for quiet mode
-		} else if _, err := exec.LookPath("ffplay"); err == nil {
-			cmd = exec.Command("ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audioFile)
-		} else if _, err := exec.LookPath("play"); err == nil {
-			// SoX play command
-			cmd = exec.Command("play", "-q", audioFile)
-		} else if _, err := exec.LookPath("paplay"); err == nil {
-			cmd = exec.Command("paplay", audioFile)
-		} else if _, err := exec.LookPath("aplay"); err == nil {
-			cmd = exec.Command("aplay", "-q", audioFile)
-		} else {
-			return fmt.Errorf("no audio player found. Install mpg123, ffplay, sox, paplay, or aplay")
-		}
-	case "windows":
-		// Use Windows Media Player
-		cmd = exec.Command("cmd", "/c", "start", "/min", audioFile)
-	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	cmd, err := audioPlaybackCommand(runtime.GOOS, audioFile, exec.LookPath)
+	if err != nil {
+		return err
 	}
 
 	// Store the command so we can stop it later
@@ -404,4 +386,53 @@ func (p *AudioPlayer) startPlaybackForFile(audioFile string) error {
 	}()
 
 	return nil
+}
+
+func audioPlaybackCommand(goos, audioFile string, lookPath func(string) (string, error)) (*exec.Cmd, error) {
+	switch goos {
+	case "darwin":
+		return exec.Command("afplay", audioFile), nil
+	case "linux":
+		return linuxAudioPlaybackCommand(audioFile, lookPath)
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "/min", audioFile), nil
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", goos)
+	}
+}
+
+func linuxAudioPlaybackCommand(audioFile string, lookPath func(string) (string, error)) (*exec.Cmd, error) {
+	candidates := linuxAudioCommandCandidates(audioFile)
+	for _, candidate := range candidates {
+		path, err := lookPath(candidate.name)
+		if err != nil {
+			continue
+		}
+
+		args := append([]string(nil), candidate.args...)
+		return exec.Command(path, args...), nil
+	}
+
+	return nil, errors.New("no compatible audio player found. Install ffplay, sox, paplay, aplay, or mpg123 for mp3 files")
+}
+
+func linuxAudioCommandCandidates(audioFile string) []audioCommandCandidate {
+	ext := strings.ToLower(filepath.Ext(audioFile))
+	switch ext {
+	case ".mp3":
+		return []audioCommandCandidate{
+			{name: "mpg123", args: []string{"-q", audioFile}},
+			{name: "ffplay", args: []string{"-nodisp", "-autoexit", "-loglevel", "quiet", audioFile}},
+			{name: "play", args: []string{"-q", audioFile}},
+			{name: "paplay", args: []string{audioFile}},
+			{name: "aplay", args: []string{"-q", audioFile}},
+		}
+	default:
+		return []audioCommandCandidate{
+			{name: "ffplay", args: []string{"-nodisp", "-autoexit", "-loglevel", "quiet", audioFile}},
+			{name: "play", args: []string{"-q", audioFile}},
+			{name: "paplay", args: []string{audioFile}},
+			{name: "aplay", args: []string{"-q", audioFile}},
+		}
+	}
 }

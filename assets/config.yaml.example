@@ -6,8 +6,8 @@ audio:
   # Gemini is the default audio provider. Set this to openai to switch back.
   provider: gemini
 
-  # Gemini TTS writes WAV files.
-  format: wav
+  # Gemini TTS writes WAV natively and auto-converts to MP3 by default to save space.
+  format: mp3
 
   # OpenAI TTS settings (used only when audio.provider is openai)
   openai_key: ${OPENAI_API_KEY}  # Can also use environment variable
@@ -17,19 +17,19 @@ audio:
 
   # Gemini TTS settings (used when audio.provider is gemini)
   gemini_tts_model: gemini-2.5-flash-preview-tts
-  gemini_voice: ""  # Leave empty to use the model default voice
+  gemini_voice: ""  # Leave empty to pick a random Gemini voice
 
 # Translation configuration
 translation:
   # Translation backend used by internal/translation/translator.go
-  # Supported values: openai (default) or gemini
-  provider: openai
+  # Supported values: gemini (default) or openai
+  provider: gemini
 
 # Phonetic configuration
 phonetic:
   # IPA phonetic backend used by internal/phonetic/fetcher.go
-  # Supported values: openai (default) or gemini
-  provider: openai
+  # Supported values: gemini (default) or openai
+  provider: gemini
 
 # Image configuration
 image:

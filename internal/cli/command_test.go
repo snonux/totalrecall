@@ -28,8 +28,8 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Long, "uses Nano Banana for images by default") {
 		t.Errorf("Expected Long description to describe the Nano Banana GUI default")
 	}
-	if !strings.Contains(cmd.Long, "Explicit CLI runs can use OpenAI or Nano Banana via --image-api") {
-		t.Errorf("Expected Long description to describe explicit CLI Nano Banana support")
+	if !strings.Contains(cmd.Long, "Explicit CLI and batch runs also use Nano Banana by default") {
+		t.Errorf("Expected Long description to describe the CLI and batch Nano Banana default")
 	}
 
 	// Test that flags are set up
@@ -111,11 +111,11 @@ func TestSetupFlags(t *testing.T) {
 	if imageAPIFlag == nil {
 		t.Fatal("image-api flag not found")
 	}
-	if imageAPIFlag.DefValue != "openai" {
-		t.Errorf("Expected default image-api to be openai, got %s", imageAPIFlag.DefValue)
+	if imageAPIFlag.DefValue != "nanobanana" {
+		t.Errorf("Expected default image-api to be nanobanana, got %s", imageAPIFlag.DefValue)
 	}
-	if imageAPIFlag.Usage != "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)" {
-		t.Errorf("Expected image-api help to describe CLI Nano Banana support and config fallback, got %q", imageAPIFlag.Usage)
+	if imageAPIFlag.Usage != "Image source for explicit CLI runs (default: Nano Banana; use openai to switch, config file image.provider also applies when unset)" {
+		t.Errorf("Expected image-api help to describe the CLI Nano Banana default and config fallback, got %q", imageAPIFlag.Usage)
 	}
 
 	openAIVoiceFlag := cmd.Flags().Lookup("openai-voice")
@@ -150,8 +150,8 @@ func TestSetupFlags(t *testing.T) {
 	if geminiVoiceFlag.DefValue != "" {
 		t.Errorf("Expected default gemini-voice to be empty, got %q", geminiVoiceFlag.DefValue)
 	}
-	if !strings.Contains(geminiVoiceFlag.Usage, "default: model default") {
-		t.Errorf("Expected gemini-voice help to describe the model default voice, got %q", geminiVoiceFlag.Usage)
+	if !strings.Contains(geminiVoiceFlag.Usage, "default: random") {
+		t.Errorf("Expected gemini-voice help to describe the random default voice, got %q", geminiVoiceFlag.Usage)
 	}
 
 	nanoBananaModelFlag := cmd.Flags().Lookup("nanobanana-model")
@@ -490,8 +490,8 @@ func TestBindFlagsToViper(t *testing.T) {
 	if viper.GetString("image.nanobanana_text_model") != "gemini-2.5-flash" {
 		t.Errorf("Expected image.nanobanana_text_model to be gemini-2.5-flash, got %s", viper.GetString("image.nanobanana_text_model"))
 	}
-	if viper.GetString("image.provider") != "openai" {
-		t.Errorf("Expected image.provider to be openai by default, got %s", viper.GetString("image.provider"))
+	if viper.GetString("image.provider") != "nanobanana" {
+		t.Errorf("Expected image.provider to be nanobanana by default, got %s", viper.GetString("image.provider"))
 	}
 }
 
@@ -503,6 +503,9 @@ func TestMarkExplicitFlagValues(t *testing.T) {
 	if err := cmd.Flags().Set("image-api", "nanobanana"); err != nil {
 		t.Fatalf("Failed to set image-api flag: %v", err)
 	}
+	if err := cmd.Flags().Set("format", "mp3"); err != nil {
+		t.Fatalf("Failed to set format flag: %v", err)
+	}
 	if err := cmd.Flags().Set("nanobanana-model", defaultNanoBananaModel); err != nil {
 		t.Fatalf("Failed to set nanobanana-model flag: %v", err)
 	}
@@ -512,6 +515,9 @@ func TestMarkExplicitFlagValues(t *testing.T) {
 
 	MarkExplicitFlagValues(cmd, flags)
 
+	if !flags.AudioFormatSpecified {
+		t.Error("Expected AudioFormatSpecified to be true")
+	}
 	if !flags.ImageAPISpecified {
 		t.Error("Expected ImageAPISpecified to be true")
 	}

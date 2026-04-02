@@ -22,7 +22,7 @@ func CreateRootCommand(flags *Flags) *cobra.Command {
 		Long: `totalrecall generates Anki flashcard materials from Bulgarian words.
 
 It creates audio pronunciation files using Gemini TTS by default and downloads
-representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Explicit CLI runs can use OpenAI or Nano Banana via --image-api, and audio can be switched between Gemini and OpenAI with --audio-provider.
+representative images. Launching with no arguments opens the interactive GUI, which uses Nano Banana for images by default. Explicit CLI and batch runs also use Nano Banana by default, and can be switched to OpenAI via --image-api openai. Audio can be switched between Gemini and OpenAI with --audio-provider.
 
 Gemini audio model and voice flags are available for Gemini TTS generation.
 
@@ -58,8 +58,8 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 
 	// Local flags
 	cmd.Flags().StringVarP(&flags.OutputDir, "output", "o", defaultOutputDir, "Output directory")
-	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3; Gemini TTS always writes wav)")
-	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (OpenAI or Nano Banana; config file image.provider also applies when unset)")
+	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3; Gemini TTS writes wav natively and auto-converts to mp3 with ffmpeg, which is now the default)")
+	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (default: Nano Banana; use openai to switch, config file image.provider also applies when unset)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
@@ -100,6 +100,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 
 // MarkExplicitFlagValues records which CLI flags were explicitly set by the user.
 func MarkExplicitFlagValues(cmd *cobra.Command, flags *Flags) {
+	flags.AudioFormatSpecified = cmd.Flags().Changed("format")
 	flags.ImageAPISpecified = cmd.Flags().Changed("image-api")
 	flags.NanoBananaModelSpecified = cmd.Flags().Changed("nanobanana-model")
 	flags.NanoBananaTextModelSpecified = cmd.Flags().Changed("nanobanana-text-model")
@@ -203,5 +204,5 @@ func openAIVoiceUsage() string {
 }
 
 func geminiVoiceUsage() string {
-	return "Gemini voice: " + strings.Join(audio.GeminiVoices, ", ") + " (default: model default)"
+	return "Gemini voice: " + strings.Join(audio.GeminiVoices, ", ") + " (default: random)"
 }

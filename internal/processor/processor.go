@@ -252,8 +252,10 @@ func (p *Processor) audioProviderName() string {
 }
 
 func (p *Processor) effectiveAudioFormat() string {
-	if p.audioProviderName() == "gemini" {
-		return "wav"
+	if p != nil && p.flags != nil && p.flags.AudioFormatSpecified {
+		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
+			return format
+		}
 	}
 
 	if viper.IsSet("audio.format") {
@@ -266,6 +268,10 @@ func (p *Processor) effectiveAudioFormat() string {
 		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
 			return format
 		}
+	}
+
+	if p.audioProviderName() == "gemini" {
+		return audio.DefaultProviderConfig().OutputFormat
 	}
 
 	return "mp3"
@@ -313,7 +319,11 @@ func (p *Processor) audioVoicesForProvider() []string {
 func (p *Processor) audioVoiceForProvider() string {
 	switch p.audioProviderName() {
 	case "gemini":
-		return p.geminiVoice()
+		if voice := p.geminiVoice(); voice != "" {
+			return voice
+		}
+		voices := p.audioVoicesForProvider()
+		return voices[rand.Intn(len(voices))]
 	default:
 		if voice := p.openAIVoice(); voice != "" {
 			return voice
@@ -321,6 +331,48 @@ func (p *Processor) audioVoiceForProvider() string {
 		voices := p.audioVoicesForProvider()
 		return voices[rand.Intn(len(voices))]
 	}
+}
+
+func (p *Processor) logSelectedAudioVoice(provider, voice string) {
+	switch provider {
+	case "gemini":
+		if p.geminiVoice() != "" {
+			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
+		} else {
+			fmt.Printf("  Using random Gemini voice: %s\n", voice)
+		}
+	default:
+		if p.openAIVoice() != "" {
+			fmt.Printf("  Using specified voice: %s\n", voice)
+		} else {
+			fmt.Printf("  Using random voice: %s\n", voice)
+		}
+	}
+}
+
+func (p *Processor) generateGeminiAudioWithFallbacks(initialVoice string, generate func(voice string) error) error {
+	attempted := make([]string, 0, len(audio.GeminiVoices))
+	var lastErr error
+
+	for i, voice := range audio.GeminiVoiceFallbacks(initialVoice) {
+		if i > 0 {
+			fmt.Printf("  Retrying Gemini audio with voice: %s\n", voice)
+		}
+
+		attempted = append(attempted, voice)
+		err := generate(voice)
+		if err == nil {
+			return nil
+		}
+		if !audio.IsGeminiNoAudioDataError(err) {
+			return err
+		}
+
+		lastErr = err
+		fmt.Printf("  Warning: Gemini returned no audio for voice %s\n", voice)
+	}
+
+	return fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)
 }
 
 // generateAudio generates audio files for a word
@@ -333,19 +385,11 @@ func (p *Processor) generateAudio(word string) error {
 		voices = p.audioVoicesForProvider()
 	} else {
 		voice := p.audioVoiceForProvider()
-		switch provider {
-		case "gemini":
-			if voice != "" {
-				fmt.Printf("  Using specified Gemini voice: %s\n", voice)
-			} else {
-				fmt.Printf("  Using Gemini model default voice\n")
-			}
-		default:
-			if p.openAIVoice() != "" {
-				fmt.Printf("  Using specified voice: %s\n", voice)
-			} else {
-				fmt.Printf("  Using random voice: %s\n", voice)
-			}
+		p.logSelectedAudioVoice(provider, voice)
+		if provider == "gemini" && p.geminiVoice() == "" {
+			return p.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+				return p.generateAudioWithVoice(word, candidate)
+			})
 		}
 		voices = []string{voice}
 	}
@@ -368,35 +412,32 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 	provider := p.audioProviderName()
 
 	voice := p.audioVoiceForProvider()
-	switch provider {
-	case "gemini":
-		if voice != "" {
-			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
-		} else {
-			fmt.Printf("  Using Gemini model default voice\n")
-		}
-	default:
-		if p.openAIVoice() != "" {
-			fmt.Printf("  Using specified voice: %s\n", voice)
-		} else {
-			fmt.Printf("  Using random voice: %s\n", voice)
-		}
-	}
+	p.logSelectedAudioVoice(provider, voice)
 
 	// Find or create the word directory ONCE (for the front word)
 	// Both audio files will be saved to this same directory
 	wordDir := p.findOrCreateWordDirectory(front)
 
-	// Generate front audio
-	fmt.Printf("  Generating front audio for '%s'...\n", front)
-	if err := p.generateAudioWithVoiceAndFilenameInDir(front, voice, "audio_front", wordDir); err != nil {
-		return fmt.Errorf("failed to generate front audio: %w", err)
+	generatePair := func(candidate string) error {
+		fmt.Printf("  Generating front audio for '%s'...\n", front)
+		if err := p.generateAudioWithVoiceAndFilenameInDir(front, candidate, "audio_front", wordDir); err != nil {
+			return fmt.Errorf("failed to generate front audio: %w", err)
+		}
+
+		fmt.Printf("  Generating back audio for '%s'...\n", back)
+		if err := p.generateAudioWithVoiceAndFilenameInDir(back, candidate, "audio_back", wordDir); err != nil {
+			return fmt.Errorf("failed to generate back audio: %w", err)
+		}
+
+		return nil
 	}
 
-	// Generate back audio
-	fmt.Printf("  Generating back audio for '%s'...\n", back)
-	if err := p.generateAudioWithVoiceAndFilenameInDir(back, voice, "audio_back", wordDir); err != nil {
-		return fmt.Errorf("failed to generate back audio: %w", err)
+	if provider == "gemini" && p.geminiVoice() == "" {
+		return p.generateGeminiAudioWithFallbacks(voice, generatePair)
+	}
+
+	if err := generatePair(voice); err != nil {
+		return err
 	}
 
 	return nil

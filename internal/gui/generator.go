@@ -62,9 +62,11 @@ func (a *Application) audioVoiceAndSpeed() (string, float64) {
 	switch a.audioProviderName() {
 	case "gemini":
 		if a.audioConfig != nil {
-			return strings.TrimSpace(a.audioConfig.GeminiVoice), a.geminiSpeed()
+			if voice := strings.TrimSpace(a.audioConfig.GeminiVoice); voice != "" {
+				return voice, a.geminiSpeed()
+			}
 		}
-		return "", a.geminiSpeed()
+		return randomVoice(a.audioVoices()), a.geminiSpeed()
 	default:
 		return randomVoice(a.audioVoices()), randomOpenAISpeed()
 	}
@@ -77,11 +79,11 @@ func (a *Application) geminiSpeed() float64 {
 	return audio.DefaultProviderConfig().GeminiSpeed
 }
 
-func (a *Application) audioOutputFormat() string {
-	if a.audioProviderName() == "gemini" {
-		return "wav"
-	}
+func (a *Application) geminiVoicePinned() bool {
+	return a != nil && a.audioConfig != nil && strings.TrimSpace(a.audioConfig.GeminiVoice) != ""
+}
 
+func (a *Application) audioOutputFormat() string {
 	if a != nil && a.config != nil && strings.TrimSpace(a.config.AudioFormat) != "" {
 		return a.config.AudioFormat
 	}
@@ -120,6 +122,42 @@ func (a *Application) audioConfigForGeneration(voice string, speed float64) audi
 	return audioConfig
 }
 
+func (a *Application) generateAudioFile(ctx context.Context, text, outputFile, voice string, speed float64) error {
+	audioConfig := a.audioConfigForGeneration(voice, speed)
+
+	provider, err := newAudioProvider(&audioConfig)
+	if err != nil {
+		return err
+	}
+
+	return provider.GenerateAudio(ctx, text, outputFile)
+}
+
+func (a *Application) generateGeminiAudioWithFallbacks(initialVoice string, generate func(voice string) error) (string, error) {
+	attempted := make([]string, 0, len(audio.GeminiVoices))
+	var lastErr error
+
+	for i, voice := range audio.GeminiVoiceFallbacks(initialVoice) {
+		if i > 0 {
+			fmt.Printf("Retrying Gemini audio with voice: %s\n", voice)
+		}
+
+		attempted = append(attempted, voice)
+		err := generate(voice)
+		if err == nil {
+			return voice, nil
+		}
+		if !audio.IsGeminiNoAudioDataError(err) {
+			return "", err
+		}
+
+		lastErr = err
+		fmt.Printf("Warning: Gemini returned no audio for voice %s\n", voice)
+	}
+
+	return "", fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)
+}
+
 // translateWord translates a Bulgarian word to English
 func (a *Application) translateWord(word string) (string, error) {
 	if a.translator == nil {
@@ -150,7 +188,6 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	audioConfig := a.audioConfigForGeneration(voice, speed)
 
 	// Log the audio generation details
 	if isRegeneration {
@@ -159,34 +196,37 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 		fmt.Printf("Generating audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	}
 
-	// Create audio provider
-	provider, err := newAudioProvider(&audioConfig)
-	if err != nil {
-		return "", err
-	}
-
 	// Use the provided card directory
 	if cardDir == "" {
 		return "", fmt.Errorf("card directory not provided")
 	}
 
 	// Generate filename in subdirectory
-	outputFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", audioConfig.OutputFormat))
+	outputFile := filepath.Join(cardDir, fmt.Sprintf("audio.%s", a.audioOutputFormat()))
 
-	// Generate audio
-	err = provider.GenerateAudio(ctx, word, outputFile)
+	finalVoice := voice
+	var err error
+	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
+		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+			return a.generateAudioFile(ctx, word, outputFile, candidate, speed)
+		})
+	} else {
+		err = a.generateAudioFile(ctx, word, outputFile, voice, speed)
+	}
 	if err != nil {
 		return "", err
 	}
 
+	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
+
 	// Save audio attribution
-	if err := a.saveAudioAttribution(word, outputFile, voice, speed); err != nil {
+	if err := a.saveAudioAttribution(word, outputFile, finalVoice, speed); err != nil {
 		// Non-fatal error, just log it
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 
 	// Save voice metadata for GUI display
-	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "en-bg", outputFile, ""); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, finalVoice, speed, "en-bg", outputFile, ""); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -203,29 +243,33 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	audioConfig := a.audioConfigForGeneration(voice, speed)
-
-	provider, err := newAudioProvider(&audioConfig)
-	if err != nil {
-		fmt.Printf("DEBUG (generateAudioFront): Failed to create audio provider: %v\n", err)
-		return "", err
-	}
-
 	fmt.Printf("DEBUG (generateAudioFront): Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
-	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", audioConfig.OutputFormat))
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.audioOutputFormat()))
 	fmt.Printf("DEBUG (generateAudioFront): Will write to: %s\n", frontFile)
-	if err := provider.GenerateAudio(ctx, word, frontFile); err != nil {
+
+	finalVoice := voice
+	var err error
+	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
+		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+			return a.generateAudioFile(ctx, word, frontFile, candidate, speed)
+		})
+	} else {
+		err = a.generateAudioFile(ctx, word, frontFile, voice, speed)
+	}
+	if err != nil {
 		return "", fmt.Errorf("failed to generate front audio: %w", err)
 	}
 	fmt.Printf("DEBUG (generateAudioFront): Successfully wrote front audio to: %s\n", frontFile)
 
-	if err := a.saveAudioAttribution(word, frontFile, voice, speed); err != nil {
+	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
+
+	if err := a.saveAudioAttribution(word, frontFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 
 	// Update metadata
-	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", frontFile, a.currentAudioFileBack); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, finalVoice, speed, "bg-bg", frontFile, a.currentAudioFileBack); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -242,29 +286,33 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	audioConfig := a.audioConfigForGeneration(voice, speed)
-
-	provider, err := newAudioProvider(&audioConfig)
-	if err != nil {
-		fmt.Printf("DEBUG (generateAudioBack): Failed to create audio provider: %v\n", err)
-		return "", err
-	}
-
 	fmt.Printf("DEBUG (generateAudioBack): Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
 	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
-	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", audioConfig.OutputFormat))
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.audioOutputFormat()))
 	fmt.Printf("DEBUG (generateAudioBack): Will write to: %s\n", backFile)
-	if err := provider.GenerateAudio(ctx, text, backFile); err != nil {
+
+	finalVoice := voice
+	var err error
+	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
+		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, func(candidate string) error {
+			return a.generateAudioFile(ctx, text, backFile, candidate, speed)
+		})
+	} else {
+		err = a.generateAudioFile(ctx, text, backFile, voice, speed)
+	}
+	if err != nil {
 		return "", fmt.Errorf("failed to generate back audio: %w", err)
 	}
 	fmt.Printf("DEBUG (generateAudioBack): Successfully wrote back audio to: %s\n", backFile)
 
-	if err := a.saveAudioAttribution(text, backFile, voice, speed); err != nil {
+	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
+
+	if err := a.saveAudioAttribution(text, backFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 
 	// Update metadata
-	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", a.currentAudioFile, backFile); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, finalVoice, speed, "bg-bg", a.currentAudioFile, backFile); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -278,37 +326,48 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	audioConfig := a.audioConfigForGeneration(voice, speed)
 
-	provider, err := newAudioProvider(&audioConfig)
+	// Generate front audio
+	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", front, voice, speed)
+	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.audioOutputFormat()))
+	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.audioOutputFormat()))
+
+	runPair := func(candidate string) error {
+		if err := a.generateAudioFile(ctx, front, frontFile, candidate, speed); err != nil {
+			return fmt.Errorf("failed to generate front audio: %w", err)
+		}
+
+		fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", back, candidate, speed)
+		if err := a.generateAudioFile(ctx, back, backFile, candidate, speed); err != nil {
+			return fmt.Errorf("failed to generate back audio: %w", err)
+		}
+
+		return nil
+	}
+
+	finalVoice := voice
+	var err error
+	if a.audioProviderName() == "gemini" && !a.geminiVoicePinned() {
+		finalVoice, err = a.generateGeminiAudioWithFallbacks(voice, runPair)
+	} else {
+		err = runPair(voice)
+	}
 	if err != nil {
 		return "", "", err
 	}
 
-	// Generate front audio
-	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", front, voice, speed)
-	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", audioConfig.OutputFormat))
-	if err := provider.GenerateAudio(ctx, front, frontFile); err != nil {
-		return "", "", fmt.Errorf("failed to generate front audio: %w", err)
-	}
-
-	// Generate back audio
-	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", back, voice, speed)
-	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", audioConfig.OutputFormat))
-	if err := provider.GenerateAudio(ctx, back, backFile); err != nil {
-		return frontFile, "", fmt.Errorf("failed to generate back audio: %w", err)
-	}
+	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
 
 	// Save audio attribution
-	if err := a.saveAudioAttribution(front, frontFile, voice, speed); err != nil {
+	if err := a.saveAudioAttribution(front, frontFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
-	if err := a.saveAudioAttribution(back, backFile, voice, speed); err != nil {
+	if err := a.saveAudioAttribution(back, backFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 
 	// Save metadata for both sides
-	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", frontFile, backFile); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, finalVoice, speed, "bg-bg", frontFile, backFile); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 

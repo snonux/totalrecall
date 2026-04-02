@@ -2,6 +2,7 @@ package phonetic
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,15 +11,15 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestNewFetcher_DefaultsToOpenAI(t *testing.T) {
+func TestNewFetcher_DefaultsToGemini(t *testing.T) {
 	fetcher := NewFetcher(nil)
 
 	if fetcher == nil {
 		t.Fatal("NewFetcher returned nil")
 	}
 
-	if got := fetcher.Provider(); got != ProviderOpenAI {
-		t.Fatalf("expected default provider %q, got %q", ProviderOpenAI, got)
+	if got := fetcher.Provider(); got != ProviderGemini {
+		t.Fatalf("expected default provider %q, got %q", ProviderGemini, got)
 	}
 }
 
@@ -239,5 +240,73 @@ func TestFetchAndSave_GeminiAPIFailure(t *testing.T) {
 
 	if err.Error() != "context deadline exceeded" {
 		t.Fatalf("unexpected Gemini API error: %v", err)
+	}
+}
+
+func TestNormalizeGeminiPhoneticResponse(t *testing.T) {
+	t.Run("extracts bracketed ipa from prose", func(t *testing.T) {
+		got, err := normalizeGeminiPhoneticResponse("IPA: [ˈkotka]")
+		if err != nil {
+			t.Fatalf("normalizeGeminiPhoneticResponse() unexpected error: %v", err)
+		}
+		if got != "[ˈkotka]" {
+			t.Fatalf("normalizeGeminiPhoneticResponse() = %q, want %q", got, "[ˈkotka]")
+		}
+	})
+
+	t.Run("strips markdown fences", func(t *testing.T) {
+		got, err := normalizeGeminiPhoneticResponse("```text\n[ˈjabəɫkɐ]\n```")
+		if err != nil {
+			t.Fatalf("normalizeGeminiPhoneticResponse() unexpected error: %v", err)
+		}
+		if got != "[ˈjabəɫkɐ]" {
+			t.Fatalf("normalizeGeminiPhoneticResponse() = %q, want %q", got, "[ˈjabəɫkɐ]")
+		}
+	})
+
+	t.Run("empty response is retryable", func(t *testing.T) {
+		_, err := normalizeGeminiPhoneticResponse("   ")
+		if !errors.Is(err, errNoGeminiPhoneticResponse) {
+			t.Fatalf("normalizeGeminiPhoneticResponse() error = %v, want %v", err, errNoGeminiPhoneticResponse)
+		}
+	})
+}
+
+func TestFetch_GeminiProviderRetriesEmptyResponse(t *testing.T) {
+	originalFetch := fetchGeminiPhonetic
+	attempts := 0
+	fetchGeminiPhonetic = func(context.Context, *genai.Client, string) (string, error) {
+		attempts++
+		if attempts < 3 {
+			return "", errNoGeminiPhoneticResponse
+		}
+		return "[ˈkotka]", nil
+	}
+	t.Cleanup(func() {
+		fetchGeminiPhonetic = originalFetch
+	})
+
+	originalNewGeminiClient := newGeminiClient
+	newGeminiClient = func(context.Context, *genai.ClientConfig) (*genai.Client, error) {
+		return &genai.Client{}, nil
+	}
+	t.Cleanup(func() {
+		newGeminiClient = originalNewGeminiClient
+	})
+
+	fetcher := NewFetcher(&Config{
+		Provider:     ProviderGemini,
+		GoogleAPIKey: "test-google-key",
+	})
+
+	got, err := fetcher.Fetch("котка")
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+	if got != "[ˈkotka]" {
+		t.Fatalf("unexpected phonetic content %q", got)
+	}
+	if attempts != phoneticRetryCount {
+		t.Fatalf("attempt count = %d, want %d", attempts, phoneticRetryCount)
 	}
 }

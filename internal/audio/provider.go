@@ -33,7 +33,7 @@ type Config struct {
 	// Gemini-specific settings
 	GoogleAPIKey   string
 	GeminiTTSModel string  // "gemini-2.5-flash-preview-tts"
-	GeminiVoice    string  // One of GeminiVoices, or empty for the model default.
+	GeminiVoice    string  // One of GeminiVoices; empty lets the caller choose a random voice.
 	GeminiSpeed    float64 // Prompt hint for desired speech speed
 }
 
@@ -42,7 +42,7 @@ func DefaultProviderConfig() *Config {
 	return &Config{
 		Provider:     "gemini",
 		OutputDir:    "./",
-		OutputFormat: "wav",
+		OutputFormat: "mp3",
 		OpenAIModel:  "gpt-4o-mini-tts", // New model with voice instructions support
 		OpenAIVoice:  "alloy",
 		OpenAISpeed:  1.0,

@@ -77,6 +77,7 @@ type fakeAudioProvider struct {
 	outputFiles    []string
 	lastText       string
 	lastOutputFile string
+	generateFunc   func(text, outputFile string) error
 }
 
 func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile string) error {
@@ -85,6 +86,9 @@ func (f *fakeAudioProvider) GenerateAudio(_ context.Context, text, outputFile st
 	f.outputFiles = append(f.outputFiles, outputFile)
 	f.lastText = text
 	f.lastOutputFile = outputFile
+	if f.generateFunc != nil {
+		return f.generateFunc(text, outputFile)
+	}
 	return nil
 }
 
@@ -131,7 +135,7 @@ func TestNewProcessor(t *testing.T) {
 	}
 }
 
-func TestNewProcessor_DefaultPhoneticProviderUsesOpenAI(t *testing.T) {
+func TestNewProcessor_DefaultPhoneticProviderUsesGemini(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
@@ -145,8 +149,8 @@ func TestNewProcessor_DefaultPhoneticProviderUsesOpenAI(t *testing.T) {
 	flags := cli.NewFlags()
 	p := NewProcessor(flags)
 
-	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderOpenAI {
-		t.Fatalf("expected default phonetic provider %q, got %q", phonetic.ProviderOpenAI, got)
+	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderGemini {
+		t.Fatalf("expected default phonetic provider %q, got %q", phonetic.ProviderGemini, got)
 	}
 }
 
@@ -170,7 +174,7 @@ func TestNewProcessor_ExplicitGeminiPhoneticProvider(t *testing.T) {
 	}
 }
 
-func TestNewProcessor_DefaultTranslationProviderUsesOpenAI(t *testing.T) {
+func TestNewProcessor_DefaultTranslationProviderUsesGemini(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
@@ -186,10 +190,10 @@ func TestNewProcessor_DefaultTranslationProviderUsesOpenAI(t *testing.T) {
 
 	_, err := p.translator.TranslateWord("ябълка")
 	if err == nil {
-		t.Fatal("Expected error for missing OpenAI API key")
+		t.Fatal("Expected error for missing Google API key")
 	}
-	if err.Error() != "OpenAI API key not found" {
-		t.Fatalf("Expected OpenAI default provider error, got: %v", err)
+	if err.Error() != "google API key not found" {
+		t.Fatalf("Expected Gemini default provider error, got: %v", err)
 	}
 }
 
@@ -231,7 +235,7 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	viper.Set("image.nanobanana_text_model", "config-text-model")
 
 	flags := cli.NewFlags()
-	flags.AudioFormat = "wav"
+	flags.AudioFormat = "mp3"
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
 	p := NewProcessor(flags)
@@ -243,8 +247,8 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	if guiConfig.AudioProvider != "gemini" {
 		t.Fatalf("guiConfig.AudioProvider = %q, want %q", guiConfig.AudioProvider, "gemini")
 	}
-	if guiConfig.AudioFormat != "wav" {
-		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "wav")
+	if guiConfig.AudioFormat != "mp3" {
+		t.Fatalf("guiConfig.AudioFormat = %q, want %q", guiConfig.AudioFormat, "mp3")
 	}
 	if guiConfig.NanoBananaModel != "config-image-model" {
 		t.Fatalf("guiConfig.NanoBananaModel = %q, want %q", guiConfig.NanoBananaModel, "config-image-model")
@@ -536,14 +540,14 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	if capturedConfig.GeminiVoice != "Kore" {
 		t.Fatalf("captured GeminiVoice = %q, want %q", capturedConfig.GeminiVoice, "Kore")
 	}
-	if capturedConfig.OutputFormat != "wav" {
-		t.Fatalf("captured OutputFormat = %q, want %q", capturedConfig.OutputFormat, "wav")
+	if capturedConfig.OutputFormat != "mp3" {
+		t.Fatalf("captured OutputFormat = %q, want %q", capturedConfig.OutputFormat, "mp3")
 	}
 	if fakeProvider.generateCalls != 1 {
 		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
 	}
-	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.wav") {
-		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want mp3 output", fakeProvider.lastOutputFile)
 	}
 
 	wordDir := p.findCardDirectory("ябълка!?")
@@ -560,8 +564,8 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		"model=gemini-2.5-flash-preview-tts",
 		"voice=Kore",
 		"speed=1.00",
-		"format=wav",
-		"audio_file=audio.wav",
+		"format=mp3",
+		"audio_file=audio.mp3",
 		"cardtype=en-bg",
 	} {
 		if !strings.Contains(metadata, want) {
@@ -591,6 +595,11 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	t.Cleanup(func() {
 		newAudioProvider = originalFactory
 	})
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+	audio.GeminiVoices = []string{"sentinel-gemini-voice"}
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
@@ -621,14 +630,14 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	if capturedConfig == nil {
 		t.Fatal("expected audio provider config to be captured")
 	}
-	if capturedConfig.GeminiVoice != "" {
-		t.Fatalf("captured GeminiVoice = %q, want empty model-default voice", capturedConfig.GeminiVoice)
+	if capturedConfig.GeminiVoice != "sentinel-gemini-voice" {
+		t.Fatalf("captured GeminiVoice = %q, want %q", capturedConfig.GeminiVoice, "sentinel-gemini-voice")
 	}
 	if fakeProvider.generateCalls != 1 {
 		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
 	}
-	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.wav") {
-		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want mp3 output", fakeProvider.lastOutputFile)
 	}
 
 	wordDir := p.findCardDirectory("ябълка!?")
@@ -642,8 +651,8 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	metadata := string(metadataData)
 	for _, want := range []string{
 		"provider=gemini",
-		"voice=model-default",
-		"audio_file=audio.wav",
+		"voice=sentinel-gemini-voice",
+		"audio_file=audio.mp3",
 		"cardtype=en-bg",
 	} {
 		if !strings.Contains(metadata, want) {
@@ -665,11 +674,79 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	}
 }
 
+func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+	audio.GeminiVoices = []string{"Charon", "Kore", "Leda"}
+
+	var attemptedVoices []string
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
+		return &fakeAudioProvider{
+			generateFunc: func(_ string, _ string) error {
+				if config.GeminiVoice == "Charon" {
+					return audio.ErrGeminiNoAudioData
+				}
+				return nil
+			},
+		}, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "gemini")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioProvider = "gemini"
+
+	p := NewProcessor(flags)
+	if err := p.generateGeminiAudioWithFallbacks("Charon", func(voice string) error {
+		return p.generateAudioWithVoice("ябълка", voice)
+	}); err != nil {
+		t.Fatalf("generateGeminiAudioWithFallbacks() unexpected error: %v", err)
+	}
+
+	if got, want := strings.Join(attemptedVoices, ","), "Charon,Kore"; got != want {
+		t.Fatalf("attempted voices = %q, want %q", got, want)
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	if !strings.Contains(metadata, "voice=Kore") {
+		t.Fatalf("metadata should use the successful fallback voice: %q", metadata)
+	}
+}
+
 func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	originalFactory := newAudioProvider
 	t.Cleanup(func() {
 		newAudioProvider = originalFactory
 	})
+	originalVoices := append([]string(nil), audio.GeminiVoices...)
+	t.Cleanup(func() {
+		audio.GeminiVoices = originalVoices
+	})
+	audio.GeminiVoices = []string{"sentinel-bg-gemini-voice"}
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfigs []*audio.Config
@@ -701,8 +778,8 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 		t.Fatalf("captured config count = %d, want %d", len(capturedConfigs), 2)
 	}
 	for i, capturedConfig := range capturedConfigs {
-		if capturedConfig.GeminiVoice != "" {
-			t.Fatalf("captured config %d GeminiVoice = %q, want empty model-default voice", i, capturedConfig.GeminiVoice)
+		if capturedConfig.GeminiVoice != "sentinel-bg-gemini-voice" {
+			t.Fatalf("captured config %d GeminiVoice = %q, want %q", i, capturedConfig.GeminiVoice, "sentinel-bg-gemini-voice")
 		}
 	}
 	if fakeProvider.generateCalls != 2 {

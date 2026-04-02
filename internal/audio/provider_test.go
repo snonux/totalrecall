@@ -36,8 +36,8 @@ func TestDefaultProviderConfig(t *testing.T) {
 		t.Errorf("Expected provider 'gemini', got '%s'", config.Provider)
 	}
 
-	if config.OutputFormat != "wav" {
-		t.Errorf("Expected output format 'wav', got '%s'", config.OutputFormat)
+	if config.OutputFormat != "mp3" {
+		t.Errorf("Expected output format 'mp3', got '%s'", config.OutputFormat)
 	}
 
 	if config.OpenAIModel != "gpt-4o-mini-tts" {
@@ -73,8 +73,8 @@ func TestDefaultProviderConfigIsGeminiCompatible(t *testing.T) {
 	}
 
 	outputFile := filepath.Join(t.TempDir(), "audio."+config.OutputFormat)
-	if filepath.Ext(outputFile) != ".wav" {
-		t.Fatalf("DefaultProviderConfig() output file %q is incompatible with Gemini TTS", outputFile)
+	if filepath.Ext(outputFile) != ".mp3" {
+		t.Fatalf("DefaultProviderConfig() output file %q does not use the default mp3 extension", outputFile)
 	}
 
 	if !strings.HasSuffix(config.GeminiTTSModel, "-tts") {

@@ -17,8 +17,9 @@ func TestNewFlags(t *testing.T) {
 		expected interface{}
 	}{
 		{"AudioFormat", flags.AudioFormat, audio.DefaultProviderConfig().OutputFormat},
+		{"AudioFormatSpecified", flags.AudioFormatSpecified, false},
 		{"AudioProvider", flags.AudioProvider, audio.DefaultProviderConfig().Provider},
-		{"ImageAPI", flags.ImageAPI, "openai"},
+		{"ImageAPI", flags.ImageAPI, "nanobanana"},
 		{"ImageAPISpecified", flags.ImageAPISpecified, false},
 		{"NanoBananaModelSpecified", flags.NanoBananaModelSpecified, false},
 		{"NanoBananaTextModelSpecified", flags.NanoBananaTextModelSpecified, false},
@@ -92,7 +93,7 @@ func TestFlagsStructure(t *testing.T) {
 	flagsType := reflect.TypeOf(*flags)
 
 	expectedFields := []string{
-		"CfgFile", "OutputDir", "AudioFormat", "AudioProvider", "ImageAPI", "ImageAPISpecified", "BatchFile",
+		"CfgFile", "OutputDir", "AudioFormat", "AudioFormatSpecified", "AudioProvider", "ImageAPI", "ImageAPISpecified", "BatchFile",
 		"SkipAudio", "SkipImages", "GenerateAnki", "AnkiCSV", "DeckName",
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",

@@ -11,14 +11,14 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestNewTranslator_DefaultsToOpenAI(t *testing.T) {
+func TestNewTranslator_DefaultsToGemini(t *testing.T) {
 	translator := NewTranslator(nil)
 
 	if translator == nil {
 		t.Fatal("NewTranslator returned nil")
 	}
-	if translator.provider != ProviderOpenAI {
-		t.Fatalf("Expected default provider %q, got %q", ProviderOpenAI, translator.provider)
+	if translator.provider != ProviderGemini {
+		t.Fatalf("Expected default provider %q, got %q", ProviderGemini, translator.provider)
 	}
 	if translator.openAIModel != "gpt-4o-mini" {
 		t.Fatalf("Expected OpenAI model gpt-4o-mini, got %q", translator.openAIModel)
@@ -42,14 +42,14 @@ func TestNewTranslator_ExplicitGeminiProvider(t *testing.T) {
 	}
 }
 
-func TestNewTranslator_EmptyProviderDefaultsToOpenAI(t *testing.T) {
+func TestNewTranslator_EmptyProviderDefaultsToGemini(t *testing.T) {
 	translator := NewTranslator(&Config{})
 
 	if translator == nil {
 		t.Fatal("NewTranslator returned nil")
 	}
-	if translator.provider != ProviderOpenAI {
-		t.Fatalf("Expected empty provider to default to %q, got %q", ProviderOpenAI, translator.provider)
+	if translator.provider != ProviderGemini {
+		t.Fatalf("Expected empty provider to default to %q, got %q", ProviderGemini, translator.provider)
 	}
 }
 
@@ -70,15 +70,15 @@ func TestNewTranslator_OpenAIProvider(t *testing.T) {
 	}
 }
 
-func TestTranslateWord_DefaultProviderRequiresOpenAIKey(t *testing.T) {
+func TestTranslateWord_DefaultProviderRequiresGoogleAPIKey(t *testing.T) {
 	translator := NewTranslator(&Config{})
 
 	_, err := translator.TranslateWord("ябълка")
 	if err == nil {
-		t.Fatal("Expected error for missing OpenAI API key")
+		t.Fatal("Expected error for missing Google API key")
 	}
-	if err.Error() != "OpenAI API key not found" {
-		t.Fatalf("Expected 'OpenAI API key not found' error, got: %v", err)
+	if err.Error() != "google API key not found" {
+		t.Fatalf("Expected 'google API key not found' error, got: %v", err)
 	}
 }
 

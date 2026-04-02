@@ -2,9 +2,11 @@ package phonetic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,10 +23,14 @@ const (
 	defaultGeminiModel   = "gemini-2.5-flash"
 	defaultOpenAIModel   = openai.GPT4o
 	phoneticTimeout      = 30 * time.Second
+	phoneticRetryCount   = 3
 	phoneticTemperature  = 0.3
 	phoneticMaxTokens    = 50
 	phoneticSystemPrompt = "You are a Bulgarian language expert. Provide only the IPA (International Phonetic Alphabet) transcription for Bulgarian words. Return ONLY the IPA transcription in square brackets, nothing else. No explanations, no word labels, just the IPA."
 )
+
+var geminiIPAPattern = regexp.MustCompile(`\[[^\[\]\n]+\]`)
+var errNoGeminiPhoneticResponse = errors.New("no response from Gemini")
 
 // Provider selects the phonetic backend.
 type Provider string
@@ -81,22 +87,19 @@ var fetchOpenAIPhonetic = func(ctx context.Context, client *openai.Client, word 
 var fetchGeminiPhonetic = func(ctx context.Context, client *genai.Client, word string) (string, error) {
 	temp := float32(phoneticTemperature)
 	resp, err := client.Models.GenerateContent(ctx, defaultGeminiModel, []*genai.Content{
-		genai.NewContentFromText(word, genai.RoleUser),
+		genai.NewContentFromText(buildGeminiPhoneticPrompt(word), genai.RoleUser),
 	}, &genai.GenerateContentConfig{
-		SystemInstruction: genai.NewContentFromText(phoneticSystemPrompt, genai.RoleUser),
-		Temperature:       &temp,
-		MaxOutputTokens:   phoneticMaxTokens,
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{{Text: phoneticSystemPrompt}},
+		},
+		Temperature:     &temp,
+		MaxOutputTokens: phoneticMaxTokens,
 	})
 	if err != nil {
 		return "", fmt.Errorf("gemini API error: %w", err)
 	}
 
-	phoneticInfo := strings.TrimSpace(resp.Text())
-	if phoneticInfo == "" {
-		return "", fmt.Errorf("no response from Gemini")
-	}
-
-	return phoneticInfo, nil
+	return normalizeGeminiPhoneticResponse(resp.Text())
 }
 
 // NewFetcher creates a new phonetic information fetcher.
@@ -190,12 +193,63 @@ func (f *Fetcher) fetchWithGemini(ctx context.Context, word string) (string, err
 		return "", fmt.Errorf("gemini client not initialized")
 	}
 
-	return fetchGeminiPhonetic(ctx, f.geminiClient, word)
+	var lastErr error
+	for attempt := 0; attempt < phoneticRetryCount; attempt++ {
+		phoneticInfo, err := fetchGeminiPhonetic(ctx, f.geminiClient, word)
+		if err == nil {
+			return phoneticInfo, nil
+		}
+		if !errors.Is(err, errNoGeminiPhoneticResponse) {
+			return "", err
+		}
+
+		lastErr = err
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+
+	return "", errNoGeminiPhoneticResponse
+}
+
+func buildGeminiPhoneticPrompt(word string) string {
+	return fmt.Sprintf("Bulgarian text or phrase:\n%s\n\nReturn only its IPA transcription in square brackets.", strings.TrimSpace(word))
+}
+
+func normalizeGeminiPhoneticResponse(raw string) (string, error) {
+	trimmed := stripMarkdownCodeFence(strings.TrimSpace(raw))
+	if trimmed == "" {
+		return "", errNoGeminiPhoneticResponse
+	}
+
+	if match := geminiIPAPattern.FindString(trimmed); match != "" {
+		return match, nil
+	}
+
+	return trimmed, nil
+}
+
+func stripMarkdownCodeFence(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if !strings.HasPrefix(trimmed, "```") {
+		return trimmed
+	}
+
+	trimmed = strings.TrimPrefix(trimmed, "```")
+	if newline := strings.Index(trimmed, "\n"); newline >= 0 {
+		trimmed = trimmed[newline+1:]
+	}
+	if closing := strings.LastIndex(trimmed, "```"); closing >= 0 {
+		trimmed = trimmed[:closing]
+	}
+
+	return strings.TrimSpace(trimmed)
 }
 
 func normalizeConfig(config *Config) Config {
 	normalized := Config{
-		Provider:     ProviderOpenAI,
+		Provider:     ProviderGemini,
 		OpenAIKey:    "",
 		GoogleAPIKey: "",
 	}
@@ -214,7 +268,7 @@ func normalizeConfig(config *Config) Config {
 func normalizeProvider(provider Provider) Provider {
 	normalized := Provider(strings.ToLower(strings.TrimSpace(string(provider))))
 	if normalized == "" {
-		return ProviderOpenAI
+		return ProviderGemini
 	}
 
 	return normalized

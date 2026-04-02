@@ -1,5 +1,7 @@
 package audio
 
+import "strings"
+
 // OpenAIVoices lists the OpenAI voices supported by the app.
 var OpenAIVoices = []string{
 	"alloy",
@@ -43,4 +45,28 @@ var GeminiVoices = []string{
 	"Sulafat",
 	"Vindemiatrix",
 	"Zubenelgenubi",
+}
+
+// GeminiVoiceFallbacks returns the selected voice first, followed by the remaining known Gemini voices.
+func GeminiVoiceFallbacks(selected string) []string {
+	selected = strings.TrimSpace(selected)
+	if selected == "" {
+		return append([]string(nil), GeminiVoices...)
+	}
+
+	fallbacks := []string{selected}
+	seen := map[string]struct{}{selected: {}}
+	for _, voice := range GeminiVoices {
+		voice = strings.TrimSpace(voice)
+		if voice == "" {
+			continue
+		}
+		if _, ok := seen[voice]; ok {
+			continue
+		}
+		fallbacks = append(fallbacks, voice)
+		seen[voice] = struct{}{}
+	}
+
+	return fallbacks
 }

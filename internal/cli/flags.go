@@ -13,6 +13,8 @@ type Flags struct {
 	CfgFile     string
 	OutputDir   string
 	AudioFormat string
+	// AudioFormatSpecified records whether the audio format was explicitly set on the CLI.
+	AudioFormatSpecified bool
 	// AudioProvider selects the text-to-speech backend ("gemini" or "openai").
 	AudioProvider     string
 	ImageAPI          string
@@ -43,7 +45,7 @@ type Flags struct {
 	// Gemini audio flags
 	// GeminiTTSModel is the Gemini TTS model used when Gemini audio is selected.
 	GeminiTTSModel string
-	// GeminiVoice selects a specific Gemini voice; empty uses the model default.
+	// GeminiVoice selects a specific Gemini voice; empty picks a random Gemini voice.
 	GeminiVoice string
 
 	// NanoBananaModel is the Gemini image model used for Nano Banana generation.
@@ -63,7 +65,7 @@ func NewFlags() *Flags {
 	return &Flags{
 		AudioFormat:         defaults.OutputFormat,
 		AudioProvider:       defaults.Provider,
-		ImageAPI:            "openai",
+		ImageAPI:            "nanobanana",
 		DeckName:            "Bulgarian Vocabulary",
 		OpenAIModel:         "gpt-4o-mini-tts",
 		OpenAISpeed:         0.9,

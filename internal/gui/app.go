@@ -121,7 +121,7 @@ type Config struct {
 	NanoBananaTextModel string
 	// GeminiTTSModel selects the Gemini TTS model when Gemini audio is active.
 	GeminiTTSModel string
-	// GeminiVoice selects a specific Gemini voice; empty uses the model default.
+	// GeminiVoice selects a specific Gemini voice; empty picks a random Gemini voice.
 	GeminiVoice         string
 	TranslationProvider translation.Provider
 	PhoneticProvider    phonetic.Provider
@@ -148,8 +148,8 @@ func DefaultConfig() *Config {
 		NanoBananaTextModel: image.DefaultNanoBananaTextModel,
 		GeminiTTSModel:      audioDefaults.GeminiTTSModel,
 		ImageProvider:       imageProviderNanoBanana,
-		TranslationProvider: translation.ProviderOpenAI,
-		PhoneticProvider:    phonetic.ProviderOpenAI,
+		TranslationProvider: translation.ProviderGemini,
+		PhoneticProvider:    phonetic.ProviderGemini,
 		AutoPlay:            true, // Auto-play enabled by default
 	}
 }
@@ -236,8 +236,8 @@ func New(config *Config) *Application {
 }
 
 // translationConfigForApp normalizes the GUI translation settings.
-// The GUI follows the shared translator defaults and stays on OpenAI unless a
-// provider is explicitly selected by the caller.
+// The GUI follows the shared translator defaults unless a provider is
+// explicitly selected by the caller.
 func translationConfigForApp(config *Config) *translation.Config {
 	if config == nil {
 		config = DefaultConfig()
@@ -245,7 +245,7 @@ func translationConfigForApp(config *Config) *translation.Config {
 
 	provider := config.TranslationProvider
 	if provider == "" {
-		provider = translation.ProviderOpenAI
+		provider = translation.ProviderGemini
 	}
 
 	return &translation.Config{
