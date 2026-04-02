@@ -62,11 +62,9 @@ func (a *Application) audioVoiceAndSpeed() (string, float64) {
 	switch a.audioProviderName() {
 	case "gemini":
 		if a.audioConfig != nil {
-			if voice := strings.TrimSpace(a.audioConfig.GeminiVoice); voice != "" {
-				return voice, a.geminiSpeed()
-			}
+			return strings.TrimSpace(a.audioConfig.GeminiVoice), a.geminiSpeed()
 		}
-		return randomVoice(a.audioVoices()), a.geminiSpeed()
+		return "", a.geminiSpeed()
 	default:
 		return randomVoice(a.audioVoices()), randomOpenAISpeed()
 	}
@@ -224,6 +222,10 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	}
 	fmt.Printf("DEBUG (generateAudioFront): Successfully wrote front audio to: %s\n", frontFile)
 
+	if err := a.saveAudioAttribution(word, frontFile, voice, speed); err != nil {
+		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
+	}
+
 	// Update metadata
 	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
 	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\ncardtype=bg-bg\n", voice, speed)
@@ -261,6 +263,10 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 	}
 	fmt.Printf("DEBUG (generateAudioBack): Successfully wrote back audio to: %s\n", backFile)
 
+	if err := a.saveAudioAttribution(text, backFile, voice, speed); err != nil {
+		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
+	}
+
 	return backFile, nil
 }
 
@@ -294,6 +300,9 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 
 	// Save audio attribution
 	if err := a.saveAudioAttribution(front, frontFile, voice, speed); err != nil {
+		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
+	}
+	if err := a.saveAudioAttribution(back, backFile, voice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 

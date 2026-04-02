@@ -95,20 +95,8 @@ func (a *Application) scanExistingWords() {
 		hasContent := false
 
 		// Check for audio file (both en-bg and bg-bg formats)
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
-		if _, err := os.Stat(audioFile); err == nil {
+		if a.hasAnyAudioFile(wordDir) {
 			hasContent = true
-		}
-
-		// Check for bg-bg audio files (audio_front and audio_back)
-		if !hasContent {
-			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
-			backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
-			if _, errFront := os.Stat(frontAudio); errFront == nil {
-				hasContent = true
-			} else if _, errBack := os.Stat(backAudio); errBack == nil {
-				hasContent = true
-			}
 		}
 
 		// Check for image files
@@ -310,7 +298,9 @@ func (a *Application) loadWordByIndex(index int) {
 			// Load from queue job
 			a.currentTranslation = job.Translation
 			a.currentAudioFile = job.AudioFile
+			a.currentAudioFileBack = job.AudioFileBack
 			a.currentImage = job.ImageFile
+			a.currentCardType = job.CardType
 
 			fyne.Do(func() {
 				if job.Translation != "" {
@@ -318,6 +308,9 @@ func (a *Application) loadWordByIndex(index int) {
 				}
 				if job.AudioFile != "" {
 					a.audioPlayer.SetAudioFile(job.AudioFile)
+				}
+				if job.AudioFileBack != "" {
+					a.audioPlayer.SetBackAudioFile(job.AudioFileBack)
 				}
 				if job.ImageFile != "" {
 					a.imageDisplay.SetImages([]string{job.ImageFile})
@@ -446,10 +439,9 @@ func (a *Application) loadExistingFiles(word string) {
 	if cardType.IsBgBg() {
 		fmt.Printf("DEBUG (loadExistingFiles): Loading audio files for bg-bg card\n")
 		// For bg-bg cards, load both front and back audio
-		frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
-		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
+		frontAudio, backAudio := a.resolveBgBgAudioFiles(wordDir)
 
-		if _, err := os.Stat(frontAudio); err == nil {
+		if frontAudio != "" {
 			a.currentAudioFile = frontAudio
 			fmt.Printf("DEBUG (loadExistingFiles): Found front audio: %s\n", frontAudio)
 			fyne.Do(func() {
@@ -459,7 +451,7 @@ func (a *Application) loadExistingFiles(word string) {
 			fmt.Printf("DEBUG (loadExistingFiles): Front audio not found: %s\n", frontAudio)
 		}
 
-		if _, err := os.Stat(backAudio); err == nil {
+		if backAudio != "" {
 			a.currentAudioFileBack = backAudio
 			fmt.Printf("DEBUG (loadExistingFiles): Found back audio: %s\n", backAudio)
 			fyne.Do(func() {
@@ -471,8 +463,8 @@ func (a *Application) loadExistingFiles(word string) {
 	} else {
 		fmt.Printf("DEBUG (loadExistingFiles): Loading audio files for en-bg card\n")
 		// For en-bg cards, load standard audio file
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
-		if _, err := os.Stat(audioFile); err == nil {
+		audioFile := a.resolveSingleAudioFile(wordDir)
+		if audioFile != "" {
 			a.currentAudioFile = audioFile
 			fmt.Printf("DEBUG (loadExistingFiles): Found audio: %s\n", audioFile)
 			fyne.Do(func() {
@@ -581,21 +573,21 @@ func (a *Application) checkForMissingFiles(word string) {
 
 	// Check for missing audio file
 	if a.currentAudioFile == "" {
-		// First check for en-bg audio file
-		audioFile := filepath.Join(wordDir, fmt.Sprintf("audio.%s", a.config.AudioFormat))
-		if _, err := os.Stat(audioFile); err == nil {
-			a.currentAudioFile = audioFile
-			fyne.Do(func() {
-				a.audioPlayer.SetAudioFile(audioFile)
-				a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
-			})
-		} else {
-			// Check for bg-bg audio_front file
-			frontAudio := filepath.Join(wordDir, fmt.Sprintf("audio_front.%s", a.config.AudioFormat))
-			if _, err := os.Stat(frontAudio); err == nil {
+		if a.currentCardType == "bg-bg" {
+			frontAudio, _ := a.resolveBgBgAudioFiles(wordDir)
+			if frontAudio != "" {
 				a.currentAudioFile = frontAudio
 				fyne.Do(func() {
 					a.audioPlayer.SetAudioFile(frontAudio)
+					a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
+				})
+			}
+		} else {
+			audioFile := a.resolveSingleAudioFile(wordDir)
+			if audioFile != "" {
+				a.currentAudioFile = audioFile
+				fyne.Do(func() {
+					a.audioPlayer.SetAudioFile(audioFile)
 					a.updateStatus(fmt.Sprintf("Found audio file for %s", word))
 				})
 			}
@@ -604,8 +596,8 @@ func (a *Application) checkForMissingFiles(word string) {
 
 	// Check for missing back audio file (bg-bg cards)
 	if a.currentAudioFileBack == "" {
-		backAudio := filepath.Join(wordDir, fmt.Sprintf("audio_back.%s", a.config.AudioFormat))
-		if _, err := os.Stat(backAudio); err == nil {
+		_, backAudio := a.resolveBgBgAudioFiles(wordDir)
+		if backAudio != "" {
 			a.currentAudioFileBack = backAudio
 			fyne.Do(func() {
 				a.audioPlayer.SetBackAudioFile(backAudio)

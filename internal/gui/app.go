@@ -116,7 +116,7 @@ type Config struct {
 	GoogleAPIKey  string
 	// GeminiTTSModel selects the Gemini TTS model when Gemini audio is active.
 	GeminiTTSModel string
-	// GeminiVoice selects a specific Gemini voice; empty uses a random shared voice.
+	// GeminiVoice selects a specific Gemini voice; empty uses the model default.
 	GeminiVoice         string
 	TranslationProvider translation.Provider
 	PhoneticProvider    phonetic.Provider
@@ -1925,6 +1925,11 @@ func (a *Application) clearUI() {
 
 	a.imageDisplay.Clear()
 	a.audioPlayer.Clear()
+	a.currentAudioFile = ""
+	a.currentAudioFileBack = ""
+	a.currentImage = ""
+	a.currentTranslation = ""
+	a.currentCardType = ""
 	// Don't clear the word input or translation entry - they should stay populated
 	// Clear the image prompt entry - it will be loaded from disk if available
 	a.imagePromptEntry.SetText("")
