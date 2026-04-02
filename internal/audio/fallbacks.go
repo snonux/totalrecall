@@ -6,7 +6,7 @@ import (
 )
 
 // RunWithVoiceFallbacks tries the selected Gemini voice first, then the remaining known voices.
-func RunWithVoiceFallbacks(initialVoice string, generate func(voice string) error) (usedVoice string, err error) {
+func RunWithVoiceFallbacks(initialVoice string, generate func(voice string) error, warnNoAudio func(voice string)) (usedVoice string, err error) {
 	attempted := make([]string, 0, len(GeminiVoices))
 	var lastErr error
 
@@ -22,6 +22,9 @@ func RunWithVoiceFallbacks(initialVoice string, generate func(voice string) erro
 		}
 
 		lastErr = err
+		if warnNoAudio != nil {
+			warnNoAudio(voice)
+		}
 	}
 
 	return "", fmt.Errorf("Gemini returned no audio for voices %s: %w", strings.Join(attempted, ", "), lastErr)

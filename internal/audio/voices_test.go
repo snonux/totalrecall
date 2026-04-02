@@ -76,7 +76,7 @@ func TestRunWithVoiceFallbacks(t *testing.T) {
 				return ErrGeminiNoAudioData
 			}
 			return nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("RunWithVoiceFallbacks() unexpected error: %v", err)
 		}
@@ -94,7 +94,7 @@ func TestRunWithVoiceFallbacks(t *testing.T) {
 		usedVoice, err := RunWithVoiceFallbacks("Charon", func(voice string) error {
 			attempted = append(attempted, voice)
 			return sentinel
-		})
+		}, nil)
 		if !errors.Is(err, sentinel) {
 			t.Fatalf("error = %v, want %v", err, sentinel)
 		}
@@ -111,7 +111,7 @@ func TestRunWithVoiceFallbacks(t *testing.T) {
 		usedVoice, err := RunWithVoiceFallbacks("Charon", func(voice string) error {
 			attempted = append(attempted, voice)
 			return ErrGeminiNoAudioData
-		})
+		}, nil)
 		if !errors.Is(err, ErrGeminiNoAudioData) {
 			t.Fatalf("error = %v, want wrapped ErrGeminiNoAudioData", err)
 		}

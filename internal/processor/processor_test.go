@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -98,6 +99,39 @@ func (f *fakeAudioProvider) Name() string {
 
 func (f *fakeAudioProvider) IsAvailable() error {
 	return nil
+}
+
+func captureStdout(t *testing.T, fn func()) (output string) {
+	t.Helper()
+
+	originalStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stdout pipe: %v", err)
+	}
+
+	os.Stdout = writer
+	outputCh := make(chan string, 1)
+	defer func() {
+		os.Stdout = originalStdout
+		if err := writer.Close(); err != nil {
+			t.Fatalf("failed to close stdout pipe: %v", err)
+		}
+		output = <-outputCh
+		if err := reader.Close(); err != nil {
+			t.Fatalf("failed to close stdout reader: %v", err)
+		}
+	}()
+
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, reader)
+		outputCh <- buf.String()
+	}()
+
+	fn()
+
+	return output
 }
 
 func TestNewProcessor(t *testing.T) {
@@ -712,10 +746,18 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
-	if _, err := audio.RunWithVoiceFallbacks("Charon", func(voice string) error {
-		return p.generateAudioWithVoice("ябълка", voice)
-	}); err != nil {
-		t.Fatalf("RunWithVoiceFallbacks() unexpected error: %v", err)
+	p.randomIntn = func(int) int { return 0 }
+	output := captureStdout(t, func() {
+		if err := p.generateAudio("ябълка"); err != nil {
+			t.Fatalf("generateAudio() unexpected error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "  Warning: Gemini returned no audio for voice Charon") {
+		t.Fatalf("stdout missing indented Gemini warning: %q", output)
+	}
+	if !strings.Contains(output, "  Retrying Gemini audio with voice: Kore") {
+		t.Fatalf("stdout missing retry message: %q", output)
 	}
 
 	if got, want := strings.Join(attemptedVoices, ","), "Charon,Kore"; got != want {

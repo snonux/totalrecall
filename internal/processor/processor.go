@@ -28,6 +28,7 @@ type Processor struct {
 	translator       *translation.Translator
 	translationCache *translation.TranslationCache
 	phoneticFetcher  *phonetic.Fetcher
+	randomIntn       func(n int) int
 }
 
 var newOpenAIImageClient = func(config *image.OpenAIConfig) image.ImageSearcher {
@@ -51,6 +52,7 @@ func NewProcessor(flags *cli.Flags) *Processor {
 		translator:       translation.NewTranslator(&translation.Config{Provider: translationProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		translationCache: translation.NewTranslationCache(),
 		phoneticFetcher:  phonetic.NewFetcher(&phonetic.Config{Provider: phoneticProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
+		randomIntn:       rand.Intn,
 	}
 }
 
@@ -317,12 +319,18 @@ func (p *Processor) audioVoiceForProvider() string {
 			return voice
 		}
 		voices := p.audioVoicesForProvider()
+		if p.randomIntn != nil {
+			return voices[p.randomIntn(len(voices))]
+		}
 		return voices[rand.Intn(len(voices))]
 	default:
 		if voice := p.openAIVoice(); voice != "" {
 			return voice
 		}
 		voices := p.audioVoicesForProvider()
+		if p.randomIntn != nil {
+			return voices[p.randomIntn(len(voices))]
+		}
 		return voices[rand.Intn(len(voices))]
 	}
 }
@@ -361,6 +369,8 @@ func (p *Processor) generateAudio(word string) error {
 					fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
 				}
 				return p.generateAudioWithVoice(word, candidate)
+			}, func(candidate string) {
+				fmt.Printf("  Warning: Gemini returned no audio for voice %s\n", candidate)
 			})
 			return err
 		}
@@ -411,6 +421,8 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 				fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
 			}
 			return generatePair(candidate)
+		}, func(candidate string) {
+			fmt.Printf("  Warning: Gemini returned no audio for voice %s\n", candidate)
 		})
 		return err
 	}

@@ -400,7 +400,7 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 
 	voice, err := audio.RunWithVoiceFallbacks("Charon", func(candidate string) error {
 		return app.generateAudioFile(context.Background(), "ябълка", outputPath, candidate, 1.0)
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("RunWithVoiceFallbacks() unexpected error: %v", err)
 	}

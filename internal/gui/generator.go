@@ -187,7 +187,7 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
 			}
 			return a.generateAudioFile(ctx, word, outputFile, candidate, speed)
-		})
+		}, nil)
 	} else {
 		err = a.generateAudioFile(ctx, word, outputFile, voice, speed)
 	}
@@ -229,7 +229,7 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
 			}
 			return a.generateAudioFile(ctx, word, frontFile, candidate, speed)
-		})
+		}, nil)
 	} else {
 		err = a.generateAudioFile(ctx, word, frontFile, voice, speed)
 	}
@@ -269,7 +269,7 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
 			}
 			return a.generateAudioFile(ctx, text, backFile, candidate, speed)
-		})
+		}, nil)
 	} else {
 		err = a.generateAudioFile(ctx, text, backFile, voice, speed)
 	}
@@ -325,7 +325,7 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
 			}
 			return runPair(candidate)
-		})
+		}, nil)
 	} else {
 		err = runPair(voice)
 	}
