@@ -242,19 +242,20 @@ func (c *NanoBananaClient) ensureReady() error {
 	return nil
 }
 
-func (c *NanoBananaClient) resolveTranslation(ctx context.Context, opts *SearchOptions, translation string) (string, error) {
+// resolveTranslation returns the English translation for the Bulgarian query.
+// Translating internally would couple the image package to the Gemini text API for a
+// concern that belongs in the translation package. Callers (processor, GUI) already
+// resolve the English translation before calling Search, so we simply use what was
+// provided and fall back to the original query word when nothing was given.
+func (c *NanoBananaClient) resolveTranslation(_ context.Context, opts *SearchOptions, translation string) (string, error) {
 	if translation != "" {
 		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, translation)
 		return translation, nil
 	}
 
-	translation, err := c.translateBulgarianToEnglish(ctx, opts.Query)
-	if err != nil {
-		fmt.Printf("Translation failed: %v, using original word\n", err)
-		return opts.Query, nil
-	}
-
-	return translation, nil
+	// No translation provided — fall back to the original query word so image
+	// generation still proceeds, albeit potentially with lower quality.
+	return opts.Query, nil
 }
 
 func (c *NanoBananaClient) resolvePrompt(ctx context.Context, opts *SearchOptions, translatedWord string) (string, error) {
@@ -330,26 +331,6 @@ func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgaria
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
 	return buildEducationalPrompt(selectedStyle, scene, subject)
-}
-
-func (c *NanoBananaClient) translateBulgarianToEnglish(ctx context.Context, word string) (string, error) {
-	fmt.Printf("Nano Banana Translation: Using model '%s' to translate '%s'\n", c.textModelName(), word)
-
-	translation, err := nanoBananaGenerateText(
-		ctx,
-		c,
-		c.textModelName(),
-		"You are a Bulgarian language expert. Translate the Bulgarian word into English. Respond with only the English translation, nothing else.",
-		fmt.Sprintf("Translate the Bulgarian word '%s' to English. Respond with only the English translation, nothing else.", word),
-		0.3,
-		50,
-	)
-	if err != nil {
-		return "", fmt.Errorf("translation failed: %w", err)
-	}
-
-	fmt.Printf("Translated '%s' to '%s'\n", word, translation)
-	return translation, nil
 }
 
 func (c *NanoBananaClient) generateSceneDescription(ctx context.Context, bulgarianWord, englishTranslation string) (string, error) {

@@ -89,21 +89,17 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		}
 	}
 
-	// Use provided translation if available, otherwise translate Bulgarian word to English
-	var translatedWord string
-	if opts.Translation != "" {
-		// Use the translation that was already provided (from UI or user input)
-		translatedWord = opts.Translation
-		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, translatedWord)
+	// Use the caller-provided translation. Translating internally would couple
+	// the image package to the OpenAI chat API for a concern that belongs in
+	// the translation package. Callers (processor, GUI) already resolve the
+	// English translation before calling Search.
+	translatedWord := opts.Translation
+	if translatedWord == "" {
+		// No translation provided — fall back to the original query word so
+		// image generation still proceeds, albeit potentially with lower quality.
+		translatedWord = opts.Query
 	} else {
-		// Translate Bulgarian word to English for better results
-		var err error
-		translatedWord, err = c.translateBulgarianToEnglish(ctx, opts.Query)
-		if err != nil {
-			// If translation fails, fall back to using the original word
-			fmt.Printf("Translation failed: %v, using original word\n", err)
-			translatedWord = opts.Query
-		}
+		fmt.Printf("Using provided translation: %s -> %s\n", opts.Query, translatedWord)
 	}
 
 	// Create prompt - use custom if provided, otherwise generate educational prompt
@@ -272,38 +268,6 @@ func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWor
 	fmt.Printf("  Using image style: %s\n", selectedStyle)
 
 	return buildEducationalPrompt(selectedStyle, scene, subject)
-}
-
-// translateBulgarianToEnglish translates a Bulgarian word to English using OpenAI
-func (c *OpenAIClient) translateBulgarianToEnglish(ctx context.Context, word string) (string, error) {
-	// Use OpenAI chat completion to translate
-	fmt.Printf("OpenAI Translation: Using model 'gpt-4o-mini' to translate '%s'\n", word)
-
-	req := openai.ChatCompletionRequest{
-		Model: openai.GPT4oMini,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: fmt.Sprintf("Translate the Bulgarian word '%s' to English. Respond with only the English translation, nothing else.", word),
-			},
-		},
-		Temperature: 0.3, // Lower temperature for more consistent translations
-		MaxTokens:   50,
-	}
-
-	resp, err := c.client.CreateChatCompletion(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("translation failed: %w", err)
-	}
-
-	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
-		return "", fmt.Errorf("no translation received")
-	}
-
-	translation := strings.TrimSpace(resp.Choices[0].Message.Content)
-	fmt.Printf("Translated '%s' to '%s'\n", word, translation)
-
-	return translation, nil
 }
 
 // generateSceneDescription generates a contextual scene description for the word

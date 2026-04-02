@@ -114,6 +114,9 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 	}
 }
 
+// TestNanoBananaClient_Search_GeneratedPromptFlow verifies the full scene-generation
+// prompt flow when the caller provides a pre-translated English word via
+// SearchOptions.Translation (translation is now the caller's responsibility).
 func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 	originalText := nanoBananaGenerateText
 	originalImage := nanoBananaGenerateImage
@@ -126,23 +129,13 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 
 	ArtisticStyles = []string{"Photorealism"}
 
-	var translationCalls int
 	var sceneCalls int
 	var gotPrompt string
 	var callbackPrompt string
 
+	// Only scene generation is expected; internal translation has been removed.
 	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
-		switch {
-		case strings.Contains(systemPrompt, "Bulgarian language expert"):
-			translationCalls++
-			if temperature != 0.3 || maxOutputTokens != 50 {
-				t.Fatalf("translation params = %v/%d, want 0.3/50", temperature, maxOutputTokens)
-			}
-			if !strings.Contains(userPrompt, "ябълка") {
-				t.Fatalf("translation prompt = %q, want Bulgarian query", userPrompt)
-			}
-			return "apple", nil
-		case strings.Contains(systemPrompt, "educational flashcards for language learning"):
+		if strings.Contains(systemPrompt, "educational flashcards for language learning") {
 			sceneCalls++
 			if temperature != 0.7 || maxOutputTokens != 100 {
 				t.Fatalf("scene params = %v/%d, want 0.7/100", temperature, maxOutputTokens)
@@ -151,10 +144,9 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 				t.Fatalf("scene prompt = %q, want English translation", userPrompt)
 			}
 			return "A bright apple sits centered on a wooden table.", nil
-		default:
-			t.Fatalf("unexpected system prompt: %q", systemPrompt)
-			return "", nil
 		}
+		t.Fatalf("unexpected system prompt: %q", systemPrompt)
+		return "", nil
 	}
 
 	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
@@ -169,12 +161,12 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 		callbackPrompt = prompt
 	})
 
-	results, err := client.Search(context.Background(), DefaultSearchOptions("ябълка"))
+	results, err := client.Search(context.Background(), &SearchOptions{
+		Query:       "ябълка",
+		Translation: "apple", // caller provides the English translation
+	})
 	if err != nil {
 		t.Fatalf("Search() unexpected error: %v", err)
-	}
-	if translationCalls != 1 {
-		t.Fatalf("translationCalls = %d, want 1", translationCalls)
 	}
 	if sceneCalls != 1 {
 		t.Fatalf("sceneCalls = %d, want 1", sceneCalls)
@@ -338,22 +330,16 @@ func TestNanoBananaClient_Search_ImageGenerationError(t *testing.T) {
 
 	ArtisticStyles = []string{"Photorealism"}
 
+	// Only scene generation is expected; internal translation has been removed.
 	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, userPrompt string, _ float32, _ int32) (string, error) {
-		switch {
-		case strings.Contains(systemPrompt, "Bulgarian language expert"):
-			if !strings.Contains(userPrompt, "ябълка") {
-				t.Fatalf("translation prompt = %q, want Bulgarian query", userPrompt)
-			}
-			return "apple", nil
-		case strings.Contains(systemPrompt, "educational flashcards for language learning"):
+		if strings.Contains(systemPrompt, "educational flashcards for language learning") {
 			if !strings.Contains(userPrompt, "apple") {
 				t.Fatalf("scene prompt = %q, want translated word", userPrompt)
 			}
 			return "A bright apple sits centered on a wooden table.", nil
-		default:
-			t.Fatalf("unexpected system prompt: %q", systemPrompt)
-			return "", nil
 		}
+		t.Fatalf("unexpected system prompt: %q", systemPrompt)
+		return "", nil
 	}
 
 	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
@@ -361,7 +347,10 @@ func TestNanoBananaClient_Search_ImageGenerationError(t *testing.T) {
 	}
 
 	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
-	_, err := client.Search(context.Background(), DefaultSearchOptions("ябълка"))
+	_, err := client.Search(context.Background(), &SearchOptions{
+		Query:       "ябълка",
+		Translation: "apple", // caller provides the English translation
+	})
 	if err == nil {
 		t.Fatal("expected image generation error")
 	}

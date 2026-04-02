@@ -12,6 +12,8 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
+
+	appconfig "codeberg.org/snonux/totalrecall/internal/config"
 )
 
 const (
@@ -265,11 +267,8 @@ func normalizeConfig(config *Config) Config {
 	return normalized
 }
 
+// normalizeProvider delegates to the shared config.NormalizeProvider so the
+// normalization rule (lowercase, trim, default to "gemini") has one home.
 func normalizeProvider(provider Provider) Provider {
-	normalized := Provider(strings.ToLower(strings.TrimSpace(string(provider))))
-	if normalized == "" {
-		return ProviderGemini
-	}
-
-	return normalized
+	return Provider(appconfig.NormalizeProvider(string(provider)))
 }
