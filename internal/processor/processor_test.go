@@ -19,8 +19,10 @@ import (
 )
 
 type stubImageSearcher struct {
-	lastPrompt string
-	searchErr  error
+	lastPrompt     string
+	searchErr      error
+	downloadErr    error
+	promptCallback func(string)
 }
 
 func (s *stubImageSearcher) Search(ctx context.Context, opts *image.SearchOptions) ([]image.SearchResult, error) {
@@ -29,6 +31,9 @@ func (s *stubImageSearcher) Search(ctx context.Context, opts *image.SearchOption
 	}
 
 	s.lastPrompt = "stub nanobanana prompt"
+	if s.promptCallback != nil {
+		s.promptCallback(s.lastPrompt)
+	}
 	return []image.SearchResult{
 		{
 			ID:           "stub-image",
@@ -44,6 +49,9 @@ func (s *stubImageSearcher) Search(ctx context.Context, opts *image.SearchOption
 }
 
 func (s *stubImageSearcher) Download(ctx context.Context, url string) (io.ReadCloser, error) {
+	if s.downloadErr != nil {
+		return nil, s.downloadErr
+	}
 	return io.NopCloser(strings.NewReader("mock image data")), nil
 }
 
@@ -57,6 +65,10 @@ func (s *stubImageSearcher) Name() string {
 
 func (s *stubImageSearcher) GetLastPrompt() string {
 	return s.lastPrompt
+}
+
+func (s *stubImageSearcher) SetPromptCallback(callback func(string)) {
+	s.promptCallback = callback
 }
 
 type fakeAudioProvider struct {
@@ -411,6 +423,26 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	if !strings.HasSuffix(fakeProvider.outputFiles[1], "audio_back.mp3") {
 		t.Fatalf("back output file = %q, want audio_back.mp3", fakeProvider.outputFiles[1])
 	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	for _, want := range []string{
+		"provider=openai",
+		"audio_file=audio_front.mp3",
+		"audio_file_back=audio_back.mp3",
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
 }
 
 func TestGenerateAudioProviderFactoryError(t *testing.T) {
@@ -515,6 +547,7 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		"voice=Kore",
 		"speed=1.00",
 		"format=wav",
+		"audio_file=audio.wav",
 	} {
 		if !strings.Contains(metadata, want) {
 			t.Fatalf("metadata = %q, missing %q", metadata, want)
@@ -730,6 +763,52 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	}
 	if got := strings.TrimSpace(string(promptData)); got != stubSearcher.GetLastPrompt() {
 		t.Fatalf("prompt file = %q, want %q", got, stubSearcher.GetLastPrompt())
+	}
+}
+
+func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("image.provider", "nanobanana")
+
+	originalConstructor := newNanoBananaImageClient
+	stubSearcher := &stubImageSearcher{downloadErr: errors.New("download failed")}
+	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageSearcher {
+		return stubSearcher
+	}
+	t.Cleanup(func() {
+		newNanoBananaImageClient = originalConstructor
+	})
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.ImageAPI = "nanobanana"
+	flags.ImageAPISpecified = true
+
+	p := NewProcessor(flags)
+	err := p.downloadImagesWithTranslation("ябълка", "apple")
+	if err == nil {
+		t.Fatal("downloadImagesWithTranslation() expected error from failed download")
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected word directory to be created")
+	}
+
+	promptData, err := os.ReadFile(filepath.Join(wordDir, "image_prompt.txt"))
+	if err != nil {
+		t.Fatalf("expected prompt file after failed download: %v", err)
+	}
+	if got := strings.TrimSpace(string(promptData)); got != "stub nanobanana prompt" {
+		t.Fatalf("prompt file = %q, want %q", got, "stub nanobanana prompt")
 	}
 }
 

@@ -495,6 +495,21 @@ func (p *Processor) downloadImagesWithTranslation(word, translationText string) 
 		searchOpts.Translation = translationText
 	}
 
+	type promptSetter interface {
+		SetPromptCallback(func(prompt string))
+	}
+	if promptAware, ok := searcher.(promptSetter); ok {
+		promptFile := filepath.Join(wordDir, "image_prompt.txt")
+		promptAware.SetPromptCallback(func(prompt string) {
+			if prompt == "" {
+				return
+			}
+			if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
+				fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
+			}
+		})
+	}
+
 	// Download single image
 	ctx := context.Background()
 	_, path, err := downloader.DownloadBestMatchWithOptions(ctx, searchOpts)
@@ -987,7 +1002,7 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 	// Also save metadata for GUI display
 	wordDir := filepath.Dir(audioFile)
 	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
-	metadata := p.buildAudioMetadata(config)
+	metadata := p.buildAudioMetadata(config, audioFile)
 	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
 		// Non-fatal error, just log it
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
@@ -996,7 +1011,7 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 	return nil
 }
 
-func (p *Processor) buildAudioMetadata(config *audio.Config) string {
+func (p *Processor) buildAudioMetadata(config *audio.Config, audioFile string) string {
 	var b strings.Builder
 	provider := strings.ToLower(strings.TrimSpace(config.Provider))
 	if provider == "" {
@@ -1029,6 +1044,40 @@ func (p *Processor) buildAudioMetadata(config *audio.Config) string {
 		format = p.effectiveAudioFormat()
 	}
 	fmt.Fprintf(&b, "format=%s\n", format)
+	audioFileHint, audioFileBackHint := p.audioMetadataFileHints(audioFile)
+	if audioFileHint != "" {
+		fmt.Fprintf(&b, "audio_file=%s\n", filepath.Base(audioFileHint))
+	}
+	if audioFileBackHint != "" {
+		fmt.Fprintf(&b, "audio_file_back=%s\n", filepath.Base(audioFileBackHint))
+	}
 
 	return b.String()
+}
+
+func (p *Processor) audioMetadataFileHints(audioFile string) (string, string) {
+	if strings.TrimSpace(audioFile) == "" {
+		return "", ""
+	}
+
+	wordDir := filepath.Dir(audioFile)
+	base := filepath.Base(audioFile)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+
+	switch name {
+	case "audio":
+		return audioFile, ""
+	case "audio_front":
+		backFile := filepath.Join(wordDir, "audio_back"+ext)
+		if _, err := os.Stat(backFile); err == nil {
+			return audioFile, backFile
+		}
+		return audioFile, ""
+	case "audio_back":
+		frontFile := filepath.Join(wordDir, "audio_front"+ext)
+		return frontFile, audioFile
+	default:
+		return audioFile, ""
+	}
 }
