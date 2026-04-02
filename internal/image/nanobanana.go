@@ -302,10 +302,18 @@ func (c *NanoBananaClient) buildPrompt(ctx context.Context, opts *SearchOptions)
 }
 
 func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgarianWord, englishTranslation string) string {
+	subject := promptSubject(englishTranslation, bulgarianWord)
 	scene, err := c.generateSceneDescription(ctx, bulgarianWord, englishTranslation)
 	if err != nil {
 		fmt.Printf("  Failed to generate scene: %v, using basic prompt\n", err)
 		scene = ""
+	}
+	if scene != "" {
+		scene = sanitizeSceneDescription(scene)
+		if !usableSceneDescription(scene) {
+			fmt.Printf("  Scene response was too short or generic, using basic prompt\n")
+			scene = ""
+		}
 	}
 
 	selectedStyle := chooseArtisticStyle()
@@ -318,36 +326,36 @@ func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgaria
 
 	if scene != "" {
 		fullPrompt := fmt.Sprintf(
-			"Generate a %s depicting: %s. "+
+			"Generate a %s educational flashcard image illustrating \"%s\". Scene: %s "+
 				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the subject is shown from an angle that makes it immediately identifiable. "+
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the scene makes \"%s\" immediately identifiable. "+
 				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-			selectedStyle, scene,
+			selectedStyle, subject, withTerminalPunctuation(scene), subject,
 		)
 
-		if len(fullPrompt) > 1000 {
+		if len(fullPrompt) > maxImagePromptChars {
 			prompt = fmt.Sprintf(
-				"Generate a %s depicting: %s. "+
+				"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
 					"The image should be educational and suitable for language learning flashcards. "+
-					"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting.",
-				selectedStyle, scene,
+					"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+				selectedStyle, subject, withTerminalPunctuation(scene),
 			)
 
-			if len(prompt) > 1000 {
-				maxSceneLen := 1000 - len(fmt.Sprintf(
-					"Generate a %s depicting: . "+
+			if len(prompt) > maxImagePromptChars {
+				maxSceneLen := maxImagePromptChars - len(fmt.Sprintf(
+					"Generate a %s flashcard image illustrating \"%s\". Scene:  "+
 						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
-					selectedStyle,
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					selectedStyle, subject,
 				))
-				if len(scene) > maxSceneLen {
+				if maxSceneLen > 3 && len(scene) > maxSceneLen {
 					scene = scene[:maxSceneLen] + "..."
 				}
 				prompt = fmt.Sprintf(
-					"Generate a %s depicting: %s. "+
+					"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
 						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
-					selectedStyle, scene,
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					selectedStyle, subject, withTerminalPunctuation(scene),
 				)
 			}
 		} else {
@@ -355,14 +363,15 @@ func (c *NanoBananaClient) createEducationalPrompt(ctx context.Context, bulgaria
 		}
 	} else {
 		prompt = fmt.Sprintf(
-			"Generate a %s of %s. "+
+			"Generate a %s educational flashcard image illustrating \"%s\". %s "+
 				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The %s must be clearly visible and easily recognizable. Show it prominently centered with excellent lighting and sharp focus.",
-			selectedStyle, englishTranslation, englishTranslation,
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. Show it prominently centered with excellent lighting and sharp focus. "+
+				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+			selectedStyle, subject, fallbackVisualDirection(subject),
 		)
 	}
 
-	if len(prompt) > 1000 {
+	if len(prompt) > maxImagePromptChars {
 		prompt = prompt[:997] + "..."
 	}
 
@@ -403,6 +412,10 @@ func (c *NanoBananaClient) generateSceneDescription(ctx context.Context, bulgari
 	)
 	if err != nil {
 		return "", fmt.Errorf("scene generation failed: %w", err)
+	}
+	scene = sanitizeSceneDescription(scene)
+	if !usableSceneDescription(scene) {
+		return "", fmt.Errorf("scene generation returned unusable content")
 	}
 
 	fmt.Printf("Generated scene: %s\n", scene)

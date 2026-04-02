@@ -237,11 +237,19 @@ func (c *OpenAIClient) SetPromptCallback(callback func(prompt string)) {
 
 // createEducationalPrompt generates a prompt optimized for language learning
 func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWord, englishTranslation string) string {
+	subject := promptSubject(englishTranslation, bulgarianWord)
 	// Generate a scene description for the word
 	scene, err := c.generateSceneDescription(ctx, bulgarianWord, englishTranslation)
 	if err != nil {
 		fmt.Printf("  Failed to generate scene: %v, using basic prompt\n", err)
 		scene = ""
+	}
+	if scene != "" {
+		scene = sanitizeSceneDescription(scene)
+		if !usableSceneDescription(scene) {
+			fmt.Printf("  Scene response was too short or generic, using basic prompt\n")
+			scene = ""
+		}
 	}
 
 	// Select a random style from the shared pool. Fall back to a generic style if
@@ -258,40 +266,40 @@ func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWor
 	if scene != "" {
 		// Full prompt with scene
 		fullPrompt := fmt.Sprintf(
-			"Generate a %s depicting: %s. "+
+			"Generate a %s educational flashcard image illustrating \"%s\". Scene: %s "+
 				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the subject is shown from an angle that makes it immediately identifiable. "+
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting. Ensure the scene makes \"%s\" immediately identifiable. "+
 				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
-			selectedStyle, scene,
+			selectedStyle, subject, withTerminalPunctuation(scene), subject,
 		)
 
 		// Check if full prompt exceeds 1000 characters
-		if len(fullPrompt) > 1000 {
+		if len(fullPrompt) > maxImagePromptChars {
 			// Try without the IMPORTANT notice
 			prompt = fmt.Sprintf(
-				"Generate a %s depicting: %s. "+
+				"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
 					"The image should be educational and suitable for language learning flashcards. "+
-					"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image. It should occupy the central area with sharp focus and proper lighting.",
-				selectedStyle, scene,
+					"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+				selectedStyle, subject, withTerminalPunctuation(scene),
 			)
 
 			// If still too long, truncate the scene
-			if len(prompt) > 1000 {
+			if len(prompt) > maxImagePromptChars {
 				// Truncate scene to fit within limit
-				maxSceneLen := 1000 - len(fmt.Sprintf(
-					"Generate a %s depicting: . "+
+				maxSceneLen := maxImagePromptChars - len(fmt.Sprintf(
+					"Generate a %s flashcard image illustrating \"%s\". Scene:  "+
 						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
-					selectedStyle,
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					selectedStyle, subject,
 				))
-				if len(scene) > maxSceneLen {
+				if maxSceneLen > 3 && len(scene) > maxSceneLen {
 					scene = scene[:maxSceneLen] + "..."
 				}
 				prompt = fmt.Sprintf(
-					"Generate a %s depicting: %s. "+
+					"Generate a %s flashcard image illustrating \"%s\". Scene: %s "+
 						"The image should be educational and suitable for language learning flashcards. "+
-						"Requirements: The main subject must be clearly visible, easily recognizable, and prominent in the image.",
-					selectedStyle, scene,
+						"Requirements: The main subject or concept must be clearly visible, centered, well lit, and easy to identify.",
+					selectedStyle, subject, withTerminalPunctuation(scene),
 				)
 			}
 		} else {
@@ -300,15 +308,16 @@ func (c *OpenAIClient) createEducationalPrompt(ctx context.Context, bulgarianWor
 	} else {
 		// Basic prompt without scene
 		prompt = fmt.Sprintf(
-			"Generate a %s of %s. "+
+			"Generate a %s educational flashcard image illustrating \"%s\". %s "+
 				"The image should be educational and suitable for language learning flashcards. "+
-				"Requirements: The %s must be clearly visible and easily recognizable. Show it prominently centered with excellent lighting and sharp focus.",
-			selectedStyle, englishTranslation, englishTranslation,
+				"Requirements: The main subject or concept must be clearly visible, easily recognizable, and prominent in the image. Show it prominently centered with excellent lighting and sharp focus. "+
+				"IMPORTANT: No text whatsoever. Do not include any words, letters, typography, labels, captions, or writing of any kind. Image only, without any text elements.",
+			selectedStyle, subject, fallbackVisualDirection(subject),
 		)
 	}
 
 	// Final check to ensure prompt is within 1000 characters
-	if len(prompt) > 1000 {
+	if len(prompt) > maxImagePromptChars {
 		prompt = prompt[:997] + "..."
 	}
 
@@ -377,7 +386,10 @@ func (c *OpenAIClient) generateSceneDescription(ctx context.Context, bulgarianWo
 		return "", fmt.Errorf("no scene description received")
 	}
 
-	scene := strings.TrimSpace(resp.Choices[0].Message.Content)
+	scene := sanitizeSceneDescription(resp.Choices[0].Message.Content)
+	if !usableSceneDescription(scene) {
+		return "", fmt.Errorf("scene generation returned unusable content")
+	}
 	fmt.Printf("Generated scene: %s\n", scene)
 
 	return scene, nil

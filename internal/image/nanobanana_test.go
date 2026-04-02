@@ -202,8 +202,11 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 	if !strings.Contains(result.Description, "apple") {
 		t.Fatalf("Description = %q, want translated word", result.Description)
 	}
-	if !strings.Contains(gotPrompt, "Generate a Photorealism depicting: A bright apple sits centered on a wooden table.") {
-		t.Fatalf("Prompt = %q, want generated scene and selected style", gotPrompt)
+	if !strings.Contains(gotPrompt, "Generate a Photorealism educational flashcard image illustrating \"apple\".") {
+		t.Fatalf("Prompt = %q, want translated subject in generated prompt", gotPrompt)
+	}
+	if !strings.Contains(gotPrompt, "Scene: A bright apple sits centered on a wooden table.") {
+		t.Fatalf("Prompt = %q, want generated scene in prompt", gotPrompt)
 	}
 
 	reader, err := client.Download(context.Background(), result.URL)
@@ -274,6 +277,52 @@ func TestNanoBananaClient_Search_TranslationFailureFallsBackToQuery(t *testing.T
 	}
 	if client.GetLastPrompt() == "" {
 		t.Fatal("expected last prompt to be recorded")
+	}
+}
+
+func TestNanoBananaClient_Search_TrivialSceneFallsBackToSubjectPrompt(t *testing.T) {
+	originalText := nanoBananaGenerateText
+	originalImage := nanoBananaGenerateImage
+	originalStyles := append([]string(nil), ArtisticStyles...)
+	t.Cleanup(func() {
+		nanoBananaGenerateText = originalText
+		nanoBananaGenerateImage = originalImage
+		ArtisticStyles = originalStyles
+	})
+
+	ArtisticStyles = []string{"Slow Design"}
+
+	nanoBananaGenerateText = func(_ context.Context, _ *NanoBananaClient, _, systemPrompt, _ string, _ float32, _ int32) (string, error) {
+		switch {
+		case strings.Contains(systemPrompt, "Bulgarian language expert"):
+			return "apple", nil
+		case strings.Contains(systemPrompt, "educational flashcards for language learning"):
+			return "A", nil
+		default:
+			t.Fatalf("unexpected system prompt: %q", systemPrompt)
+			return "", nil
+		}
+	}
+
+	var gotPrompt string
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+		gotPrompt = prompt
+		return mustPNGBytes(t), "image/png", nil
+	}
+
+	client := NewNanoBananaClient(&NanoBananaConfig{APIKey: "test-key"})
+	_, err := client.Search(context.Background(), &SearchOptions{
+		Query:       "ябълка",
+		Translation: "apple",
+	})
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v", err)
+	}
+	if !strings.Contains(gotPrompt, "illustrating \"apple\"") {
+		t.Fatalf("Prompt = %q, want subject preserved in fallback prompt", gotPrompt)
+	}
+	if strings.Contains(gotPrompt, "Scene: A.") {
+		t.Fatalf("Prompt = %q, did not expect trivial scene to survive", gotPrompt)
 	}
 }
 
