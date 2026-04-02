@@ -244,14 +244,20 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 			"extendRev":        50,
 		},
 	}
-	decksJSON, _ := json.Marshal(decks)
+	decksJSON, err := marshalJSON("decks", decks)
+	if err != nil {
+		return err
+	}
 
 	// Create model (note type) configuration
 	models := map[string]interface{}{
 		fmt.Sprintf("%d", g.modelID):     g.createNoteTypeConfig(),
 		fmt.Sprintf("%d", g.modelIDBgBg): g.createBgBgNoteTypeConfig(),
 	}
-	modelsJSON, _ := json.Marshal(models)
+	modelsJSON, err := marshalJSON("models", models)
+	if err != nil {
+		return err
+	}
 
 	// Default configuration
 	conf := map[string]interface{}{
@@ -270,7 +276,10 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 		"curModel":      fmt.Sprintf("%d", g.modelID),
 		"dayLearnFirst": false,
 	}
-	confJSON, _ := json.Marshal(conf)
+	confJSON, err := marshalJSON("conf", conf)
+	if err != nil {
+		return err
+	}
 
 	// Deck options
 	dconf := map[string]interface{}{
@@ -311,10 +320,13 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 			"replayq":  true,
 		},
 	}
-	dconfJSON, _ := json.Marshal(dconf)
+	dconfJSON, err := marshalJSON("dconf", dconf)
+	if err != nil {
+		return err
+	}
 
 	query := `INSERT INTO col VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := db.Exec(query,
+	_, err = db.Exec(query,
 		1,        // id
 		now,      // crt
 		now*1000, // mod
@@ -330,6 +342,15 @@ func (g *APKGGenerator) insertCollection(db *sql.DB) error {
 		"{}", // tags
 	)
 	return err
+}
+
+func marshalJSON(name string, value any) ([]byte, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal %s: %w", name, err)
+	}
+
+	return data, nil
 }
 
 // createNoteTypeConfig creates the note type configuration

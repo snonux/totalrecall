@@ -16,6 +16,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/batch"
 	"codeberg.org/snonux/totalrecall/internal/cli"
+	appconfig "codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
@@ -676,7 +677,10 @@ func (p *Processor) RunGUIMode() error {
 
 	// Only set OutputDir if it was explicitly provided via flag
 	// Check if the outputDir is different from the default
-	home, _ := os.UserHomeDir()
+	home, err := appconfig.HomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 	defaultOutputDir := filepath.Join(home, "Downloads")
 	if p.flags.OutputDir != defaultOutputDir {
 		// User explicitly set a different output directory

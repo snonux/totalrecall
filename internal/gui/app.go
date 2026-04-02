@@ -24,6 +24,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	appconfig "codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"codeberg.org/snonux/totalrecall/internal/translation"
@@ -135,7 +136,10 @@ const (
 
 // DefaultConfig returns default GUI configuration
 func DefaultConfig() *Config {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := appconfig.HomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 	// Use XDG Base Directory specification for state data
 	outputDir := filepath.Join(homeDir, ".local", "state", "totalrecall", "cards")
 	audioDefaults := audio.DefaultProviderConfig()
@@ -1362,7 +1366,10 @@ func (a *Application) onExportToAnki() {
 	deckNameEntry.SetPlaceHolder("Bulgarian Vocabulary")
 
 	// Export directory selection
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := appconfig.HomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 	defaultExportDir := homeDir // Changed from Downloads to home directory
 	selectedDir := defaultExportDir
 
@@ -1533,7 +1540,10 @@ func (a *Application) onArchive() {
 	// Function to perform the archive
 	performArchive := func() {
 		// Get the cards directory path
-		home, _ := os.UserHomeDir()
+		home, err := appconfig.HomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
 		cardsDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 
 		// Archive the cards

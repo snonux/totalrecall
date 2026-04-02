@@ -63,6 +63,7 @@ func TestAPKGAddCard(t *testing.T) {
 		t.Errorf("Expected Bulgarian 'ябълка', got '%s'", gen.cards[0].Bulgarian)
 	}
 }
+
 func TestMediaFiles(t *testing.T) {
 	gen := NewAPKGGenerator("Test Deck")
 
@@ -82,6 +83,7 @@ func TestMediaFiles(t *testing.T) {
 		t.Errorf("Expected mediaFiles['image.jpg'] = 1, got %d", gen.mediaFiles["image.jpg"])
 	}
 }
+
 func TestGenerateAPKG(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -211,5 +213,11 @@ func TestCreateDatabase(t *testing.T) {
 	err = db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&noteCount)
 	if err == nil && noteCount != 1 {
 		t.Errorf("Expected 1 note, got %d", noteCount)
+	}
+}
+
+func TestMarshalJSONReturnsErrorForUnsupportedValue(t *testing.T) {
+	if _, err := marshalJSON("bad", make(chan int)); err == nil {
+		t.Fatal("marshalJSON() error = nil, want error")
 	}
 }

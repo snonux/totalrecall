@@ -12,6 +12,7 @@ import (
 
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	appconfig "codeberg.org/snonux/totalrecall/internal/config"
 )
 
 // CreateRootCommand creates and configures the root cobra command
@@ -49,7 +50,10 @@ Batch file formats:
 
 func setupFlags(cmd *cobra.Command, flags *Flags) {
 	// Set default output directory to match GUI mode
-	home, _ := os.UserHomeDir()
+	home, err := appconfig.HomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 	defaultOutputDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 
 	// Global flags
