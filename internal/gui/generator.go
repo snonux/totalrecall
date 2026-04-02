@@ -186,9 +186,7 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 	}
 
 	// Save voice metadata for GUI display
-	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
-	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\n", voice, speed)
-	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "en-bg", outputFile, ""); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -227,9 +225,7 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	}
 
 	// Update metadata
-	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
-	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\ncardtype=bg-bg\n", voice, speed)
-	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", frontFile, a.currentAudioFileBack); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -265,6 +261,11 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 
 	if err := a.saveAudioAttribution(text, backFile, voice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
+	}
+
+	// Update metadata
+	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", a.currentAudioFile, backFile); err != nil {
+		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
 	return backFile, nil
@@ -306,10 +307,8 @@ func (a *Application) generateAudioBgBg(ctx context.Context, front, back, cardDi
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
 	}
 
-	// Save voice metadata
-	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
-	metadata := fmt.Sprintf("voice=%s\nspeed=%.2f\ncardtype=bg-bg\n", voice, speed)
-	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
+	// Save metadata for both sides
+	if err := a.saveAudioMetadata(cardDir, audioConfig, voice, speed, "bg-bg", frontFile, backFile); err != nil {
 		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
 	}
 
@@ -455,6 +454,43 @@ func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed 
 	attrPath := audio.AttributionPath(audioFile)
 	if err := os.WriteFile(attrPath, []byte(attribution), 0644); err != nil {
 		return fmt.Errorf("failed to write audio attribution file: %w", err)
+	}
+
+	return nil
+}
+
+func (a *Application) saveAudioMetadata(cardDir string, audioConfig audio.Config, voice string, speed float64, cardType string, audioFile string, audioFileBack string) error {
+	metadataFile := filepath.Join(cardDir, "audio_metadata.txt")
+	if cardType == "bg-bg" {
+		if audioFile == "" {
+			audioFile, _ = a.resolveBgBgAudioFiles(cardDir)
+		}
+		if audioFileBack == "" {
+			_, audioFileBack = a.resolveBgBgAudioFiles(cardDir)
+		}
+	}
+
+	metadata := strings.Builder{}
+
+	fmt.Fprintf(&metadata, "provider=%s\n", audioConfig.Provider)
+	if strings.TrimSpace(audioConfig.GeminiTTSModel) != "" {
+		fmt.Fprintf(&metadata, "model=%s\n", audioConfig.GeminiTTSModel)
+	} else if strings.TrimSpace(audioConfig.OpenAIModel) != "" {
+		fmt.Fprintf(&metadata, "model=%s\n", audioConfig.OpenAIModel)
+	}
+	fmt.Fprintf(&metadata, "voice=%s\n", voice)
+	fmt.Fprintf(&metadata, "speed=%.2f\n", speed)
+	fmt.Fprintf(&metadata, "format=%s\n", audioConfig.OutputFormat)
+	fmt.Fprintf(&metadata, "cardtype=%s\n", cardType)
+	if audioFile != "" {
+		fmt.Fprintf(&metadata, "audio_file=%s\n", filepath.Base(audioFile))
+	}
+	if audioFileBack != "" {
+		fmt.Fprintf(&metadata, "audio_file_back=%s\n", filepath.Base(audioFileBack))
+	}
+
+	if err := os.WriteFile(metadataFile, []byte(metadata.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write audio metadata file: %w", err)
 	}
 
 	return nil

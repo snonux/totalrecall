@@ -2357,7 +2357,7 @@ func (a *Application) processWordJob(job *WordJob) {
 		a.updateStatus(fmt.Sprintf("Finalizing '%s'...", job.Word))
 	})
 
-	a.queue.CompleteJob(job.ID, translation, audioFile, imageFile)
+	a.queue.CompleteJob(job.ID, translation, audioFile, audioFileBack, imageFile)
 
 	// Update UI with results if this is still the current job
 	a.mu.Lock()

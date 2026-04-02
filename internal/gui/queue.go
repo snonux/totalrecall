@@ -196,7 +196,7 @@ func (q *WordQueue) Stop() {
 }
 
 // CompleteJob marks a job as completed with results
-func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, imageFile string) {
+func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, audioFileBack, imageFile string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -204,6 +204,7 @@ func (q *WordQueue) CompleteJob(jobID int, translation, audioFile, imageFile str
 		job.Status = StatusCompleted
 		job.Translation = translation
 		job.AudioFile = audioFile
+		job.AudioFileBack = audioFileBack
 		job.ImageFile = imageFile
 		job.CompletedAt = time.Now()
 

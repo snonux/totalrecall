@@ -297,6 +297,21 @@ func TestGenerateAudioUsesGeminiModelDefaultVoiceAndAttribution(t *testing.T) {
 	if strings.Contains(attribution, "sentinel-gemini-voice") {
 		t.Fatalf("gemini attribution should not use the shared voice list when voice is unset: %q", attribution)
 	}
+
+	metadataData, err := os.ReadFile(filepath.Join(cardDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	if !strings.Contains(metadata, "audio_file=audio.wav") {
+		t.Fatalf("gemini metadata missing fresh audio file reference: %q", metadata)
+	}
+	if !strings.Contains(metadata, "format=wav") {
+		t.Fatalf("gemini metadata missing format: %q", metadata)
+	}
+	if !strings.Contains(metadata, "cardtype=en-bg") {
+		t.Fatalf("gemini metadata missing card type: %q", metadata)
+	}
 }
 
 func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
@@ -367,6 +382,21 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	}
 	if !strings.HasSuffix(backPath, "audio_back.mp3") {
 		t.Fatalf("backPath = %q, want audio_back.mp3", backPath)
+	}
+
+	metadataData, err := os.ReadFile(filepath.Join(cardDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	if !strings.Contains(metadata, "audio_file=audio_front.mp3") {
+		t.Fatalf("bg-bg metadata missing front audio reference: %q", metadata)
+	}
+	if !strings.Contains(metadata, "audio_file_back=audio_back.mp3") {
+		t.Fatalf("bg-bg metadata missing back audio reference: %q", metadata)
+	}
+	if !strings.Contains(metadata, "cardtype=bg-bg") {
+		t.Fatalf("bg-bg metadata missing card type: %q", metadata)
 	}
 }
 
