@@ -452,9 +452,9 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 			t.Fatalf("expected attribution file %q: %v", attrPath, err)
 		}
 		attribution := string(attributionData)
-		wantText := []string{"ябълка...", "круша..."}[i]
+		wantText := []string{"ябълка", "круша"}[i]
 		if !strings.Contains(attribution, "Processed text sent to TTS: "+wantText) {
-			t.Fatalf("bg-bg attribution missing processed text %q: %q", wantText, attribution)
+			t.Fatalf("bg-bg attribution missing exact processed text %q: %q", wantText, attribution)
 		}
 	}
 }
@@ -575,23 +575,16 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 		t.Fatalf("expected attribution file %q: %v", attrPath, err)
 	}
 	attribution := string(attributionData)
-	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
-		t.Fatalf("gemini attribution missing processed text: %q", attribution)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+		t.Fatalf("gemini attribution missing exact processed text: %q", attribution)
 	}
 }
 
-func TestGenerateAudioUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
+func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	originalFactory := newAudioProvider
 	t.Cleanup(func() {
 		newAudioProvider = originalFactory
 	})
-
-	originalVoices := append([]string(nil), audio.GeminiVoices...)
-	t.Cleanup(func() {
-		audio.GeminiVoices = originalVoices
-	})
-
-	audio.GeminiVoices = []string{"sentinel-gemini-voice"}
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
@@ -622,23 +615,52 @@ func TestGenerateAudioUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
 	if capturedConfig == nil {
 		t.Fatal("expected audio provider config to be captured")
 	}
-	if capturedConfig.GeminiVoice != "sentinel-gemini-voice" {
-		t.Fatalf("captured GeminiVoice = %q, want %q", capturedConfig.GeminiVoice, "sentinel-gemini-voice")
+	if capturedConfig.GeminiVoice != "" {
+		t.Fatalf("captured GeminiVoice = %q, want empty model-default voice", capturedConfig.GeminiVoice)
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.wav") {
+		t.Fatalf("GenerateAudio() output file = %q, want wav output", fakeProvider.lastOutputFile)
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	for _, want := range []string{
+		"provider=gemini",
+		"voice=model-default",
+		"audio_file=audio.wav",
+		"cardtype=en-bg",
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
+
+	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+		t.Fatalf("gemini attribution missing exact processed text: %q", attribution)
 	}
 }
 
-func TestGenerateAudioBgBgUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
+func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	originalFactory := newAudioProvider
 	t.Cleanup(func() {
 		newAudioProvider = originalFactory
 	})
-
-	originalVoices := append([]string(nil), audio.GeminiVoices...)
-	t.Cleanup(func() {
-		audio.GeminiVoices = originalVoices
-	})
-
-	audio.GeminiVoices = []string{"sentinel-bg-gemini-voice"}
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfigs []*audio.Config
@@ -670,12 +692,24 @@ func TestGenerateAudioBgBgUsesSharedGeminiVoicesWhenVoiceNotSet(t *testing.T) {
 		t.Fatalf("captured config count = %d, want %d", len(capturedConfigs), 2)
 	}
 	for i, capturedConfig := range capturedConfigs {
-		if capturedConfig.GeminiVoice != "sentinel-bg-gemini-voice" {
-			t.Fatalf("captured config %d GeminiVoice = %q, want %q", i, capturedConfig.GeminiVoice, "sentinel-bg-gemini-voice")
+		if capturedConfig.GeminiVoice != "" {
+			t.Fatalf("captured config %d GeminiVoice = %q, want empty model-default voice", i, capturedConfig.GeminiVoice)
 		}
 	}
 	if fakeProvider.generateCalls != 2 {
 		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 2)
+	}
+	for i, outputFile := range fakeProvider.outputFiles {
+		attrPath := audio.AttributionPath(outputFile)
+		attributionData, err := os.ReadFile(attrPath)
+		if err != nil {
+			t.Fatalf("expected attribution file %q: %v", attrPath, err)
+		}
+		attribution := string(attributionData)
+		wantText := []string{"ябълка", "круша"}[i]
+		if !strings.Contains(attribution, "Processed text sent to TTS: "+wantText) {
+			t.Fatalf("bg-bg attribution missing exact processed text %q: %q", wantText, attribution)
+		}
 	}
 }
 
@@ -749,8 +783,83 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 		t.Fatalf("expected attribution file %q: %v", attrPath, err)
 	}
 	attribution := string(attributionData)
-	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка...") {
-		t.Fatalf("openai attribution missing processed text: %q", attribution)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+		t.Fatalf("openai attribution missing exact processed text: %q", attribution)
+	}
+}
+
+func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
+	originalFactory := newAudioProvider
+	t.Cleanup(func() {
+		newAudioProvider = originalFactory
+	})
+
+	fakeProvider := &fakeAudioProvider{}
+	var capturedConfig *audio.Config
+	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
+
+	originalConfig := viper.New()
+	*originalConfig = *viper.GetViper()
+	defer func() {
+		*viper.GetViper() = *originalConfig
+	}()
+	viper.Reset()
+	viper.Set("audio.provider", "openai")
+	viper.Set("audio.openai_voice", "shimmer")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.AudioFormat = "mp3"
+
+	p := NewProcessor(flags)
+	if err := p.generateAudio("ябълка"); err != nil {
+		t.Fatalf("generateAudio() unexpected error: %v", err)
+	}
+
+	if capturedConfig == nil {
+		t.Fatal("expected audio provider config to be captured")
+	}
+	if capturedConfig.OpenAIVoice != "shimmer" {
+		t.Fatalf("captured OpenAIVoice = %q, want %q", capturedConfig.OpenAIVoice, "shimmer")
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("GenerateAudio() calls = %d, want %d", fakeProvider.generateCalls, 1)
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio.mp3") {
+		t.Fatalf("GenerateAudio() output file = %q, want single-voice output file", fakeProvider.lastOutputFile)
+	}
+
+	wordDir := p.findCardDirectory("ябълка")
+	if wordDir == "" {
+		t.Fatal("expected generated word directory")
+	}
+	metadataData, err := os.ReadFile(filepath.Join(wordDir, "audio_metadata.txt"))
+	if err != nil {
+		t.Fatalf("expected metadata file: %v", err)
+	}
+	metadata := string(metadataData)
+	for _, want := range []string{
+		"provider=openai",
+		"voice=shimmer",
+		"audio_file=audio.mp3",
+	} {
+		if !strings.Contains(metadata, want) {
+			t.Fatalf("metadata = %q, missing %q", metadata, want)
+		}
+	}
+
+	attrPath := audio.AttributionPath(fakeProvider.lastOutputFile)
+	attributionData, err := os.ReadFile(attrPath)
+	if err != nil {
+		t.Fatalf("expected attribution file %q: %v", attrPath, err)
+	}
+	attribution := string(attributionData)
+	if !strings.Contains(attribution, "Processed text sent to TTS: ябълка") {
+		t.Fatalf("openai attribution missing exact processed text: %q", attribution)
 	}
 }
 

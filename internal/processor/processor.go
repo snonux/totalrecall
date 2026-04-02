@@ -291,6 +291,16 @@ func (p *Processor) geminiVoice() string {
 	return ""
 }
 
+func (p *Processor) openAIVoice() string {
+	if voice := strings.TrimSpace(viper.GetString("audio.openai_voice")); voice != "" {
+		return voice
+	}
+	if p != nil && p.flags != nil {
+		return strings.TrimSpace(p.flags.OpenAIVoice)
+	}
+	return ""
+}
+
 func (p *Processor) audioVoicesForProvider() []string {
 	switch p.audioProviderName() {
 	case "gemini":
@@ -303,17 +313,14 @@ func (p *Processor) audioVoicesForProvider() []string {
 func (p *Processor) audioVoiceForProvider() string {
 	switch p.audioProviderName() {
 	case "gemini":
-		if voice := p.geminiVoice(); voice != "" {
+		return p.geminiVoice()
+	default:
+		if voice := p.openAIVoice(); voice != "" {
 			return voice
 		}
-	default:
-		if p.flags.OpenAIVoice != "" {
-			return p.flags.OpenAIVoice
-		}
+		voices := p.audioVoicesForProvider()
+		return voices[rand.Intn(len(voices))]
 	}
-
-	voices := p.audioVoicesForProvider()
-	return voices[rand.Intn(len(voices))]
 }
 
 // generateAudio generates audio files for a word
@@ -328,13 +335,13 @@ func (p *Processor) generateAudio(word string) error {
 		voice := p.audioVoiceForProvider()
 		switch provider {
 		case "gemini":
-			if p.geminiVoice() != "" {
+			if voice != "" {
 				fmt.Printf("  Using specified Gemini voice: %s\n", voice)
 			} else {
-				fmt.Printf("  Using random Gemini voice: %s\n", voice)
+				fmt.Printf("  Using Gemini model default voice\n")
 			}
 		default:
-			if p.flags.OpenAIVoice != "" {
+			if p.openAIVoice() != "" {
 				fmt.Printf("  Using specified voice: %s\n", voice)
 			} else {
 				fmt.Printf("  Using random voice: %s\n", voice)
@@ -363,13 +370,13 @@ func (p *Processor) generateAudioBgBg(front, back string) error {
 	voice := p.audioVoiceForProvider()
 	switch provider {
 	case "gemini":
-		if p.geminiVoice() != "" {
+		if voice != "" {
 			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
 		} else {
-			fmt.Printf("  Using random Gemini voice: %s\n", voice)
+			fmt.Printf("  Using Gemini model default voice\n")
 		}
 	default:
-		if p.flags.OpenAIVoice != "" {
+		if p.openAIVoice() != "" {
 			fmt.Printf("  Using specified voice: %s\n", voice)
 		} else {
 			fmt.Printf("  Using random voice: %s\n", voice)
@@ -479,7 +486,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(word, voice, filename
 	}
 
 	// Save audio attribution
-	if err := p.saveAudioAttribution(word, outputFile, providerConfig); err != nil {
+	if err := p.saveAudioAttribution(word, outputFile, providerConfig, word); err != nil {
 		fmt.Printf("  Warning: Failed to save audio attribution: %v\n", err)
 	}
 
@@ -980,8 +987,7 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	}
 	return true // All required files exist
 }
-func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config) error {
-	processedText := audio.ProcessedTextForWord(word)
+func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config, processedText string) error {
 	var attribution string
 	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
 	case "gemini":
