@@ -241,28 +241,18 @@ func (p *AudioPlayer) SetAutoPlayEnabled(autoPlayEnabled *bool) {
 
 // onPlay handles play button click
 func (p *AudioPlayer) onPlay() {
-	fmt.Printf("DEBUG (onPlay): Starting playback\n")
-	fmt.Printf("  - audioFile: %s\n", p.audioFile)
-	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
-	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
-	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
-
 	if p.audioFile == "" {
-		fmt.Printf("DEBUG (onPlay): No audioFile set, returning\n")
 		return
 	}
 
 	if p.isPlaying {
 		// Pause functionality - just stop for now
-		fmt.Printf("DEBUG (onPlay): Already playing, stopping\n")
 		p.onStop()
 		return
 	}
 
 	// Start playing
-	fmt.Printf("DEBUG (onPlay): About to start playback for: %s\n", filepath.Base(p.audioFile))
 	if err := p.startPlayback(); err != nil {
-		fmt.Printf("DEBUG (onPlay): Error starting playback: %v\n", err)
 		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
 		return
 	}
@@ -271,31 +261,20 @@ func (p *AudioPlayer) onPlay() {
 	p.playButton.SetIcon(theme.MediaPauseIcon())
 	p.stopButton.Enable()
 	p.statusLabel.SetText(fmt.Sprintf("Playing: %s%s", filepath.Base(p.audioFile), p.voiceInfo))
-	fmt.Printf("DEBUG (onPlay): Playback started successfully\n")
 }
 
 // onPlayBack handles back audio button click (for bg-bg cards)
 func (p *AudioPlayer) onPlayBack() {
-	fmt.Printf("DEBUG (onPlayBack): Starting back audio playback\n")
-	fmt.Printf("  - audioFile: %s\n", p.audioFile)
-	fmt.Printf("  - audioFileBack: %s\n", p.audioFileBack)
-	fmt.Printf("  - isBgBg: %v\n", p.isBgBg)
-	fmt.Printf("  - isPlaying: %v\n", p.isPlaying)
-
 	if p.audioFileBack == "" {
-		fmt.Printf("DEBUG (onPlayBack): No audioFileBack set, returning\n")
 		return
 	}
 
 	if p.isPlaying {
-		fmt.Printf("DEBUG (onPlayBack): Already playing, stopping first\n")
 		p.onStop()
 	}
 
 	// Start playback using back audio file directly
-	fmt.Printf("DEBUG (onPlayBack): About to start playback for back audio: %s\n", filepath.Base(p.audioFileBack))
 	if err := p.startPlaybackForFile(p.audioFileBack); err != nil {
-		fmt.Printf("DEBUG (onPlayBack): Error starting playback: %v\n", err)
 		p.statusLabel.SetText(fmt.Sprintf("Error: %v", err))
 		return
 	}
@@ -304,14 +283,12 @@ func (p *AudioPlayer) onPlayBack() {
 	p.playBackButton.SetIcon(theme.MediaPauseIcon()) // Back button, not front
 	p.stopButton.Enable()
 	p.statusLabel.SetText(fmt.Sprintf("Playing back audio: %s", filepath.Base(p.audioFileBack)))
-	fmt.Printf("DEBUG (onPlayBack): Back audio playback started successfully\n")
 }
 
 // onStop handles stop button click
 func (p *AudioPlayer) onStop() {
 	if p.playCmd != nil && p.playCmd.Process != nil {
 		if err := p.playCmd.Process.Kill(); err != nil {
-			fmt.Printf("DEBUG (onStop): Failed to kill playback process: %v\n", err)
 			p.statusLabel.SetText(fmt.Sprintf("failed to stop playback: %v", err))
 		}
 		p.playCmd = nil

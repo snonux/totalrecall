@@ -235,18 +235,13 @@ func (a *Application) generateAudio(ctx context.Context, word string, cardDir st
 
 // generateAudioFront generates front audio for a bg-bg card
 func (a *Application) generateAudioFront(ctx context.Context, word string, cardDir string) (string, error) {
-	fmt.Printf("DEBUG (generateAudioFront): Called with word: %s, cardDir: %s\n", word, cardDir)
-
 	if cardDir == "" {
-		fmt.Printf("DEBUG (generateAudioFront): Card directory not provided, returning error\n")
 		return "", fmt.Errorf("card directory not provided")
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	fmt.Printf("DEBUG (generateAudioFront): Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", a.audioOutputFormat()))
-	fmt.Printf("DEBUG (generateAudioFront): Will write to: %s\n", frontFile)
 
 	finalVoice := voice
 	var err error
@@ -260,7 +255,6 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 	if err != nil {
 		return "", fmt.Errorf("failed to generate front audio: %w", err)
 	}
-	fmt.Printf("DEBUG (generateAudioFront): Successfully wrote front audio to: %s\n", frontFile)
 
 	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
 
@@ -278,18 +272,13 @@ func (a *Application) generateAudioFront(ctx context.Context, word string, cardD
 
 // generateAudioBack generates back audio for a bg-bg card
 func (a *Application) generateAudioBack(ctx context.Context, text string, cardDir string) (string, error) {
-	fmt.Printf("DEBUG (generateAudioBack): Called with text: %s, cardDir: %s\n", text, cardDir)
-
 	if cardDir == "" {
-		fmt.Printf("DEBUG (generateAudioBack): Card directory not provided, returning error\n")
 		return "", fmt.Errorf("card directory not provided")
 	}
 
 	voice, speed := a.audioVoiceAndSpeed()
-	fmt.Printf("DEBUG (generateAudioBack): Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
 	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
 	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", a.audioOutputFormat()))
-	fmt.Printf("DEBUG (generateAudioBack): Will write to: %s\n", backFile)
 
 	finalVoice := voice
 	var err error
@@ -303,7 +292,6 @@ func (a *Application) generateAudioBack(ctx context.Context, text string, cardDi
 	if err != nil {
 		return "", fmt.Errorf("failed to generate back audio: %w", err)
 	}
-	fmt.Printf("DEBUG (generateAudioBack): Successfully wrote back audio to: %s\n", backFile)
 
 	audioConfig := a.audioConfigForGeneration(finalVoice, speed)
 

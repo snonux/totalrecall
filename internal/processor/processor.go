@@ -103,17 +103,11 @@ func (p *Processor) ProcessBatch() error {
 		fmt.Printf("\nProcessing %d/%d: %s\n", i+1, len(entries), entry.Bulgarian)
 
 		// Check if word already exists and has all required files
-		if os.Getenv("DEBUG_BATCH") != "" {
-			fmt.Printf("  [DEBUG] Checking if word is fully processed...\n")
-		}
 		if p.isWordFullyProcessed(entry.Bulgarian) {
 			wordDir := p.findCardDirectory(entry.Bulgarian)
 			fmt.Printf("  ✓ Skipping '%s' - already fully processed in %s\n", entry.Bulgarian, filepath.Base(wordDir))
 			skippedCount++
 			continue
-		}
-		if os.Getenv("DEBUG_BATCH") != "" {
-			fmt.Printf("  [DEBUG] Word is not fully processed, will process it\n")
 		}
 
 		if err := p.ProcessWordWithTranslationAndType(entry.Bulgarian, entry.Translation, entry.CardType); err != nil {
@@ -922,10 +916,6 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	}
 
 	// Debug logging
-	if os.Getenv("DEBUG_BATCH") != "" {
-		fmt.Printf("  [DEBUG] Checking word directory: %s\n", wordDir)
-	}
-
 	// Check for required files
 	requiredFiles := []string{
 		"word.txt",        // Word metadata
@@ -943,16 +933,10 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 			frontAudioFiles := anki.ResolveAudioPaths(wordDir, "audio_front", audioFormat)
 			backAudioFiles := anki.ResolveAudioPaths(wordDir, "audio_back", audioFormat)
 			if len(frontAudioFiles) == 0 || len(backAudioFiles) == 0 {
-				if os.Getenv("DEBUG_BATCH") != "" {
-					fmt.Printf("  [DEBUG] No bg-bg audio files found in %s\n", wordDir)
-				}
 				return false
 			}
 			for _, audioFile := range append(frontAudioFiles, backAudioFiles...) {
 				if _, err := os.Stat(audio.AttributionPath(audioFile)); os.IsNotExist(err) {
-					if os.Getenv("DEBUG_BATCH") != "" {
-						fmt.Printf("  [DEBUG] Missing attribution for audio file: %s\n", audioFile)
-					}
 					return false
 				}
 			}
@@ -962,16 +946,10 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 
 			audioFiles := anki.ResolveAudioPaths(wordDir, "audio", audioFormat)
 			if len(audioFiles) == 0 {
-				if os.Getenv("DEBUG_BATCH") != "" {
-					fmt.Printf("  [DEBUG] No audio files found in %s\n", wordDir)
-				}
 				return false
 			}
 			for _, audioFile := range audioFiles {
 				if _, err := os.Stat(audio.AttributionPath(audioFile)); os.IsNotExist(err) {
-					if os.Getenv("DEBUG_BATCH") != "" {
-						fmt.Printf("  [DEBUG] Missing attribution for audio file: %s\n", audioFile)
-					}
 					return false
 				}
 			}
@@ -1005,9 +983,6 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 			}
 		}
 		if !hasImage {
-			if os.Getenv("DEBUG_BATCH") != "" {
-				fmt.Printf("  [DEBUG] No image files found in %s\n", wordDir)
-			}
 			return false // No image files found
 		}
 	}
@@ -1016,16 +991,10 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 	for _, file := range requiredFiles {
 		filePath := filepath.Join(wordDir, file)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			if os.Getenv("DEBUG_BATCH") != "" {
-				fmt.Printf("  [DEBUG] Required file missing: %s\n", filePath)
-			}
 			return false // Required file missing
 		}
 	}
 
-	if os.Getenv("DEBUG_BATCH") != "" {
-		fmt.Printf("  [DEBUG] All required files exist, word is fully processed\n")
-	}
 	return true // All required files exist
 }
 func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.Config) error {

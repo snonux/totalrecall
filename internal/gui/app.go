@@ -1147,23 +1147,14 @@ func (a *Application) onRegenerateRandomImage() {
 
 // onRegenerateAudio regenerates front audio (or single audio for en-bg cards)
 func (a *Application) onRegenerateAudio() {
-	fmt.Printf("DEBUG: ████████████████████████████████████████████████████████████████\n")
-	fmt.Printf("DEBUG: ████  ENTERED onRegenerateAudio() - REGENERATING FRONT AUDIO\n")
-	fmt.Printf("DEBUG: ████████████████████████████████████████████████████████████████\n")
-	fmt.Printf("DEBUG (onRegenerateAudio): Starting front audio regeneration\n")
-	fmt.Printf("  - currentWord: %s\n", a.currentWord)
-	fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-
 	// Only disable the audio-related buttons
 	a.regenerateAudioBtn.Disable()
 	a.regenerateAllBtn.Disable()
 
 	isBgBg := a.currentCardType == "bg-bg"
 	if isBgBg {
-		fmt.Printf("DEBUG (onRegenerateAudio): Card type is bg-bg, regenerating FRONT audio only\n")
 		a.showProgress("Regenerating front audio...")
 	} else {
-		fmt.Printf("DEBUG (onRegenerateAudio): Card type is en-bg, regenerating single audio\n")
 		a.showProgress("Regenerating audio...")
 	}
 
@@ -1176,7 +1167,6 @@ func (a *Application) onRegenerateAudio() {
 
 		// Store the word we're generating for
 		wordForGeneration := a.currentWord
-		fmt.Printf("DEBUG (onRegenerateAudio): In goroutine - wordForGeneration: %s\n", wordForGeneration)
 
 		a.startOperation(wordForGeneration)
 		defer a.endOperation(wordForGeneration)
@@ -1254,17 +1244,7 @@ func (a *Application) onRegenerateAudio() {
 
 // onRegenerateBackAudio regenerates back audio for bg-bg cards
 func (a *Application) onRegenerateBackAudio() {
-	fmt.Printf("DEBUG: ████████████████████████████████████████████████████████████████\n")
-	fmt.Printf("DEBUG: ████  ENTERED onRegenerateBackAudio() - REGENERATING BACK AUDIO\n")
-	fmt.Printf("DEBUG: ████████████████████████████████████████████████████████████████\n")
-	fmt.Printf("DEBUG (onRegenerateBackAudio): Starting back audio regeneration\n")
-	fmt.Printf("  - currentWord: %s\n", a.currentWord)
-	fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-	fmt.Printf("  - currentTranslation (state var): %s\n", a.currentTranslation)
-	fmt.Printf("  - translationEntry.Text (UI field): %s\n", a.translationEntry.Text)
-
 	if a.currentCardType != "bg-bg" {
-		fmt.Printf("DEBUG (onRegenerateBackAudio): Not a bg-bg card, returning\n")
 		return
 	}
 
@@ -1281,24 +1261,16 @@ func (a *Application) onRegenerateBackAudio() {
 
 		// CRITICAL: Get translation from state variable first
 		translation := a.currentTranslation
-		fmt.Printf("DEBUG (onRegenerateBackAudio): In goroutine - translation from a.currentTranslation: %s\n", translation)
-		fmt.Printf("DEBUG (onRegenerateBackAudio): In goroutine - translation UI field: %s\n", a.translationEntry.Text)
 
 		if translation == "" {
-			fmt.Printf("DEBUG (onRegenerateBackAudio): WARNING - translation state was empty, falling back to UI field\n")
 			translation = strings.TrimSpace(a.translationEntry.Text)
-			fmt.Printf("DEBUG (onRegenerateBackAudio): Using UI field translation: %s\n", translation)
 		}
 
 		wordForGeneration := a.currentWord
-		fmt.Printf("DEBUG (onRegenerateBackAudio): Final decision - will generate back audio for: %s\n", translation)
-		fmt.Printf("DEBUG (onRegenerateBackAudio): (NOT for word: %s)\n", wordForGeneration)
 
 		// For back audio, we need to use the main context, not create a new card context
 		// because the front audio regeneration already has an active context for this word.
 		// Creating a new context would cancel the front audio operation.
-		fmt.Printf("DEBUG (onRegenerateBackAudio): Using main context (not creating new card context)\n")
-		fmt.Printf("DEBUG (onRegenerateBackAudio): This prevents cancelling ongoing front audio operation\n")
 
 		a.startOperation(wordForGeneration)
 		defer a.endOperation(wordForGeneration)
@@ -1311,16 +1283,7 @@ func (a *Application) onRegenerateBackAudio() {
 			return
 		}
 
-		fmt.Printf("DEBUG (onRegenerateBackAudio): Calling generateAudioBack with:\n")
-		fmt.Printf("  - ctx: a.ctx (main app context)\n")
-		fmt.Printf("  - translation: %s\n", translation)
-		fmt.Printf("  - cardDir: %s\n", cardDir)
-
 		audioFile, err := a.generateAudioBack(a.ctx, translation, cardDir)
-
-		fmt.Printf("DEBUG (onRegenerateBackAudio): generateAudioBack returned:\n")
-		fmt.Printf("  - err: %v\n", err)
-		fmt.Printf("  - audioFile: %s\n", audioFile)
 
 		if err != nil {
 			fyne.Do(func() {
@@ -2603,30 +2566,13 @@ func (a *Application) setupKeyboardShortcuts() {
 				a.onRegenerateRandomImage()
 			}
 		case 'a', 'а': // a = regenerate front audio
-			fmt.Printf("DEBUG: ╔════════════════════════════════════════════════════════════════\n")
-			fmt.Printf("DEBUG: ║ KEY PRESSED: 'a' (lowercase, regenerate FRONT audio)\n")
-			fmt.Printf("DEBUG: ╚════════════════════════════════════════════════════════════════\n")
-			fmt.Printf("  - currentWord: %s\n", a.currentWord)
-			fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-			fmt.Printf("  - regenerateAudioBtn.Disabled(): %v\n", a.regenerateAudioBtn.Disabled())
-			fmt.Printf("  - CALLING: onRegenerateAudio() for FRONT audio\n")
 			if !a.regenerateAudioBtn.Disabled() {
 				a.onRegenerateAudio()
 			}
 		case 'A', 'А': // A = regenerate back audio (for bg-bg cards)
-			fmt.Printf("DEBUG: ╔════════════════════════════════════════════════════════════════\n")
-			fmt.Printf("DEBUG: ║ KEY PRESSED: 'A' (uppercase, regenerate BACK audio)\n")
-			fmt.Printf("DEBUG: ╚════════════════════════════════════════════════════════════════\n")
-			fmt.Printf("  - currentWord: %s\n", a.currentWord)
-			fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-			fmt.Printf("  - currentTranslation: %s\n", a.currentTranslation)
-			fmt.Printf("  - translationEntry.Text: %s\n", a.translationEntry.Text)
-			fmt.Printf("  - regenerateAudioBtn.Disabled(): %v\n", a.regenerateAudioBtn.Disabled())
 			if a.currentCardType == "bg-bg" {
-				fmt.Printf("  - CALLING: onRegenerateBackAudio() for BACK audio\n")
 				a.onRegenerateBackAudio()
 			} else {
-				fmt.Printf("DEBUG: Skipping back audio regen - not a bg-bg card\n")
 			}
 		case 'р', 'Р': // р = r
 			if !a.regenerateAllBtn.Disabled() {
@@ -2637,24 +2583,12 @@ func (a *Application) setupKeyboardShortcuts() {
 				a.onDelete()
 			}
 		case 'p', 'п': // p = play front audio
-			fmt.Printf("DEBUG: Key pressed 'p' (play front audio)\n")
-			fmt.Printf("  - currentWord: %s\n", a.currentWord)
-			fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-			fmt.Printf("  - currentAudioFile: %s\n", a.currentAudioFile)
 			if a.currentAudioFile != "" {
 				a.audioPlayer.Play()
-			} else {
-				fmt.Printf("DEBUG: No front audio file to play\n")
 			}
 		case 'P', 'П': // P = play back audio (for bg-bg cards)
-			fmt.Printf("DEBUG: Key pressed 'P' (play back audio)\n")
-			fmt.Printf("  - currentWord: %s\n", a.currentWord)
-			fmt.Printf("  - currentCardType: %s\n", a.currentCardType)
-			fmt.Printf("  - currentAudioFileBack: %s\n", a.currentAudioFileBack)
 			if a.currentAudioFileBack != "" {
 				a.audioPlayer.PlayBack()
-			} else {
-				fmt.Printf("DEBUG: No back audio file to play\n")
 			}
 		case 'ж', 'Ж': // ж = x
 			a.onExportToAnki()
