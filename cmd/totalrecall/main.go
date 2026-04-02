@@ -50,7 +50,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 
 	// Handle --list-models flag
 	if flags.ListModels {
-		lister := models.NewLister(cli.GetOpenAIKey())
+		lister := models.NewLister(cli.GetOpenAIKey(), cli.GetGoogleAPIKey(), os.Stdout)
 		return lister.ListAvailableModels()
 	}
 
