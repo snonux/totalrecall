@@ -15,8 +15,10 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
+// promptAwareImageClient extends ImageClient with prompt-callback support
+// used by the GUI to capture and display the last generated image prompt.
 type promptAwareImageClient interface {
-	image.ImageSearcher
+	image.ImageClient
 	SetPromptCallback(func(prompt string))
 }
 
@@ -49,13 +51,9 @@ func (a *Application) audioProviderName() string {
 	return audio.DefaultProviderConfig().Provider
 }
 
+// audioVoices returns the voice list for the configured provider.
 func (a *Application) audioVoices() []string {
-	switch a.audioProviderName() {
-	case "gemini":
-		return audio.GeminiVoices
-	default:
-		return audio.OpenAIVoices
-	}
+	return audio.VoicesFor(a.audioProviderName())
 }
 
 func (a *Application) audioVoiceAndSpeed() (string, float64) {
@@ -455,45 +453,29 @@ func (a *Application) imagePromptCallback(cardDir, word string) func(prompt stri
 	}
 }
 
-// saveAudioAttribution saves attribution info for generated audio
+// saveAudioAttribution saves attribution info for generated audio.
+// Uses BuildAttributionFor so no switch on provider name is needed here.
 func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed float64) error {
 	processedText := audio.ProcessedTextForWord(word)
-	var attribution string
-	switch a.audioProviderName() {
-	case "gemini":
-		model := audio.DefaultProviderConfig().GeminiTTSModel
-		if a.audioConfig != nil && strings.TrimSpace(a.audioConfig.GeminiTTSModel) != "" {
-			model = a.audioConfig.GeminiTTSModel
-		}
-		attribution = audio.BuildGeminiAttribution(audio.AttributionParams{
-			Word:          word,
-			Model:         model,
-			Voice:         voice,
-			Speed:         speed,
-			ProcessedText: processedText,
-			GeneratedAt:   time.Now(),
-		})
-	default:
-		model := audio.DefaultProviderConfig().OpenAIModel
-		instruction := audio.DefaultProviderConfig().OpenAIInstruction
-		if a.audioConfig != nil {
-			if strings.TrimSpace(a.audioConfig.OpenAIModel) != "" {
-				model = a.audioConfig.OpenAIModel
-			}
-			if strings.TrimSpace(a.audioConfig.OpenAIInstruction) != "" {
-				instruction = a.audioConfig.OpenAIInstruction
-			}
-		}
-		attribution = audio.BuildOpenAIAttribution(audio.AttributionParams{
-			Word:          word,
-			Model:         model,
-			Voice:         voice,
-			Speed:         speed,
-			Instruction:   instruction,
-			ProcessedText: processedText,
-			GeneratedAt:   time.Now(),
-		})
+	providerName := a.audioProviderName()
+
+	// Build an ephemeral Config from the current audioConfig so we can use
+	// AttributionParamsFrom to read provider-specific fields without a switch.
+	cfg := a.audioConfig
+	if cfg == nil {
+		cfg = audio.DefaultProviderConfig()
 	}
+	// Override voice and speed with the values used for this specific generation.
+	cfgCopy := *cfg
+	cfgCopy.Provider = providerName
+	cfgCopy.GeminiVoice = voice
+	cfgCopy.GeminiSpeed = speed
+	cfgCopy.OpenAIVoice = voice
+	cfgCopy.OpenAISpeed = speed
+
+	instruction := audio.InstructionForProvider(providerName, &cfgCopy)
+	params := audio.AttributionParamsFrom(&cfgCopy, word, instruction, processedText, time.Now())
+	attribution := audio.BuildAttributionFor(providerName, params)
 
 	// Save to file
 	attrPath := audio.AttributionPath(audioFile)

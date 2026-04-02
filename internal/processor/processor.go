@@ -311,13 +311,10 @@ func (p *Processor) openAIVoice() string {
 	return ""
 }
 
+// audioVoicesForProvider returns the voice list for the configured provider
+// without needing a Provider instance (uses the package-level VoicesFor).
 func (p *Processor) audioVoicesForProvider() []string {
-	switch p.audioProviderName() {
-	case "gemini":
-		return audio.GeminiVoices
-	default:
-		return audio.OpenAIVoices
-	}
+	return audio.VoicesFor(p.audioProviderName())
 }
 
 func (p *Processor) audioVoiceForProvider() string {
@@ -1008,29 +1005,9 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 	processedText := audio.ProcessedTextForProvider(config.Provider, word)
 	instruction := audio.InstructionForProvider(config.Provider, config)
 
-	var attribution string
-	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
-	case "gemini":
-		attribution = audio.BuildGeminiAttribution(audio.AttributionParams{
-			Word:          word,
-			Model:         config.GeminiTTSModel,
-			Voice:         config.GeminiVoice,
-			Speed:         config.GeminiSpeed,
-			Instruction:   instruction,
-			ProcessedText: processedText,
-			GeneratedAt:   time.Now(),
-		})
-	default:
-		attribution = audio.BuildOpenAIAttribution(audio.AttributionParams{
-			Word:          word,
-			Model:         config.OpenAIModel,
-			Voice:         config.OpenAIVoice,
-			Speed:         config.OpenAISpeed,
-			Instruction:   instruction,
-			ProcessedText: processedText,
-			GeneratedAt:   time.Now(),
-		})
-	}
+	// Build params from the provider-specific sub-config to avoid a manual switch.
+	params := audio.AttributionParamsFrom(config, word, instruction, processedText, time.Now())
+	attribution := audio.BuildAttributionFor(config.Provider, params)
 
 	// Save to file
 	attrPath := audio.AttributionPath(audioFile)

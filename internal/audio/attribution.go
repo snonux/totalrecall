@@ -18,6 +18,34 @@ type AttributionParams struct {
 	GeneratedAt   time.Time
 }
 
+// AttributionParamsFrom builds an AttributionParams from a flat Config and the
+// word being transcribed, reading provider-appropriate sub-config fields to
+// eliminate the need for callers to switch on config.Provider themselves.
+func AttributionParamsFrom(config *Config, word, instruction, processedText string, generatedAt time.Time) AttributionParams {
+	base := AttributionParams{
+		Word:          word,
+		Instruction:   instruction,
+		ProcessedText: processedText,
+		GeneratedAt:   generatedAt,
+	}
+	if config == nil {
+		return base
+	}
+	switch strings.ToLower(strings.TrimSpace(config.Provider)) {
+	case "gemini":
+		g := geminiAudioConfigFrom(config)
+		base.Model = g.TTSModel
+		base.Voice = g.Voice
+		base.Speed = g.Speed
+	default:
+		o := openAIAudioConfigFrom(config)
+		base.Model = o.Model
+		base.Voice = o.Voice
+		base.Speed = o.Speed
+	}
+	return base
+}
+
 // AttributionPath returns the sidecar attribution file path for a generated audio file.
 func AttributionPath(audioFile string) string {
 	return strings.TrimSuffix(audioFile, filepath.Ext(audioFile)) + "_attribution.txt"

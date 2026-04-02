@@ -84,6 +84,14 @@ func (f *fakeAudioProvider) IsAvailable() error {
 	return nil
 }
 
+func (f *fakeAudioProvider) Voices() []string {
+	return nil
+}
+
+func (f *fakeAudioProvider) BuildAttribution(params audio.AttributionParams) string {
+	return ""
+}
+
 func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 	originalNanoBananaClient := newNanoBananaImageClient
 	originalOpenAIClient := newOpenAIImageClient

@@ -97,6 +97,16 @@ func (p *GeminiProvider) Name() string {
 	return "gemini"
 }
 
+// Voices returns the list of Gemini voices supported by the app.
+func (p *GeminiProvider) Voices() []string {
+	return GeminiVoices
+}
+
+// BuildAttribution returns the Gemini attribution text for a generated audio file.
+func (p *GeminiProvider) BuildAttribution(params AttributionParams) string {
+	return BuildGeminiAttribution(params)
+}
+
 // IsAvailable checks if the Google API key is configured.
 func (p *GeminiProvider) IsAvailable() error {
 	if p == nil || strings.TrimSpace(p.config.APIKey) == "" {

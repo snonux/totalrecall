@@ -3,18 +3,27 @@ package audio
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
-// Provider defines the interface for text-to-speech providers
+// Provider defines the interface for text-to-speech providers.
+// All provider-specific behavior (voices, attribution) is encapsulated here
+// so callers never need to switch on the provider name (OCP).
 type Provider interface {
-	// GenerateAudio generates audio from text and saves it to the specified file
+	// GenerateAudio generates audio from text and saves it to the specified file.
 	GenerateAudio(ctx context.Context, text string, outputFile string) error
 
-	// Name returns the provider name
+	// Name returns the provider name.
 	Name() string
 
-	// IsAvailable checks if the provider is properly configured and available
+	// IsAvailable checks if the provider is properly configured and available.
 	IsAvailable() error
+
+	// Voices returns the list of voice names supported by this provider.
+	Voices() []string
+
+	// BuildAttribution returns the attribution text for a generated audio file.
+	BuildAttribution(params AttributionParams) string
 }
 
 // OpenAIAudioConfig holds settings specific to the OpenAI TTS backend.
@@ -56,6 +65,25 @@ type Config struct {
 	GeminiTTSModel string  // "gemini-2.5-flash-preview-tts"
 	GeminiVoice    string  // One of GeminiVoices; empty lets the caller choose a random voice.
 	GeminiSpeed    float64 // Prompt hint for desired speech speed
+}
+
+// VoicesFor returns the voice list for the named provider. This is a
+// convenience for callers that need voices before constructing a Provider.
+func VoicesFor(providerName string) []string {
+	if strings.ToLower(strings.TrimSpace(providerName)) == "gemini" {
+		return GeminiVoices
+	}
+	return OpenAIVoices
+}
+
+// BuildAttributionFor builds the attribution text for the named provider
+// without requiring a Provider instance. Use Provider.BuildAttribution when
+// you already have an instance.
+func BuildAttributionFor(providerName string, params AttributionParams) string {
+	if strings.ToLower(strings.TrimSpace(providerName)) == "gemini" {
+		return BuildGeminiAttribution(params)
+	}
+	return BuildOpenAIAttribution(params)
 }
 
 // openAIAudioConfigFrom extracts the OpenAI-specific sub-config from the flat Config.

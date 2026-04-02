@@ -147,6 +147,16 @@ func (p *OpenAIProvider) IsAvailable() error {
 	return nil
 }
 
+// Voices returns the list of OpenAI voices supported by the app.
+func (p *OpenAIProvider) Voices() []string {
+	return OpenAIVoices
+}
+
+// BuildAttribution returns the OpenAI attribution text for a generated audio file.
+func (p *OpenAIProvider) BuildAttribution(params AttributionParams) string {
+	return BuildOpenAIAttribution(params)
+}
+
 // preprocessBulgarianText prepares Bulgarian text for clearer TTS pronunciation
 func (p *OpenAIProvider) preprocessBulgarianText(text string) string {
 	return openAIProcessedText(text)

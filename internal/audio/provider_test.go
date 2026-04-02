@@ -28,6 +28,14 @@ func (m *mockProvider) IsAvailable() error {
 	return m.availableErr
 }
 
+func (m *mockProvider) Voices() []string {
+	return nil
+}
+
+func (m *mockProvider) BuildAttribution(params AttributionParams) string {
+	return ""
+}
+
 func TestDefaultProviderConfig(t *testing.T) {
 	config := DefaultProviderConfig()
 
