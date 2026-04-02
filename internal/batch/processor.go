@@ -103,20 +103,21 @@ func parseBatchLine(line string) *WordEntry {
 	}
 }
 
-// splitLines splits a string by newlines
+// splitLines splits a string by newlines, handling both \n and \r\n line endings.
+// Uses strings.Builder to avoid per-character heap allocations from += concatenation.
 func splitLines(s string) []string {
 	var lines []string
-	current := ""
+	var current strings.Builder
 	for _, r := range s {
 		if r == '\n' {
-			lines = append(lines, current)
-			current = ""
+			lines = append(lines, current.String())
+			current.Reset()
 		} else if r != '\r' {
-			current += string(r)
+			current.WriteRune(r)
 		}
 	}
-	if current != "" {
-		lines = append(lines, current)
+	if current.Len() > 0 {
+		lines = append(lines, current.String())
 	}
 	return lines
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -22,17 +23,19 @@ func GenerateCardID(bulgarianWord string) string {
 	return fmt.Sprintf("%d_%s", epochMillis, hashStr)
 }
 
-// SanitizeFilename creates a safe filename from a string
+// SanitizeFilename creates a safe filename from a string.
+// Uses strings.Builder to avoid per-rune heap allocations.
 func SanitizeFilename(s string) string {
-	result := ""
+	var b strings.Builder
+	b.Grow(len(s))
 	for _, r := range s {
 		if isAlphaNumeric(r) || r == '-' || r == '_' {
-			result += string(r)
+			b.WriteRune(r)
 		} else {
-			result += "_"
+			b.WriteByte('_')
 		}
 	}
-	return result
+	return b.String()
 }
 
 // isAlphaNumeric checks if a rune is alphanumeric
