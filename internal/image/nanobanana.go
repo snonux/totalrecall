@@ -114,7 +114,16 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 	fmt.Printf("Nano Banana Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
 	fmt.Printf("Nano Banana Image Generation: Using model '%s' with aspect ratio '%s'\n", c.modelName(), aspectRatio)
 
-	imageBytes, mimeType, err := nanoBananaGenerateImage(ctx, c, prompt, aspectRatio)
+	var imageBytes []byte
+	var mimeType string
+	// Use multimodal chaining when reference images are available — this keeps
+	// character appearance consistent across pages far more reliably than
+	// injecting a text-only character bible.
+	if len(opts.ReferenceImages) > 0 {
+		imageBytes, mimeType, err = c.generateImageWithRefs(ctx, prompt, aspectRatio, opts.ReferenceImages)
+	} else {
+		imageBytes, mimeType, err = nanoBananaGenerateImage(ctx, c, prompt, aspectRatio)
+	}
 	if err != nil {
 		if searchErr, ok := err.(*SearchError); ok {
 			return nil, searchErr
@@ -405,6 +414,61 @@ func (c *NanoBananaClient) generateImage(ctx context.Context, prompt, aspectRati
 			Provider: nanoBananaSource,
 			Code:     "API_ERROR",
 			Message:  fmt.Sprintf("failed to generate image: %v", err),
+		}
+	}
+
+	imageBytes, mimeType, err := extractGeneratedImage(resp)
+	if err != nil {
+		return nil, "", &SearchError{
+			Provider: nanoBananaSource,
+			Code:     "NO_RESULTS",
+			Message:  err.Error(),
+		}
+	}
+
+	return imageBytes, mimeType, nil
+}
+
+// generateImageWithRefs sends reference images alongside the text prompt so the
+// model can match character appearance from the existing pages. This implements
+// the iterative chaining technique: each new page is conditioned on the visual
+// look established by previous pages rather than relying on text descriptions alone.
+func (c *NanoBananaClient) generateImageWithRefs(ctx context.Context, prompt, aspectRatio string, refs [][]byte) ([]byte, string, error) {
+	if aspectRatio == "" {
+		aspectRatio = nanoBananaAspectRatio
+	}
+	cfg := &genai.GenerateContentConfig{
+		ResponseModalities: []string{string(genai.ModalityImage)},
+		ImageConfig:        &genai.ImageConfig{AspectRatio: aspectRatio},
+	}
+
+	// Build multimodal content: reference image bytes first, then the instruction
+	// + prompt text. Leading with images means they are processed before the text.
+	parts := make([]*genai.Part, 0, len(refs)+1)
+	for _, ref := range refs {
+		if len(ref) > 0 {
+			parts = append(parts, &genai.Part{
+				InlineData: &genai.Blob{MIMEType: "image/png", Data: ref},
+			})
+		}
+	}
+	refNote := fmt.Sprintf(
+		"The %d reference image(s) above show the EXACT character appearance that must be preserved. "+
+			"Every character — same face, same age, same hair, same clothing, same animal breed and markings — "+
+			"must look IDENTICAL in the new image. Now generate:\n\n",
+		len(refs),
+	)
+	parts = append(parts, &genai.Part{Text: refNote + prompt})
+
+	resp, err := c.client.Models.GenerateContent(ctx, c.modelName(),
+		[]*genai.Content{{Role: string(genai.RoleUser), Parts: parts}},
+		cfg,
+	)
+	if err != nil {
+		return nil, "", &SearchError{
+			Provider: nanoBananaSource,
+			Code:     "API_ERROR",
+			Message:  fmt.Sprintf("failed to generate image with refs: %v", err),
 		}
 	}
 

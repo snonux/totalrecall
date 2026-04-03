@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"strings"
 	"time"
 
@@ -16,9 +17,10 @@ const (
 	// storyPageCount is the number of 9-panel story pages (excluding cover/back).
 	storyPageCount = 3
 
-	// comicPageAspectRatio: portrait (3:4) matches a standard comic book page
-	// and gives the model room for a 3×3 panel grid.
-	comicPageAspectRatio = "3:4"
+	// comicPageAspectRatio: 16:9 is the closest supported widescreen ratio for
+	// the ThinkPad X1 Gen 9 (2560×1600 / 16:10), filling the display with minimal
+	// letterboxing. The API supports 16:9 but not 16:10.
+	comicPageAspectRatio = "16:9"
 
 	// comicPromptMaxChars caps each page's story excerpt in the NanoBanana prompt.
 	comicPromptMaxChars = 900
@@ -63,11 +65,11 @@ var comicStyles = []string{
 // gemini-2.5-flash allocates its thinking budget correctly instead of returning empty.
 const bibleSystemInstruction = `You are a comic-book art director producing a CHARACTER CONSISTENCY GUIDE in English for an illustrator.
 
-For every named HUMAN character provide: name, EXACT age (e.g. "8-year-old girl", "65-year-old woman"),
-hair (colour + style), eye colour, skin tone, build, and the EXACT clothing they wear —
-specify garment, colour, pattern, and fit.
+For every named HUMAN character provide: name, apparent age category (young child, teenager,
+young adult, middle-aged, elderly), hair (colour + style), eye colour, skin tone, build,
+and the EXACT clothing they wear — specify garment, colour, pattern, and fit.
 The character's apparent age MUST NOT change across any panel, page, cover, or back cover —
-they must always look the same age. Clothing must NOT change between panels unless the story
+they must always look the same. Clothing must NOT change between panels unless the story
 explicitly describes a change; if no change is described, list the same outfit for all appearances.
 
 For every named ANIMAL character provide: name, species, exact breed, fur/feather/scale colour
@@ -131,50 +133,62 @@ func NewArtist(config *ArtistConfig) *Artist {
 }
 
 // DrawComicPages generates 5 images total:
-//   - comic_cover.png   — full-bleed cover
-//   - comic_page_1.png … comic_page_3.png — 9-panel (3×3) story pages
-//   - comic_back.png    — back cover
+//   - <titleSlug>_cover.png          — full-bleed cover
+//   - <titleSlug>_page_1.png … _3    — 9-panel (3×3) story pages
+//   - <titleSlug>_back.png           — back cover
 //
-// A character bible is built first and injected into every prompt so
-// characters, clothing, and setting stay consistent across all pages.
+// A character bible injected into every prompt keeps characters, clothing, and
+// setting consistent across all pages. The bible is produced by GenerateFull in
+// the same Gemini call as the story; prebuiltBible is passed in from there.
+// titleSlug is used as the file-name prefix; it must already be a safe slug.
 // Returns the list of saved image paths in order.
-func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
+func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string) ([]string, error) {
 	style := a.style
 	if style == "" {
 		style = pickStyle()
 	}
 	fmt.Printf("  Comic style: %s\n", style)
 
-	bible, blurb := a.buildHelperTexts(storyText)
+	bible, blurb := a.resolveHelperTexts(storyText, prebuiltBible)
 
 	var paths []string
+	// recentRefs holds image bytes from recently generated pages for iterative
+	// chaining: each new page receives the cover + the previous page as visual
+	// reference so the model can match character appearance directly from pixels
+	// rather than relying on text descriptions alone.
+	var recentRefs [][]byte
 
-	// 1. Cover
+	// 1. Cover — generated without refs (it is the visual baseline).
 	fmt.Println("  Generating cover page...")
-	if p, err := a.generateSinglePage(buildCoverPrompt(storyText, style, bible), "comic_cover"); err != nil {
+	p, coverBytes, err := a.generateSinglePage(buildCoverPrompt(storyText, style, bible), titleSlug+"_cover", nil)
+	if err != nil {
 		fmt.Printf("  Warning: cover generation failed: %v\n", err)
 	} else {
 		paths = append(paths, p)
+		recentRefs = appendRef(recentRefs, coverBytes) // cover becomes the anchor reference
 	}
 
-	// 2. Story pages (9-panel grids)
+	// 2. Story pages (9-panel grids) — each page receives cover + previous page as refs.
 	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
 		fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
-		p, err := a.generateSinglePage(
+		p, pageBytes, err := a.generateSinglePage(
 			buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible),
-			fmt.Sprintf("comic_page_%d", pageNum),
+			fmt.Sprintf("%s_page_%d", titleSlug, pageNum),
+			recentRefs,
 		)
 		if err != nil {
 			return paths, fmt.Errorf("story page %d failed: %w", pageNum, err)
 		}
 		paths = append(paths, p)
+		recentRefs = appendRef(recentRefs, pageBytes)
 	}
 
-	// 3. Back cover
+	// 3. Back cover — receives the same rolling refs as the last story page.
 	fmt.Println("  Generating back cover...")
-	if p, err := a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible, blurb), "comic_back"); err != nil {
+	p, _, err = a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible, blurb), titleSlug+"_back", recentRefs)
+	if err != nil {
 		fmt.Printf("  Warning: back cover generation failed: %v\n", err)
 	} else {
 		paths = append(paths, p)
@@ -183,38 +197,52 @@ func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 	return paths, nil
 }
 
-// buildHelperTexts generates the character bible and back-cover blurb in sequence.
-// Both use gemini-2.0-flash with a single retry on empty response (rate-limit recovery).
-// Returns ("", "") on total failure — callers degrade gracefully without these.
-func (a *Artist) buildHelperTexts(storyText string) (bible, blurb string) {
+// appendRef adds imgBytes to refs and keeps at most 2 entries (cover anchor +
+// the immediately preceding page). Larger windows inflate the multimodal
+// payload significantly without proportional consistency gains.
+func appendRef(refs [][]byte, imgBytes []byte) [][]byte {
+	if len(imgBytes) == 0 {
+		return refs
+	}
+	refs = append(refs, imgBytes)
+	if len(refs) > 2 {
+		// Keep the first entry (cover anchor) and the latest page only.
+		refs = [][]byte{refs[0], refs[len(refs)-1]}
+	}
+	return refs
+}
+
+// resolveHelperTexts returns the character bible and back-cover blurb.
+// The bible comes from prebuiltBible (produced by GenerateFull in the same
+// Gemini call as the story — no extra API call, no rate-limiting). The blurb
+// is still generated with a separate call since it is not part of story generation.
+func (a *Artist) resolveHelperTexts(storyText, prebuiltBible string) (bible, blurb string) {
+	bible = prebuiltBible
+	if bible != "" {
+		fmt.Printf("  Character bible ready (%d chars)\n", len(bible))
+	} else {
+		fmt.Println("  Warning: no character bible — characters may vary between pages")
+	}
+
 	if a.apiKey == "" {
-		fmt.Println("  Warning: no API key — skipping character bible and blurb")
-		return "", ""
+		return bible, ""
 	}
 
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: a.apiKey})
 	if err != nil {
-		fmt.Printf("  Warning: Gemini client failed (%v); panels may vary\n", err)
-		return "", ""
-	}
-
-	bible = a.callGeminiHelper(client, bibleSystemInstruction, storyText, "character bible")
-	if bible != "" {
-		fmt.Printf("  Character bible ready (%d chars)\n", len(bible))
+		fmt.Printf("  Warning: Gemini client failed for blurb (%v)\n", err)
+		return bible, ""
 	}
 
 	blurb = a.callGeminiHelper(client, blurbSystemInstruction, storyText, "back-cover blurb")
 	if blurb != "" {
 		fmt.Printf("  Back-cover blurb ready (%d chars)\n", len(blurb))
 	}
-
 	return bible, blurb
 }
 
 // callGeminiHelper sends one text prompt to helperModel and returns the trimmed response.
-// Uses the same SystemInstruction + user-content pattern as the story generator,
-// which is the proven approach for gemini-2.5-flash. Retries once after
-// helperRetryPause when the model returns an empty string (free-tier RPM recovery).
+// Retries once after helperRetryPause on empty response.
 func (a *Artist) callGeminiHelper(client *genai.Client, systemInstruction, userPrompt, label string) string {
 	for attempt := 1; attempt <= 2; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), helperTimeout)
@@ -246,10 +274,14 @@ func (a *Artist) callGeminiHelper(client *genai.Client, systemInstruction, userP
 }
 
 // generateSinglePage downloads and saves one image for the given prompt.
-func (a *Artist) generateSinglePage(prompt, fileNamePattern string) (string, error) {
+// refs are optional previously generated page images passed as multimodal
+// context to the image model for iterative chaining consistency.
+// Returns the saved file path and raw PNG bytes (for use as ref in next page).
+func (a *Artist) generateSinglePage(prompt, fileNamePattern string, refs [][]byte) (string, []byte, error) {
 	opts := image.DefaultSearchOptions("vocabulary story")
 	opts.CustomPrompt = prompt
 	opts.AspectRatio = comicPageAspectRatio
+	opts.ReferenceImages = refs
 
 	downloader := image.NewDownloader(a.nbClient, &image.DownloadOptions{
 		OutputDir:         a.outputDir,
@@ -260,7 +292,19 @@ func (a *Artist) generateSinglePage(prompt, fileNamePattern string) (string, err
 	})
 
 	_, savedPath, err := downloader.DownloadBestMatchWithOptions(context.Background(), opts)
-	return savedPath, err
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Read back the saved PNG so callers can pass it as a reference image to
+	// subsequent pages. Non-fatal if the read fails — we just skip the reference.
+	imgBytes, readErr := os.ReadFile(savedPath)
+	if readErr != nil {
+		fmt.Printf("  Warning: could not read back %s for chaining: %v\n", savedPath, readErr)
+		imgBytes = nil
+	}
+
+	return savedPath, imgBytes, nil
 }
 
 // buildCoverPrompt constructs the front-cover image prompt.
@@ -277,28 +321,45 @@ func buildCoverPrompt(storyText, style, bible string) string {
 
 	bibleBlock := bibleSection(bible, "cover")
 	return fmt.Sprintf(
-		"Art style: %s.%s\n"+
+		// Bulgarian language rule placed first so the model processes it before any other instruction.
+		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
+			"All text on the cover (cover lines, banners, labels) MUST be in Bulgarian "+
+			"Cyrillic script. The masthead title must also be rendered in a striking comic-book font.\n\n"+
+			"Art style: %s.%s\n"+
 			"TRADITIONAL COMIC BOOK FRONT COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
-			"MANDATORY TITLE — the most important element on this cover:\n"+
-			"  The title 'BULGARIAN VOCABULARY ADVENTURE' MUST appear in HUGE, dominant lettering "+
-			"across the very top of the cover. Use a bold, colourful comic-book masthead font — "+
-			"thick outlines, high contrast against the background, taking up the top 20%% of the image. "+
-			"This title MUST be legible and unmissable.\n"+
+			"MANDATORY MASTHEAD — the most important visual element on this cover:\n"+
+			"  • Invent a DRAMATIC, STORY-SPECIFIC comic book title that fits the characters and "+
+			"theme of the story teaser below (e.g. for a space story: 'ГАЛАКТИЧЕСКИ ГЕРОИ', for "+
+			"a mystery: 'ТАЙНАТА НА ГОРАТА'). The title must be in HUGE, dominant lettering "+
+			"across the very top of the cover — bold comic-book masthead font, thick outlines, "+
+			"bright contrasting colours (yellow, red, or white on dark), taking up the top 20%% "+
+			"of the image. This title MUST be legible and unmissable.\n"+
+			"  • Directly below the main title, add a smaller subtitle banner: "+
+			"'BULGARIAN VOCABULARY ADVENTURE' in a contrasting accent colour.\n"+
+			"  • Add a bold comic-book LOGO BUG (small circular or star-shaped badge) "+
+			"in the top-left corner — e.g. a planet, rocket, magnifying glass, sword — "+
+			"matching the story theme. The logo should feel like a real publisher imprint.\n"+
 			"Remaining layout rules:\n"+
-			"  • MAIN ART: below the title, a dramatic illustration of EXACTLY the named characters "+
+			"  • MAIN ART: below the masthead, a dramatic illustration of EXACTLY the named characters "+
 			"from the story (as described in the reference above) — same faces, same ages, same "+
 			"clothing, same animals. Do NOT invent new characters or use generic stand-ins.\n"+
-			"  • COVER LINES: 2–3 short teaser phrases in bold display type (e.g. 'A Summer Adventure!').\n"+
+			"  • COVER LINES: 2–3 short Bulgarian teaser phrases in bold display type "+
+			"(e.g. 'НЕВЕРОЯТНО ПРИКЛЮЧЕНИЕ!' or 'СРЕЩА С НЕПОЗНАТОТО!')\n"+
 			"  • BOTTOM STRIP: price box bottom-left, issue number bottom-right — "+
 			"classic Silver-Age / Bronze-Age comic production design.\n"+
 			"IMPORTANT: only the characters named in the reference may appear on this cover. "+
-			"Same age, same face, same clothing as in the interior pages. Story teaser:\n\n%s",
+			"Same age, same face, same clothing as in the interior pages. "+
+			"LANGUAGE REMINDER: all cover text in Bulgarian Cyrillic — see rule at top. "+
+			"Story teaser:\n\n%s",
 		style, bibleBlock, teaser,
 	)
 }
 
 // buildStoryPagePrompt constructs a 9-panel grid page prompt.
+// The Bulgarian language requirement is placed at the very top — before the
+// character reference and story excerpt — because image models tend to follow
+// early instructions more reliably than late ones buried in a list.
 func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string) string {
 	excerpt := strings.TrimSpace(section)
 	if len(excerpt) > comicPromptMaxChars {
@@ -311,7 +372,13 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 
 	bibleBlock := bibleSection(bible, fmt.Sprintf("story page %d of %d", pageNum, totalPages))
 	return fmt.Sprintf(
-		"Art style: %s.%s\n"+
+		// Lead with the hard language constraint so it is processed first.
+		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
+			"Every word of text inside speech bubbles, thought bubbles, caption boxes, "+
+			"and panel labels MUST be written in Bulgarian Cyrillic script "+
+			"(например: Здравей! Какво правиш? Побързай!). "+
+			"English text anywhere in the panels is STRICTLY FORBIDDEN — use ONLY Bulgarian.\n\n"+
+			"Art style: %s.%s\n"+
 			"Comic book story page %d of %d. Layout: a 3×3 grid of 9 panels filling the page, "+
 			"each panel showing a distinct moment from the excerpt below.\n"+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
@@ -320,6 +387,7 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
 			"NEVER substitute a different animal or a generic version of the species.\n"+
 			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
+			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n"+
 			"Story excerpt:\n\n%s",
 		style, bibleBlock, pageNum, totalPages, excerpt,
 	)
@@ -351,7 +419,11 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 
 	bibleBlock := bibleSection(bible, "back cover")
 	return fmt.Sprintf(
-		"Art style: %s.%s\n"+
+		// Bulgarian language rule placed first for maximum model compliance.
+		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
+			"All visible text (blurb box, labels, banners) MUST be in Bulgarian Cyrillic script. "+
+			"English text anywhere on the back cover is STRICTLY FORBIDDEN.\n\n"+
+			"Art style: %s.%s\n"+
 			"TRADITIONAL COMIC BOOK BACK COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
@@ -365,6 +437,7 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 			"classic comic book back-cover production design.\n"+
 			"IMPORTANT: only the characters named in the reference may appear on this back cover. "+
 			"Same age, same face, same clothing, same animals as in the interior pages. "+
+			"LANGUAGE REMINDER: all text in Bulgarian Cyrillic — see rule at top. "+
 			"Story ending hint:\n\n%s",
 		style, bibleBlock, blurbBoxInstruction, ending,
 	)

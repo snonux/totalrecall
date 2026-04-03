@@ -68,6 +68,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 			ImageTextModel: flags.NanoBananaTextModel,
 			OutputDir:      ".",
 			Style:          flags.StoryStyle,
+			Theme:          flags.StoryTheme,
 			NarratorVoice:  flags.NarratorVoice,
 		})
 		return runner.Run(flags.StoryFile)
