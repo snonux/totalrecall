@@ -23,16 +23,22 @@ const (
 	// comicPromptMaxChars caps each page's story excerpt in the NanoBanana prompt.
 	comicPromptMaxChars = 900
 
-	// bibleModel is the Gemini text model used to generate the character bible.
-	bibleModel = "gemini-2.5-flash"
+	// helperModel matches the story generator's proven model (gemini-2.5-flash).
+	// Both the bible and blurb use the same SystemInstruction + user-content pattern
+	// that the story generator uses successfully.
+	helperModel = "gemini-2.5-flash"
 
-	// bibleTimeout gives Gemini up to 90 s to produce the character bible.
-	bibleTimeout = 90 * time.Second
+	// helperTimeout gives Gemini up to 90 s per helper call; thinking tokens
+	// within gemini-2.5-flash need more time than a plain text model.
+	helperTimeout = 90 * time.Second
 
-	// bibleMaxTokens matches the story generator's proven budget.
-	// No ThinkingConfig is set — the model manages token allocation itself,
-	// which is the same approach used by the working story generator.
-	bibleMaxTokens = int32(8192)
+	// helperMaxTokens must be large enough to cover internal thinking tokens
+	// (gemini-2.5-flash) plus the visible output. 8192 matches the story generator.
+	helperMaxTokens = int32(8192)
+
+	// helperRetryPause waits before retrying when the model returns an empty
+	// response — typically caused by free-tier RPM exhaustion between rapid calls.
+	helperRetryPause = 15 * time.Second
 )
 
 // comicStyles is the pool from which the page style is drawn each run.
@@ -52,22 +58,33 @@ var comicStyles = []string{
 
 // characterBiblePrompt instructs Gemini to produce a strict visual reference
 // prepended verbatim to every panel, cover, and back-cover prompt.
-const characterBiblePrompt = `You are a comic-book art director. Read the Bulgarian story below and write a
-CHARACTER CONSISTENCY GUIDE in English for an illustrator.
+// bibleSystemInstruction is the SystemInstruction role for the character bible call.
+// Matching the story generator's proven SystemInstruction + user-content split ensures
+// gemini-2.5-flash allocates its thinking budget correctly instead of returning empty.
+const bibleSystemInstruction = `You are a comic-book art director producing a CHARACTER CONSISTENCY GUIDE in English for an illustrator.
 
-For every named character provide: name, age estimate, hair (colour + style), eye colour,
+For every named HUMAN character provide: name, age estimate, hair (colour + style), eye colour,
 skin tone, build, and the EXACT clothing they wear — specify garment, colour, pattern, and fit.
 Clothing must NOT change between panels unless the story explicitly describes a change;
 if no change is described, list the same outfit for all appearances.
+
+For every named ANIMAL character provide: name, species, exact breed, fur/feather/scale colour
+and pattern, eye colour, size, any distinctive markings, and typical body posture.
+The animal must look IDENTICAL on every page — same breed, same markings, same eye colour.
+Do NOT substitute a generic animal; if the story says Persian cat, every panel must show a
+Persian cat with the exact described colouring.
 
 Also describe: the setting (location, time of day, weather, key props) and overall
 lighting / colour mood.
 
 Be extremely specific — this guide will be copy-pasted into every panel prompt to lock visual
-consistency. Maximum 220 words. No headers, just dense descriptive prose.
+consistency. Maximum 280 words. No headers, just dense descriptive prose.`
 
-Story:
-`
+// blurbSystemInstruction is the SystemInstruction role for the back-cover blurb call.
+const blurbSystemInstruction = `You are a comic-book editor writing back-cover marketing copy.
+Rules: write exactly 2–3 sentences in English; exciting and enticing; do NOT spoil the ending;
+use present-tense second-person (e.g. "Join Eli as she discovers…").
+Output only the blurb text — no quotes, no labels, no extra commentary.`
 
 // ArtistConfig holds settings for comic-book image generation via NanoBanana.
 type ArtistConfig struct {
@@ -126,13 +143,7 @@ func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 	}
 	fmt.Printf("  Comic style: %s\n", style)
 
-	bible, err := a.buildCharacterBible(storyText)
-	if err != nil {
-		fmt.Printf("  Warning: character bible failed (%v); panels may vary\n", err)
-		bible = ""
-	} else {
-		fmt.Printf("  Character bible ready (%d chars)\n", len(bible))
-	}
+	bible, blurb := a.buildHelperTexts(storyText)
 
 	var paths []string
 
@@ -161,7 +172,7 @@ func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 
 	// 3. Back cover
 	fmt.Println("  Generating back cover...")
-	if p, err := a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible), "comic_back"); err != nil {
+	if p, err := a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible, blurb), "comic_back"); err != nil {
 		fmt.Printf("  Warning: back cover generation failed: %v\n", err)
 	} else {
 		paths = append(paths, p)
@@ -170,43 +181,66 @@ func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 	return paths, nil
 }
 
-// buildCharacterBible calls Gemini to produce a strict visual reference card.
-// No ThinkingConfig is set — same pattern as the working story generator.
-func (a *Artist) buildCharacterBible(storyText string) (string, error) {
+// buildHelperTexts generates the character bible and back-cover blurb in sequence.
+// Both use gemini-2.0-flash with a single retry on empty response (rate-limit recovery).
+// Returns ("", "") on total failure — callers degrade gracefully without these.
+func (a *Artist) buildHelperTexts(storyText string) (bible, blurb string) {
 	if a.apiKey == "" {
-		return "", fmt.Errorf("no API key for character bible generation")
+		fmt.Println("  Warning: no API key — skipping character bible and blurb")
+		return "", ""
 	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey: a.apiKey,
-	})
+	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: a.apiKey})
 	if err != nil {
-		return "", fmt.Errorf("create genai client: %w", err)
+		fmt.Printf("  Warning: Gemini client failed (%v); panels may vary\n", err)
+		return "", ""
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), bibleTimeout)
-	defer cancel()
-
-	resp, err := client.Models.GenerateContent(ctx, bibleModel,
-		[]*genai.Content{genai.NewContentFromText(characterBiblePrompt+storyText, genai.RoleUser)},
-		&genai.GenerateContentConfig{
-			MaxOutputTokens: bibleMaxTokens,
-		},
-	)
-	if err != nil {
-		return "", fmt.Errorf("gemini bible call: %w", err)
+	bible = a.callGeminiHelper(client, bibleSystemInstruction, storyText, "character bible")
+	if bible != "" {
+		fmt.Printf("  Character bible ready (%d chars)\n", len(bible))
 	}
 
-	bible := strings.TrimSpace(resp.Text())
-	if bible == "" {
-		reason := "unknown"
-		if len(resp.Candidates) > 0 {
-			reason = string(resp.Candidates[0].FinishReason)
+	blurb = a.callGeminiHelper(client, blurbSystemInstruction, storyText, "back-cover blurb")
+	if blurb != "" {
+		fmt.Printf("  Back-cover blurb ready (%d chars)\n", len(blurb))
+	}
+
+	return bible, blurb
+}
+
+// callGeminiHelper sends one text prompt to helperModel and returns the trimmed response.
+// Uses the same SystemInstruction + user-content pattern as the story generator,
+// which is the proven approach for gemini-2.5-flash. Retries once after
+// helperRetryPause when the model returns an empty string (free-tier RPM recovery).
+func (a *Artist) callGeminiHelper(client *genai.Client, systemInstruction, userPrompt, label string) string {
+	for attempt := 1; attempt <= 2; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), helperTimeout)
+		resp, err := client.Models.GenerateContent(ctx, helperModel,
+			[]*genai.Content{genai.NewContentFromText(userPrompt, genai.RoleUser)},
+			&genai.GenerateContentConfig{
+				SystemInstruction: &genai.Content{
+					Parts: []*genai.Part{{Text: systemInstruction}},
+				},
+				MaxOutputTokens: helperMaxTokens,
+			},
+		)
+		cancel()
+
+		if err != nil {
+			fmt.Printf("  Warning: %s attempt %d failed: %v\n", label, attempt, err)
+		} else if text := strings.TrimSpace(resp.Text()); text != "" {
+			return text
+		} else {
+			fmt.Printf("  Warning: %s attempt %d returned empty response\n", label, attempt)
 		}
-		return "", fmt.Errorf("empty response (finish reason: %s)", reason)
-	}
 
-	return bible, nil
+		if attempt < 2 {
+			fmt.Printf("  Retrying %s in %s...\n", label, helperRetryPause)
+			time.Sleep(helperRetryPause)
+		}
+	}
+	return ""
 }
 
 // generateSinglePage downloads and saves one image for the given prompt.
@@ -242,11 +276,20 @@ func buildCoverPrompt(storyText, style, bible string) string {
 	bibleBlock := bibleSection(bible, "cover")
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
-			"COMIC BOOK FRONT COVER — single full-bleed illustration, no panel grid. "+
-			"Large bold title text at the top: \"BULGARIAN VOCABULARY ADVENTURE\". "+
-			"Show the main character(s) in a dynamic, eye-catching pose with the story setting "+
-			"behind them. Dramatic, inviting, professional comic cover composition. "+
-			"Story teaser:\n\n%s",
+			"TRADITIONAL COMIC BOOK FRONT COVER — portrait orientation, single full-bleed illustration.\n"+
+			"NO panel grid. NO speech bubbles.\n"+
+			"MANDATORY TITLE — the most important element on this cover:\n"+
+			"  The title 'BULGARIAN VOCABULARY ADVENTURE' MUST appear in HUGE, dominant lettering "+
+			"across the very top of the cover. Use a bold, colourful comic-book masthead font — "+
+			"thick outlines, high contrast against the background, taking up the top 20%% of the image. "+
+			"This title MUST be legible and unmissable.\n"+
+			"Remaining layout rules:\n"+
+			"  • MAIN ART: below the title, a single dramatic illustration of the main character(s) "+
+			"and any animals in a dynamic pose, richly detailed story setting behind them.\n"+
+			"  • COVER LINES: 2–3 short teaser phrases in bold display type (e.g. 'A Summer Adventure!').\n"+
+			"  • BOTTOM STRIP: price box bottom-left, issue number bottom-right — "+
+			"classic Silver-Age / Bronze-Age comic production design.\n"+
+			"Characters and animals MUST match the reference exactly. Story teaser:\n\n%s",
 		style, bibleBlock, teaser,
 	)
 }
@@ -266,16 +309,22 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
 			"Comic book story page %d of %d. Layout: a 3×3 grid of 9 panels filling the page, "+
-			"each panel showing a distinct moment from the excerpt below. "+
-			"All characters MUST look identical across every panel — same face, hair, and clothing "+
-			"as described in the reference above. Story excerpt:\n\n%s",
+			"each panel showing a distinct moment from the excerpt below.\n"+
+			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
+			"  • Human characters: identical face, hair colour/style, and clothing to the reference.\n"+
+			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
+			"NEVER substitute a different animal or a generic version of the species.\n"+
+			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
+			"Story excerpt:\n\n%s",
 		style, bibleBlock, pageNum, totalPages, excerpt,
 	)
 }
 
 // buildBackCoverPrompt constructs the back-cover image prompt.
-func buildBackCoverPrompt(storyText, style, bible string) string {
-	// Use the last ~200 chars of the story as the resolution hint.
+// blurb is an English marketing summary generated by Gemini; when non-empty it is
+// embedded verbatim in the blurb-box instruction so the image model renders it.
+func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
+	// Use the last ~200 chars of the story as a visual hint for the scene.
 	ending := strings.TrimSpace(storyText)
 	if len(ending) > 200 {
 		ending = ending[len(ending)-200:]
@@ -284,14 +333,33 @@ func buildBackCoverPrompt(storyText, style, bible string) string {
 		}
 	}
 
+	// Build the blurb box instruction: use the generated blurb if available,
+	// otherwise ask the model to leave a styled empty box.
+	blurbBoxInstruction := "a rectangular text box (white or cream background, thin black border) " +
+		"near the bottom — styled like a classic back-cover synopsis box, box shape required."
+	if blurb != "" {
+		blurbBoxInstruction = fmt.Sprintf(
+			"a rectangular text box (white or cream background, thin black border) "+
+				"near the bottom displaying this blurb text in italic type:\n"+
+				"    \"%s\"", blurb)
+	}
+
 	bibleBlock := bibleSection(bible, "back cover")
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
-			"COMIC BOOK BACK COVER — single full-bleed illustration, no panel grid. "+
-			"A calm, warm, conclusive scene from the story's ending. "+
-			"Small text area at the bottom for a short blurb (leave space). "+
+			"TRADITIONAL COMIC BOOK BACK COVER — portrait orientation, single full-bleed illustration.\n"+
+			"NO panel grid. NO speech bubbles.\n"+
+			"Layout rules (must follow exactly):\n"+
+			"  • MAIN ART: a calm, warm, resolved scene filling the upper 60%% of the cover — "+
+			"the main character(s) and any animals in a peaceful or triumphant ending moment, "+
+			"with the full story setting behind them.\n"+
+			"  • BLURB BOX: %s\n"+
+			"  • BOTTOM STRIP: barcode box bottom-left (black-and-white barcode graphic), "+
+			"series title 'BULGARIAN VOCABULARY ADVENTURE' bottom-right — "+
+			"classic comic book back-cover production design.\n"+
+			"Characters and animals MUST match the reference above exactly. "+
 			"Story ending hint:\n\n%s",
-		style, bibleBlock, ending,
+		style, bibleBlock, blurbBoxInstruction, ending,
 	)
 }
 

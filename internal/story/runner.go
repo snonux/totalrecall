@@ -121,9 +121,14 @@ func (r *Runner) Run(batchFile string) error {
 	return r.handleNarration(storyText, dir)
 }
 
-// drawComicPages generates comicPageCount images with a shared character bible
-// for visual consistency; errors are non-fatal so story.txt is always accessible.
+// drawComicPages generates the 5 comic images and assembles them into a PDF.
+// Errors are non-fatal — story.txt is always accessible regardless of image failures.
 func (r *Runner) drawComicPages(storyText string) {
+	dir := "."
+	if r.config != nil && r.config.OutputDir != "" {
+		dir = r.config.OutputDir
+	}
+
 	fmt.Printf("Generating %d comic pages...\n", storyPageCount+2) // 2 = cover + back cover
 	paths, err := r.artist.DrawComicPages(storyText)
 	if err != nil {
@@ -132,6 +137,18 @@ func (r *Runner) drawComicPages(storyText string) {
 	for _, p := range paths {
 		fmt.Printf("Comic page saved: %s\n", p)
 	}
+
+	if len(paths) == 0 {
+		return
+	}
+
+	// Assemble all generated pages into a single PDF in reading order.
+	pdfPath, err := AssembleComicPDF(dir, paths)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: PDF assembly failed: %v\n", err)
+		return
+	}
+	fmt.Printf("Comic PDF saved: %s\n", pdfPath)
 }
 
 // handleNarration generates a cinematic MP3 via Gemini TTS when a narrator is
