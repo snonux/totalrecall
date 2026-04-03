@@ -8,6 +8,8 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/batch"
 )
 
+
+
 // ttsTodoContent is written to story_tts_todo.txt as a fallback when Gemini TTS
 // narration fails or no API key is available.  It documents the original
 // ElevenLabs integration placeholder for reference.
@@ -141,18 +143,17 @@ func (r *Runner) Run(batchFile string) error {
 		return err
 	}
 
-	r.drawComicPages(result.StoryText, result.Bible, slug)
+	r.drawComicPages(result.StoryText, result.Bible, slug, entries)
 
 	return r.handleNarration(result.StoryText, slug, comicsDir)
 }
 
 // drawComicPages generates the 5 comic images and assembles them into a PDF.
-// The pre-built bible (from story generation) is passed to DrawComicPages so
-// no extra Gemini call is needed for character consistency.
+// entries carries the vocabulary words so panels can visually feature and label them.
 // Errors are non-fatal — story.txt is always accessible regardless of image failures.
-func (r *Runner) drawComicPages(storyText, bible, titleSlug string) {
+func (r *Runner) drawComicPages(storyText, bible, titleSlug string, entries []batch.WordEntry) {
 	fmt.Printf("Generating %d comic pages...\n", storyPageCount+2) // 2 = cover + back cover
-	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug)
+	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug, entries)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: comic page generation failed: %v\n", err)
 	}

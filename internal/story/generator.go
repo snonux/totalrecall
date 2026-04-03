@@ -244,7 +244,7 @@ func parseGenerateResult(combined string) GenerateResult {
 func buildStoryPrompt(entries []batch.WordEntry, theme string) string {
 	genre := resolveGenre(theme)
 	header := fmt.Sprintf(
-		"Write a ~500-word story in Bulgarian that naturally uses all of the following words.\n"+
+		"Write a ~250-word story in Bulgarian that naturally uses all of the following words.\n"+
 			"The story must be %s — do NOT write a generic fairy tale.\n"+
 			"Number each word as shown below. Return ONLY the story text — no title, no header, no explanation.\n\n",
 		genre,
@@ -259,7 +259,7 @@ func buildStoryPrompt(entries []batch.WordEntry, theme string) string {
 func buildStoryPromptFull(entries []batch.WordEntry, theme string) string {
 	genre := resolveGenre(theme)
 	var sb strings.Builder
-	sb.WriteString("Write a ~500-word story in Bulgarian that naturally uses all of the following words.\n")
+	sb.WriteString("Write a ~250-word story in Bulgarian that naturally uses all of the following words.\n")
 	sb.WriteString(fmt.Sprintf("The story must be %s — do NOT write a generic fairy tale.\n", genre))
 	sb.WriteString("Number each word as shown below.\n\n")
 	sb.WriteString(buildWordList(entries, ""))

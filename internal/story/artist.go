@@ -10,11 +10,13 @@ import (
 
 	"google.golang.org/genai"
 
+	"codeberg.org/snonux/totalrecall/internal/batch"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
 const (
-	// storyPageCount is the number of 9-panel story pages (excluding cover/back).
+	// storyPageCount is the number of story pages (excluding cover/back).
+	// Each page uses a 2×2 grid of 4 panels in landscape (16:9) format.
 	storyPageCount = 3
 
 	// comicPageAspectRatio: 16:9 is the closest supported widescreen ratio for
@@ -134,15 +136,17 @@ func NewArtist(config *ArtistConfig) *Artist {
 
 // DrawComicPages generates 5 images total:
 //   - <titleSlug>_cover.png          — full-bleed cover
-//   - <titleSlug>_page_1.png … _3    — 9-panel (3×3) story pages
+//   - <titleSlug>_page_1.png … _3    — 4-panel (2×2 grid) landscape story pages
 //   - <titleSlug>_back.png           — back cover
 //
 // A character bible injected into every prompt keeps characters, clothing, and
 // setting consistent across all pages. The bible is produced by GenerateFull in
 // the same Gemini call as the story; prebuiltBible is passed in from there.
+// entries are the vocabulary words from input.txt — they are injected into every
+// story page prompt so the image model visually features and labels them in panels.
 // titleSlug is used as the file-name prefix; it must already be a safe slug.
 // Returns the list of saved image paths in order.
-func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string) ([]string, error) {
+func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entries []batch.WordEntry) ([]string, error) {
 	style := a.style
 	if style == "" {
 		style = pickStyle()
@@ -168,13 +172,13 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string) ([]s
 		recentRefs = appendRef(recentRefs, coverBytes) // cover becomes the anchor reference
 	}
 
-	// 2. Story pages (9-panel grids) — each page receives cover + previous page as refs.
+	// 2. Story pages (7-panel landscape: 3+4 rows) — each receives cover + previous page as refs.
 	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
 		fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
 		p, pageBytes, err := a.generateSinglePage(
-			buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible),
+			buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries),
 			fmt.Sprintf("%s_page_%d", titleSlug, pageNum),
 			recentRefs,
 		)
@@ -356,11 +360,13 @@ func buildCoverPrompt(storyText, style, bible string) string {
 	)
 }
 
-// buildStoryPagePrompt constructs a 9-panel grid page prompt.
-// The Bulgarian language requirement is placed at the very top — before the
-// character reference and story excerpt — because image models tend to follow
-// early instructions more reliably than late ones buried in a list.
-func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string) string {
+// buildStoryPagePrompt constructs a landscape comic page prompt.
+// Layout uses a 2×2 grid of 4 panels optimised for the 16:9 aspect ratio.
+// entries are injected as a vocabulary block so the image model features and
+// labels each word visually inside the panels — making each page a learning tool.
+// The Bulgarian language requirement is placed at the very top so it is processed
+// before all other instructions.
+func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string, entries []batch.WordEntry) string {
 	excerpt := strings.TrimSpace(section)
 	if len(excerpt) > comicPromptMaxChars {
 		excerpt = excerpt[:comicPromptMaxChars]
@@ -371,6 +377,7 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 	}
 
 	bibleBlock := bibleSection(bible, fmt.Sprintf("story page %d of %d", pageNum, totalPages))
+	vocabBlock := buildVocabBlock(entries)
 	return fmt.Sprintf(
 		// Lead with the hard language constraint so it is processed first.
 		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
@@ -379,8 +386,16 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"(например: Здравей! Какво правиш? Побързай!). "+
 			"English text anywhere in the panels is STRICTLY FORBIDDEN — use ONLY Bulgarian.\n\n"+
 			"Art style: %s.%s\n"+
-			"Comic book story page %d of %d. Layout: a 3×3 grid of 9 panels filling the page, "+
-			"each panel showing a distinct moment from the excerpt below.\n"+
+			"%s"+ // vocabulary block
+			"Comic book story page %d of %d. "+
+			"MANDATORY PANEL LAYOUT — divide the image into exactly 4 panels in a 2×2 grid:\n"+
+			"  • TOP-LEFT panel: scene 1 from the excerpt\n"+
+			"  • TOP-RIGHT panel: scene 2 from the excerpt\n"+
+			"  • BOTTOM-LEFT panel: scene 3 from the excerpt\n"+
+			"  • BOTTOM-RIGHT panel: scene 4 from the excerpt\n"+
+			"Each panel is separated by a thin black gutter line. "+
+			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
+			"The full image area must be covered by the 4 panels with no empty space.\n"+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
 			"to the reference — a child must never look older or younger than defined.\n"+
@@ -389,8 +404,30 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
 			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n"+
 			"Story excerpt:\n\n%s",
-		style, bibleBlock, pageNum, totalPages, excerpt,
+		style, bibleBlock, vocabBlock, pageNum, totalPages, excerpt,
 	)
+}
+
+// buildVocabBlock formats the vocabulary entries as a mandatory visual instruction
+// block. Each word must appear as a clearly labelled object or element in at least
+// one panel — making the comic page a vocabulary learning tool as well as a story page.
+func buildVocabBlock(entries []batch.WordEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("VOCABULARY WORDS — each word below MUST appear as a clearly visible, labelled\n")
+	sb.WriteString("object or element in at least one panel. Show the object in the scene and add a\n")
+	sb.WriteString("small Bulgarian label directly on it (bold text, contrasting colour, easy to read):\n")
+	for _, e := range entries {
+		if e.Translation != "" {
+			sb.WriteString(fmt.Sprintf("  • %s (%s)\n", e.Bulgarian, e.Translation))
+		} else {
+			sb.WriteString(fmt.Sprintf("  • %s\n", e.Bulgarian))
+		}
+	}
+	sb.WriteString("\n")
+	return sb.String()
 }
 
 // buildBackCoverPrompt constructs the back-cover image prompt.

@@ -29,22 +29,29 @@ const (
 	// conclusionSystemInstruction directs Gemini to write a short cinematic
 	// epilogue in Bulgarian — roughly 40–60 words (≈15–30 seconds of narration).
 	conclusionSystemInstruction = `You are a dramatic cinematic narrator writing a closing epilogue for a Bulgarian story.
-Write a SHORT closing epilogue in Bulgarian: exactly 3–4 sentences, cinematic and poetic,
-with a warm and conclusive tone — like the final voice-over of a film that leaves the audience
-with a sense of wonder and completion. Do NOT summarise the plot; instead reflect on the deeper
-meaning or emotion of the story. Output only the Bulgarian epilogue text, nothing else.`
+Write a SHORT closing epilogue in the BULGARIAN language (NOT Russian — Bulgarian uses Cyrillic but
+is a distinct language with different phonology, vocabulary, and grammar).
+Exactly 3–4 sentences, cinematic and poetic, with a warm and conclusive tone — like the final
+voice-over of a film that leaves the audience with a sense of wonder and completion.
+Do NOT summarise the plot; instead reflect on the deeper meaning or emotion of the story.
+Output only the Bulgarian epilogue text, nothing else.`
 
 	// cinematicInstruction is prepended to every chunk before the TTS call.
 	// Gemini TTS reads style instructions from the user-turn prompt, so embedding
 	// the directive here (rather than as a SystemInstruction) is the supported way
 	// to control voice style, pacing, and emotional delivery.
-	cinematicInstruction = `You are a dramatic cinematic narrator performing a Bulgarian story.
+	// The language must be stated explicitly: Gemini TTS can confuse Bulgarian with
+	// Russian (both use Cyrillic) and apply Slavic Russian phonology by default.
+	cinematicInstruction = `You are a dramatic cinematic narrator performing a story written in BULGARIAN.
+IMPORTANT: This text is in the BULGARIAN language — NOT Russian, NOT Serbian, NOT any other Slavic language.
+Pronounce every word using authentic BULGARIAN phonology and accent. Bulgarian vowels are clear and distinct;
+do not apply Russian stress patterns or Russian vowel reduction. The letter 'ъ' in Bulgarian is a mid-central
+vowel (like the 'u' in "but"), not the Russian reduced schwa.
 Deliver this as a professional movie trailer narrator would: deep, resonant, and commanding.
 Use long dramatic pauses before key moments. Build tension with slower, deliberate pacing,
 then accelerate through action. Drop your voice low and gravelly for mysterious or serious
 passages; let warmth and energy rise for joyful or triumphant ones. Breathe life into every
-sentence — this should sound like an epic film, not a reading exercise. Pronounce all
-Bulgarian words with authentic clarity and expressive intonation.
+sentence — this should sound like an epic Bulgarian film, not a reading exercise.
 
 `
 )
@@ -130,11 +137,18 @@ func (n *Narrator) Narrate(storyText, outputFile string) error {
 		chunkPaths = append(chunkPaths, conclusionPath)
 	}
 
+	// Merge all segments into a single file, then widen to stereo.
+	// Gemini TTS produces mono audio; convertToStereo duplicates the channel so
+	// the result plays correctly on headphones without audio only in one ear.
+	combinedPath := filepath.Join(tmpDir, "combined.mp3")
 	if len(chunkPaths) == 1 {
-		// Only one segment (short story, no conclusion) — move directly.
-		return os.Rename(chunkPaths[0], outputFile)
+		combinedPath = chunkPaths[0]
+	} else {
+		if err := concatenateMP3s(chunkPaths, combinedPath, tmpDir); err != nil {
+			return err
+		}
 	}
-	return concatenateMP3s(chunkPaths, outputFile, tmpDir)
+	return convertToStereo(combinedPath, outputFile)
 }
 
 // narrateConclusion generates a short Bulgarian cinematic epilogue via Gemini text,
@@ -228,6 +242,32 @@ func concatenateMP3s(chunkPaths []string, outputFile, tmpDir string) error {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ffmpeg concat failed: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// convertToStereo re-encodes a mono MP3 to stereo by duplicating the single
+// channel into both left and right. Gemini TTS always outputs mono; without this
+// step the audio plays only in one ear on headphones.
+func convertToStereo(inputFile, outputFile string) error {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		// ffmpeg absent — fall back to a plain copy so narration still saves.
+		fmt.Println("    Warning: ffmpeg not found, narration will be mono")
+		return os.Rename(inputFile, outputFile)
+	}
+
+	cmd := exec.Command(ffmpegPath,
+		"-nostdin", "-hide_banner", "-loglevel", "error",
+		"-y",
+		"-i", inputFile,
+		"-ac", "2", // duplicate mono channel into stereo
+		"-codec:a", "libmp3lame", "-q:a", "2",
+		outputFile,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg stereo conversion failed: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
