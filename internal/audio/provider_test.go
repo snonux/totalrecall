@@ -1,40 +1,10 @@
 package audio
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// mockProvider implements Provider interface for testing
-type mockProvider struct {
-	name          string
-	generateErr   error
-	availableErr  error
-	generateCalls int
-}
-
-func (m *mockProvider) GenerateAudio(ctx context.Context, text string, outputFile string) error {
-	m.generateCalls++
-	return m.generateErr
-}
-
-func (m *mockProvider) Name() string {
-	return m.name
-}
-
-func (m *mockProvider) IsAvailable() error {
-	return m.availableErr
-}
-
-func (m *mockProvider) Voices() []string {
-	return nil
-}
-
-func (m *mockProvider) BuildAttribution(params AttributionParams) string {
-	return ""
-}
 
 func TestDefaultProviderConfig(t *testing.T) {
 	config := DefaultProviderConfig()

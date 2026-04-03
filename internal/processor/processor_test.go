@@ -789,7 +789,7 @@ func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
 	if !errors.Is(err, audio.ErrGeminiNoAudioData) {
 		t.Fatalf("generateAudio() error = %v, want wrapped ErrGeminiNoAudioData", err)
 	}
-	if got, want := err.Error(), "Gemini returned no audio for voices Charon: no audio data returned from Gemini"; got != want {
+	if got, want := err.Error(), "gemini returned no audio for voices Charon: no audio data returned from Gemini"; got != want {
 		t.Fatalf("generateAudio() error text = %q, want %q", got, want)
 	}
 }

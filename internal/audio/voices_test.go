@@ -121,7 +121,7 @@ func TestRunWithVoiceFallbacks(t *testing.T) {
 		if got, want := attempted, []string{"Charon", "Kore", "Leda"}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("attempted voices = %#v, want %#v", got, want)
 		}
-		if got := err.Error(); got != "Gemini returned no audio for voices Charon, Kore, Leda: no audio data returned from Gemini" {
+		if got := err.Error(); got != "gemini returned no audio for voices Charon, Kore, Leda: no audio data returned from Gemini" {
 			t.Fatalf("error text = %q, want wrapped attempted-voices summary", got)
 		}
 	})

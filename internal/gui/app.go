@@ -2604,10 +2604,9 @@ func (a *Application) setupKeyboardShortcuts() {
 			if !a.regenerateAudioBtn.Disabled() {
 				a.onRegenerateAudio()
 			}
-		case 'A', 'А': // A = regenerate back audio (for bg-bg cards)
+		case 'A', 'А': // A = regenerate back audio (for bg-bg cards only)
 			if a.currentCardType == "bg-bg" {
 				a.onRegenerateBackAudio()
-			} else {
 			}
 		case 'р', 'Р': // р = r
 			if !a.regenerateAllBtn.Disabled() {
