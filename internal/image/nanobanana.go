@@ -48,7 +48,9 @@ type NanoBananaClient struct {
 	PromptCallback func(prompt string)
 }
 
-var _ ImageSearcher = (*NanoBananaClient)(nil)
+// Compile-time check that NanoBananaClient implements the full ImageClient interface
+// (ImageSearcher + AttributionProvider).
+var _ ImageClient = (*NanoBananaClient)(nil)
 
 var newNanoBananaClient = genai.NewClient
 var nanoBananaGenerateText = func(ctx context.Context, c *NanoBananaClient, model, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {

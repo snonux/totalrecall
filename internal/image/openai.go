@@ -13,8 +13,9 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-// Compile-time check that OpenAIClient implements the ImageSearcher interface.
-var _ ImageSearcher = (*OpenAIClient)(nil)
+// Compile-time check that OpenAIClient implements the full ImageClient interface
+// (ImageSearcher + AttributionProvider).
+var _ ImageClient = (*OpenAIClient)(nil)
 
 // imageHTTPClient is a shared HTTP client with a generous timeout for image
 // downloads. http.DefaultClient has no timeout, which can block goroutines

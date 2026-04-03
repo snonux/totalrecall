@@ -29,14 +29,16 @@ func DefaultDownloadOptions() *DownloadOptions {
 	}
 }
 
-// Downloader handles image downloads from search results
+// Downloader handles image downloads from search results.
+// It requires ImageClient (ImageSearcher + AttributionProvider) because it
+// both downloads images and embeds attribution text in saved files.
 type Downloader struct {
-	searcher ImageSearcher
+	searcher ImageClient
 	options  *DownloadOptions
 }
 
 // NewDownloader creates a new image downloader
-func NewDownloader(searcher ImageSearcher, options *DownloadOptions) *Downloader {
+func NewDownloader(searcher ImageClient, options *DownloadOptions) *Downloader {
 	if options == nil {
 		options = DefaultDownloadOptions()
 	}

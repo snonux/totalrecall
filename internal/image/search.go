@@ -43,19 +43,32 @@ func DefaultSearchOptions(query string) *SearchOptions {
 	}
 }
 
-// ImageSearcher defines the interface for image search providers
+// AttributionProvider returns required attribution text for a search result.
+// Kept separate from ImageSearcher so callers that only need attribution
+// do not depend on Search/Download/Name.
+type AttributionProvider interface {
+	GetAttribution(result *SearchResult) string
+}
+
+// ImageSearcher defines the interface for image search providers.
+// Providers that also carry attribution text implement AttributionProvider
+// in addition to this interface.
 type ImageSearcher interface {
-	// Search performs an image search with the given options
+	// Search performs an image search with the given options.
 	Search(ctx context.Context, opts *SearchOptions) ([]SearchResult, error)
 
-	// Download downloads an image from the given URL
+	// Download downloads an image from the given URL.
 	Download(ctx context.Context, url string) (io.ReadCloser, error)
 
-	// GetAttribution returns the required attribution text for an image
-	GetAttribution(result *SearchResult) string
-
-	// Name returns the name of the search provider
+	// Name returns the name of the search provider.
 	Name() string
+}
+
+// ImageClient combines ImageSearcher and AttributionProvider for callers
+// that need full provider capabilities (search, download, attribution).
+type ImageClient interface {
+	ImageSearcher
+	AttributionProvider
 }
 
 // SearchError represents an error from an image search provider
