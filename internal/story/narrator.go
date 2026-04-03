@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/genai"
+
 	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
@@ -23,6 +25,14 @@ const (
 	// splitting at ~200 words keeps each call short and the voice stable.
 	// Chunks are split at paragraph boundaries whenever possible.
 	narratorChunkWords = 200
+
+	// conclusionSystemInstruction directs Gemini to write a short cinematic
+	// epilogue in Bulgarian — roughly 40–60 words (≈15–30 seconds of narration).
+	conclusionSystemInstruction = `You are a dramatic cinematic narrator writing a closing epilogue for a Bulgarian story.
+Write a SHORT closing epilogue in Bulgarian: exactly 3–4 sentences, cinematic and poetic,
+with a warm and conclusive tone — like the final voice-over of a film that leaves the audience
+with a sense of wonder and completion. Do NOT summarise the plot; instead reflect on the deeper
+meaning or emotion of the story. Output only the Bulgarian epilogue text, nothing else.`
 
 	// cinematicInstruction is prepended to every chunk before the TTS call.
 	// Gemini TTS reads style instructions from the user-turn prompt, so embedding
@@ -60,6 +70,7 @@ type NarratorConfig struct {
 // Narrator wraps a Gemini TTS Provider and generates cinematic MP3 narrations.
 type Narrator struct {
 	provider audio.Provider
+	apiKey   string // stored for the conclusion text-generation call
 	voice    string // resolved voice name, stored for progress logging
 }
 
@@ -86,27 +97,23 @@ func NewNarrator(config *NarratorConfig) (*Narrator, error) {
 		return nil, fmt.Errorf("narrator: initialise Gemini TTS: %w", err)
 	}
 
-	return &Narrator{provider: provider, voice: voice}, nil
+	return &Narrator{provider: provider, apiKey: config.APIKey, voice: voice}, nil
 }
 
 // Narrate generates a cinematic MP3 narration of storyText and saves it to
 // outputFile. The story is split into short paragraph-aligned chunks before
-// calling the TTS API so the voice quality and consistency stay high throughout
-// the full narration (Gemini TTS degrades on long single-call texts).
+// calling the TTS API so the voice quality stays high throughout (Gemini TTS
+// degrades on long single-call texts). A Gemini-generated cinematic epilogue
+// is always appended as a final 15–30 second concluding segment.
 func (n *Narrator) Narrate(storyText, outputFile string) error {
-	chunks := splitIntoNarrationChunks(storyText, narratorChunkWords)
-	if len(chunks) == 1 {
-		// Single short story — narrate in one call, no concatenation needed.
-		return n.narrateChunk(cinematicInstruction+chunks[0], outputFile)
-	}
-
-	fmt.Printf("    Splitting narration into %d chunks for consistent voice quality...\n", len(chunks))
-
 	tmpDir, err := os.MkdirTemp("", "totalrecall-narration-*")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
+
+	chunks := splitIntoNarrationChunks(storyText, narratorChunkWords)
+	fmt.Printf("    Splitting narration into %d chunks for consistent voice quality...\n", len(chunks))
 
 	var chunkPaths []string
 	for i, chunk := range chunks {
@@ -118,7 +125,71 @@ func (n *Narrator) Narrate(storyText, outputFile string) error {
 		chunkPaths = append(chunkPaths, chunkPath)
 	}
 
+	// Generate and append a cinematic epilogue as the final segment.
+	if conclusionPath, ok := n.narrateConclusion(storyText, tmpDir); ok {
+		chunkPaths = append(chunkPaths, conclusionPath)
+	}
+
+	if len(chunkPaths) == 1 {
+		// Only one segment (short story, no conclusion) — move directly.
+		return os.Rename(chunkPaths[0], outputFile)
+	}
 	return concatenateMP3s(chunkPaths, outputFile, tmpDir)
+}
+
+// narrateConclusion generates a short Bulgarian cinematic epilogue via Gemini text,
+// then narrates it as an MP3 written to tmpDir. Returns the path and true on success,
+// or empty string and false on any failure (non-fatal — the main narration still saves).
+func (n *Narrator) narrateConclusion(storyText, tmpDir string) (string, bool) {
+	conclusion := n.buildConclusion(storyText)
+	if conclusion == "" {
+		return "", false
+	}
+
+	fmt.Println("    Narrating concluding epilogue...")
+	conclusionPath := filepath.Join(tmpDir, "conclusion.mp3")
+	if err := n.narrateChunk(cinematicInstruction+conclusion, conclusionPath); err != nil {
+		fmt.Printf("    Warning: conclusion narration failed: %v\n", err)
+		return "", false
+	}
+	return conclusionPath, true
+}
+
+// buildConclusion calls Gemini text to produce a short Bulgarian cinematic epilogue
+// (≈40–60 words, ~15–30 s of narration). Returns empty string on failure.
+func (n *Narrator) buildConclusion(storyText string) string {
+	if n.apiKey == "" {
+		return ""
+	}
+
+	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: n.apiKey})
+	if err != nil {
+		fmt.Printf("    Warning: conclusion text generation failed: %v\n", err)
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), helperTimeout)
+	defer cancel()
+
+	resp, err := client.Models.GenerateContent(ctx, helperModel,
+		[]*genai.Content{genai.NewContentFromText(storyText, genai.RoleUser)},
+		&genai.GenerateContentConfig{
+			SystemInstruction: &genai.Content{
+				Parts: []*genai.Part{{Text: conclusionSystemInstruction}},
+			},
+			MaxOutputTokens: helperMaxTokens,
+		},
+	)
+	if err != nil {
+		fmt.Printf("    Warning: conclusion text generation failed: %v\n", err)
+		return ""
+	}
+
+	text := strings.TrimSpace(resp.Text())
+	if text == "" {
+		fmt.Println("    Warning: conclusion text generation returned empty response")
+	}
+	return text
 }
 
 // narrateChunk calls the TTS provider for a single text segment.
