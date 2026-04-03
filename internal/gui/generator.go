@@ -22,16 +22,6 @@ type promptAwareImageClient interface {
 	SetPromptCallback(func(prompt string))
 }
 
-var newOpenAIImageClient = func(config *image.OpenAIConfig) promptAwareImageClient {
-	return image.NewOpenAIClient(config)
-}
-
-var newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareImageClient {
-	return image.NewNanoBananaClient(config)
-}
-
-var newAudioProvider = audio.NewProvider
-
 func randomVoice(voices []string) string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return voices[rng.Intn(len(voices))]
@@ -123,7 +113,7 @@ func (a *Application) audioConfigForGeneration(voice string, speed float64) audi
 func (a *Application) generateAudioFile(ctx context.Context, text, outputFile, voice string, speed float64) error {
 	audioConfig := a.audioConfigForGeneration(voice, speed)
 
-	provider, err := newAudioProvider(&audioConfig)
+	provider, err := a.newAudioProvider(&audioConfig)
 	if err != nil {
 		return err
 	}
@@ -410,7 +400,7 @@ func (a *Application) newImageSearcher() (promptAwareImageClient, error) {
 			Style:   "natural",
 		}
 
-		return newOpenAIImageClient(openaiConfig), nil
+		return a.newOpenAIImageClient(openaiConfig), nil
 	case imageProviderNanoBanana:
 		config := a.config
 		if config == nil {
@@ -426,7 +416,7 @@ func (a *Application) newImageSearcher() (promptAwareImageClient, error) {
 			TextModel: config.NanoBananaTextModel,
 		}
 
-		return newNanoBananaImageClient(nanoBananaConfig), nil
+		return a.newNanoBananaImageClient(nanoBananaConfig), nil
 	default:
 		return nil, fmt.Errorf("unknown image provider: %s", a.config.ImageProvider)
 	}

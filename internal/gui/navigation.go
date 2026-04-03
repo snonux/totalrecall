@@ -15,41 +15,11 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
-// findCardDirectory finds the directory for a given Bulgarian word
+// findCardDirectory finds the directory for a given Bulgarian word.
+// Delegates to the shared internal.FindCardDirectory which also handles the
+// legacy _word.txt fallback for backward compatibility.
 func (a *Application) findCardDirectory(word string) string {
-	entries, err := os.ReadDir(a.config.OutputDir)
-	if err != nil {
-		return ""
-	}
-
-	// Look through all directories to find one with matching _word.txt
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-
-		dirPath := filepath.Join(a.config.OutputDir, entry.Name())
-		wordFile := filepath.Join(dirPath, "word.txt")
-
-		// Read the word file to check if it matches
-		if data, err := os.ReadFile(wordFile); err == nil {
-			storedWord := strings.TrimSpace(string(data))
-			if storedWord == word {
-				return dirPath
-			}
-		} else {
-			// Try old format with underscore for backward compatibility
-			wordFile = filepath.Join(dirPath, "_word.txt")
-			if data, err := os.ReadFile(wordFile); err == nil {
-				storedWord := strings.TrimSpace(string(data))
-				if storedWord == word {
-					return dirPath
-				}
-			}
-		}
-	}
-
-	return ""
+	return internal.FindCardDirectory(a.config.OutputDir, word)
 }
 
 // scanExistingWords scans the output directory for existing words

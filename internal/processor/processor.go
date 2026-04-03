@@ -22,37 +22,125 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
-// Processor handles the main word processing logic
+// viperConfig holds all Viper-sourced settings captured once in NewProcessor.
+// Storing them in a struct avoids repeated global Viper access in method bodies
+// and makes the values testable without mutating process-wide Viper state.
+type viperConfig struct {
+	// Translation & phonetic settings
+	translationProvider    string
+	phoneticProvider       string
+	translationGeminiModel string
+
+	// Audio settings
+	audioProvider        string
+	audioFormat          string
+	audioFormatSet       bool
+	geminiTTSModel       string
+	geminiVoice          string
+	openAIVoice          string
+	openAIModel          string
+	openAIModelSet       bool
+	openAISpeed          float64
+	openAISpeedSet       bool
+	openAIInstruction    string
+	openAIInstructionSet bool
+
+	// Image settings
+	imageProvider               string
+	imageOpenAIModel            string
+	imageOpenAIModelSet         bool
+	imageOpenAISize             string
+	imageOpenAISizeSet          bool
+	imageOpenAIQuality          string
+	imageOpenAIQualitySet       bool
+	imageOpenAIStyle            string
+	imageOpenAIStyleSet         bool
+	imageNanoBananaModel        string
+	imageNanoBananaModelSet     bool
+	imageNanoBananaTextModel    string
+	imageNanoBananaTextModelSet bool
+}
+
+// newViperConfig reads all Viper settings in one pass. Called once from NewProcessor
+// so the processor methods never touch the global Viper instance directly.
+func newViperConfig() viperConfig {
+	return viperConfig{
+		translationProvider:    strings.TrimSpace(viper.GetString("translation.provider")),
+		phoneticProvider:       strings.TrimSpace(viper.GetString("phonetic.provider")),
+		translationGeminiModel: viper.GetString("translation.gemini_model"),
+
+		audioProvider:        strings.ToLower(strings.TrimSpace(viper.GetString("audio.provider"))),
+		audioFormat:          strings.ToLower(strings.TrimSpace(viper.GetString("audio.format"))),
+		audioFormatSet:       viper.IsSet("audio.format"),
+		geminiTTSModel:       strings.TrimSpace(viper.GetString("audio.gemini_tts_model")),
+		geminiVoice:          strings.TrimSpace(viper.GetString("audio.gemini_voice")),
+		openAIVoice:          strings.TrimSpace(viper.GetString("audio.openai_voice")),
+		openAIModel:          viper.GetString("audio.openai_model"),
+		openAIModelSet:       viper.IsSet("audio.openai_model"),
+		openAISpeed:          viper.GetFloat64("audio.openai_speed"),
+		openAISpeedSet:       viper.IsSet("audio.openai_speed"),
+		openAIInstruction:    viper.GetString("audio.openai_instruction"),
+		openAIInstructionSet: viper.IsSet("audio.openai_instruction"),
+
+		imageProvider:               strings.ToLower(strings.TrimSpace(viper.GetString("image.provider"))),
+		imageOpenAIModel:            viper.GetString("image.openai_model"),
+		imageOpenAIModelSet:         viper.IsSet("image.openai_model"),
+		imageOpenAISize:             viper.GetString("image.openai_size"),
+		imageOpenAISizeSet:          viper.IsSet("image.openai_size"),
+		imageOpenAIQuality:          viper.GetString("image.openai_quality"),
+		imageOpenAIQualitySet:       viper.IsSet("image.openai_quality"),
+		imageOpenAIStyle:            viper.GetString("image.openai_style"),
+		imageOpenAIStyleSet:         viper.IsSet("image.openai_style"),
+		imageNanoBananaModel:        strings.TrimSpace(viper.GetString("image.nanobanana_model")),
+		imageNanoBananaModelSet:     viper.IsSet("image.nanobanana_model"),
+		imageNanoBananaTextModel:    strings.TrimSpace(viper.GetString("image.nanobanana_text_model")),
+		imageNanoBananaTextModelSet: viper.IsSet("image.nanobanana_text_model"),
+	}
+}
+
+// Processor handles the main word processing logic.
+// The factory fields (newOpenAIImageClient, newNanoBananaImageClient, newAudioProvider)
+// are injected at construction time so tests can swap them without mutating global state.
 type Processor struct {
 	flags            *cli.Flags
 	translator       *translation.Translator
 	translationCache *translation.TranslationCache
 	phoneticFetcher  *phonetic.Fetcher
 	randomIntn       func(n int) int
+	// viperCfg holds all config-file values read once at construction time,
+	// so individual methods never call Viper directly.
+	viperCfg viperConfig
+
+	// Factories — replaced by tests to inject fakes.
+	newOpenAIImageClient     func(*image.OpenAIConfig) image.ImageClient
+	newNanoBananaImageClient func(*image.NanoBananaConfig) image.ImageClient
+	newAudioProvider         func(*audio.Config) (audio.Provider, error)
 }
 
-var newOpenAIImageClient = func(config *image.OpenAIConfig) image.ImageClient {
-	return image.NewOpenAIClient(config)
-}
-
-var newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
-	return image.NewNanoBananaClient(config)
-}
-
-var newAudioProvider = audio.NewProvider
-
-// NewProcessor creates a new word processor
+// NewProcessor creates a new word processor with default production factories.
+// All Viper config values are read once here via newViperConfig() so that no
+// method body ever calls Viper directly.
+// Tests can replace the factory fields on the returned struct to inject fakes.
 func NewProcessor(flags *cli.Flags) *Processor {
+	cfg := newViperConfig()
 	openAIKey := cli.GetOpenAIKey()
 	googleAPIKey := cli.GetGoogleAPIKey()
-	translationProvider := translation.Provider(viper.GetString("translation.provider"))
-	phoneticProvider := phonetic.Provider(viper.GetString("phonetic.provider"))
+	translationProvider := translation.Provider(cfg.translationProvider)
+	phoneticProvider := phonetic.Provider(cfg.phoneticProvider)
 	return &Processor{
 		flags:            flags,
+		viperCfg:         cfg,
 		translator:       translation.NewTranslator(&translation.Config{Provider: translationProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		translationCache: translation.NewTranslationCache(),
 		phoneticFetcher:  phonetic.NewFetcher(&phonetic.Config{Provider: phoneticProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		randomIntn:       rand.Intn,
+		newOpenAIImageClient: func(config *image.OpenAIConfig) image.ImageClient {
+			return image.NewOpenAIClient(config)
+		},
+		newNanoBananaImageClient: func(config *image.NanoBananaConfig) image.ImageClient {
+			return image.NewNanoBananaClient(config)
+		},
+		newAudioProvider: audio.NewProvider,
 	}
 }
 
@@ -246,8 +334,8 @@ func (p *Processor) ProcessWordWithTranslationAndType(ctx context.Context, word,
 }
 
 func (p *Processor) audioProviderName() string {
-	if provider := strings.ToLower(strings.TrimSpace(viper.GetString("audio.provider"))); provider != "" {
-		return provider
+	if p.viperCfg.audioProvider != "" {
+		return p.viperCfg.audioProvider
 	}
 	if p != nil && p.flags != nil {
 		return strings.ToLower(strings.TrimSpace(p.flags.AudioProvider))
@@ -262,10 +350,8 @@ func (p *Processor) effectiveAudioFormat() string {
 		}
 	}
 
-	if viper.IsSet("audio.format") {
-		if format := strings.ToLower(strings.TrimSpace(viper.GetString("audio.format"))); format != "" {
-			return format
-		}
+	if p.viperCfg.audioFormatSet && p.viperCfg.audioFormat != "" {
+		return p.viperCfg.audioFormat
 	}
 
 	if p != nil && p.flags != nil {
@@ -282,8 +368,8 @@ func (p *Processor) effectiveAudioFormat() string {
 }
 
 func (p *Processor) geminiTTSModel() string {
-	if model := strings.TrimSpace(viper.GetString("audio.gemini_tts_model")); model != "" {
-		return model
+	if p.viperCfg.geminiTTSModel != "" {
+		return p.viperCfg.geminiTTSModel
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.GeminiTTSModel)
@@ -292,8 +378,8 @@ func (p *Processor) geminiTTSModel() string {
 }
 
 func (p *Processor) geminiVoice() string {
-	if voice := strings.TrimSpace(viper.GetString("audio.gemini_voice")); voice != "" {
-		return voice
+	if p.viperCfg.geminiVoice != "" {
+		return p.viperCfg.geminiVoice
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.GeminiVoice)
@@ -302,8 +388,8 @@ func (p *Processor) geminiVoice() string {
 }
 
 func (p *Processor) openAIVoice() string {
-	if voice := strings.TrimSpace(viper.GetString("audio.openai_voice")); voice != "" {
-		return voice
+	if p.viperCfg.openAIVoice != "" {
+		return p.viperCfg.openAIVoice
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.OpenAIVoice)
@@ -461,7 +547,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, 
 
 	// Generate random speed between 0.90 and 1.00 if not explicitly set
 	speed := p.flags.OpenAISpeed
-	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !viper.IsSet("audio.openai_speed") {
+	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !p.viperCfg.openAISpeedSet {
 		// Default was used, generate random speed
 		speed = 0.90 + rand.Float64()*0.10
 	}
@@ -491,19 +577,19 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, 
 		providerConfig.OpenAIInstruction = p.flags.OpenAIInstruction
 
 		// Use config file values if not overridden by flags
-		if p.flags.OpenAIModel == "gpt-4o-mini-tts" && viper.IsSet("audio.openai_model") {
-			providerConfig.OpenAIModel = viper.GetString("audio.openai_model")
+		if p.flags.OpenAIModel == "gpt-4o-mini-tts" && p.viperCfg.openAIModelSet {
+			providerConfig.OpenAIModel = p.viperCfg.openAIModel
 		}
-		if p.flags.OpenAISpeed == 0.9 && viper.IsSet("audio.openai_speed") {
-			providerConfig.OpenAISpeed = viper.GetFloat64("audio.openai_speed")
+		if p.flags.OpenAISpeed == 0.9 && p.viperCfg.openAISpeedSet {
+			providerConfig.OpenAISpeed = p.viperCfg.openAISpeed
 		}
-		if p.flags.OpenAIInstruction == "" && viper.IsSet("audio.openai_instruction") {
-			providerConfig.OpenAIInstruction = viper.GetString("audio.openai_instruction")
+		if p.flags.OpenAIInstruction == "" && p.viperCfg.openAIInstructionSet {
+			providerConfig.OpenAIInstruction = p.viperCfg.openAIInstruction
 		}
 	}
 
 	// Create the audio provider
-	provider, err := newAudioProvider(providerConfig)
+	provider, err := p.newAudioProvider(providerConfig)
 	if err != nil {
 		return err
 	}
@@ -689,8 +775,8 @@ func (p *Processor) GUIConfig() *gui.Config {
 
 	openAIKey := cli.GetOpenAIKey()
 	googleAPIKey := cli.GetGoogleAPIKey()
-	translationProvider := translation.Provider(viper.GetString("translation.provider"))
-	phoneticProvider := phonetic.Provider(viper.GetString("phonetic.provider"))
+	translationProvider := translation.Provider(p.viperCfg.translationProvider)
+	phoneticProvider := phonetic.Provider(p.viperCfg.phoneticProvider)
 
 	// Construct and inject phonetic/translation dependencies at the composition root
 	// so gui.New() receives ready-to-use instances rather than raw config strings.
@@ -702,7 +788,7 @@ func (p *Processor) GUIConfig() *gui.Config {
 	translator := translation.NewTranslator(&translation.Config{
 		Provider:    translationProvider,
 		OpenAIKey:   openAIKey,
-		GeminiModel: viper.GetString("translation.gemini_model"),
+		GeminiModel: p.viperCfg.translationGeminiModel,
 	})
 
 	return &gui.Config{
@@ -730,8 +816,8 @@ func (p *Processor) nanoBananaModelForRunMode() string {
 		}
 	}
 
-	if model := strings.TrimSpace(viper.GetString("image.nanobanana_model")); model != "" {
-		return model
+	if p.viperCfg.imageNanoBananaModel != "" {
+		return p.viperCfg.imageNanoBananaModel
 	}
 
 	if p != nil && p.flags != nil {
@@ -750,8 +836,8 @@ func (p *Processor) nanoBananaTextModelForRunMode() string {
 		}
 	}
 
-	if model := strings.TrimSpace(viper.GetString("image.nanobanana_text_model")); model != "" {
-		return model
+	if p.viperCfg.imageNanoBananaTextModel != "" {
+		return p.viperCfg.imageNanoBananaTextModel
 	}
 
 	if p != nil && p.flags != nil {
@@ -781,8 +867,8 @@ func (p *Processor) imageProviderForRunMode() string {
 		return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 	}
 
-	if provider := strings.ToLower(strings.TrimSpace(viper.GetString("image.provider"))); provider != "" {
-		return provider
+	if p.viperCfg.imageProvider != "" {
+		return p.viperCfg.imageProvider
 	}
 
 	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
@@ -797,24 +883,24 @@ func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 		Style:   p.flags.OpenAIImageStyle,
 	}
 
-	if p.flags.OpenAIImageModel == "dall-e-2" && viper.IsSet("image.openai_model") {
-		openaiConfig.Model = viper.GetString("image.openai_model")
+	if p.flags.OpenAIImageModel == "dall-e-2" && p.viperCfg.imageOpenAIModelSet {
+		openaiConfig.Model = p.viperCfg.imageOpenAIModel
 	}
-	if p.flags.OpenAIImageSize == "512x512" && viper.IsSet("image.openai_size") {
-		openaiConfig.Size = viper.GetString("image.openai_size")
+	if p.flags.OpenAIImageSize == "512x512" && p.viperCfg.imageOpenAISizeSet {
+		openaiConfig.Size = p.viperCfg.imageOpenAISize
 	}
-	if p.flags.OpenAIImageQuality == "standard" && viper.IsSet("image.openai_quality") {
-		openaiConfig.Quality = viper.GetString("image.openai_quality")
+	if p.flags.OpenAIImageQuality == "standard" && p.viperCfg.imageOpenAIQualitySet {
+		openaiConfig.Quality = p.viperCfg.imageOpenAIQuality
 	}
-	if p.flags.OpenAIImageStyle == "natural" && viper.IsSet("image.openai_style") {
-		openaiConfig.Style = viper.GetString("image.openai_style")
+	if p.flags.OpenAIImageStyle == "natural" && p.viperCfg.imageOpenAIStyleSet {
+		openaiConfig.Style = p.viperCfg.imageOpenAIStyle
 	}
 
 	if openaiConfig.APIKey == "" {
 		return nil, fmt.Errorf("OpenAI API key is required for image generation")
 	}
 
-	return newOpenAIImageClient(openaiConfig), nil
+	return p.newOpenAIImageClient(openaiConfig), nil
 }
 
 func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
@@ -824,18 +910,18 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
 		TextModel: p.flags.NanoBananaTextModel,
 	}
 
-	if !p.flags.NanoBananaModelSpecified && viper.IsSet("image.nanobanana_model") {
-		nanoBananaConfig.Model = viper.GetString("image.nanobanana_model")
+	if !p.flags.NanoBananaModelSpecified && p.viperCfg.imageNanoBananaModelSet {
+		nanoBananaConfig.Model = p.viperCfg.imageNanoBananaModel
 	}
-	if !p.flags.NanoBananaTextModelSpecified && viper.IsSet("image.nanobanana_text_model") {
-		nanoBananaConfig.TextModel = viper.GetString("image.nanobanana_text_model")
+	if !p.flags.NanoBananaTextModelSpecified && p.viperCfg.imageNanoBananaTextModelSet {
+		nanoBananaConfig.TextModel = p.viperCfg.imageNanoBananaTextModel
 	}
 
 	if nanoBananaConfig.APIKey == "" {
 		return nil, fmt.Errorf("google API key is required for image generation")
 	}
 
-	return newNanoBananaImageClient(nanoBananaConfig), nil
+	return p.newNanoBananaImageClient(nanoBananaConfig), nil
 }
 
 func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageClient) {
@@ -862,53 +948,11 @@ func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageClient) 
 // Helper methods
 
 func (p *Processor) findOrCreateWordDirectory(word string) string {
-	// Try to find existing directory first
-	if dir := p.findCardDirectory(word); dir != "" {
-		return dir
-	}
-
-	// No existing directory, create new one with card ID
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(p.flags.OutputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		fmt.Printf("Warning: failed to create word directory: %v\n", err)
-		return p.flags.OutputDir // Fallback to output directory
-	}
-
-	// Save word metadata
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-		fmt.Printf("Warning: failed to save word metadata: %v\n", err)
-	}
-
-	return wordDir
+	return internal.FindOrCreateCardDirectory(p.flags.OutputDir, word)
 }
 
 func (p *Processor) findCardDirectory(word string) string {
-	entries, err := os.ReadDir(p.flags.OutputDir)
-	if err != nil {
-		return ""
-	}
-
-	// Look through all directories to find one with matching word.txt
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-
-		dirPath := filepath.Join(p.flags.OutputDir, entry.Name())
-		wordFile := filepath.Join(dirPath, "word.txt")
-
-		// Read the word file to check if it matches
-		if data, err := os.ReadFile(wordFile); err == nil {
-			storedWord := strings.TrimSpace(string(data))
-			if storedWord == word {
-				return dirPath
-			}
-		}
-	}
-
-	return ""
+	return internal.FindCardDirectory(p.flags.OutputDir, word)
 }
 
 // isWordFullyProcessed checks if a word has already been fully processed

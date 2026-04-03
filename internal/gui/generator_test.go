@@ -93,28 +93,8 @@ func (f *fakeAudioProvider) BuildAttribution(params audio.AttributionParams) str
 }
 
 func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
-	originalNanoBananaClient := newNanoBananaImageClient
-	originalOpenAIClient := newOpenAIImageClient
-	t.Cleanup(func() {
-		newNanoBananaImageClient = originalNanoBananaClient
-		newOpenAIImageClient = originalOpenAIClient
-	})
-
 	fakeClient := &fakePromptAwareImageClient{}
 	var capturedConfig *image.NanoBananaConfig
-
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareImageClient {
-		capturedConfig = &image.NanoBananaConfig{
-			APIKey:    config.APIKey,
-			Model:     config.Model,
-			TextModel: config.TextModel,
-		}
-		return fakeClient
-	}
-	newOpenAIImageClient = func(*image.OpenAIConfig) promptAwareImageClient {
-		t.Fatal("unexpected OpenAI image client construction")
-		return nil
-	}
 
 	tempDir := t.TempDir()
 	app := &Application{
@@ -126,6 +106,18 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 			OutputDir:           tempDir,
 		},
 		currentWord: "друго",
+	}
+	app.newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareImageClient {
+		capturedConfig = &image.NanoBananaConfig{
+			APIKey:    config.APIKey,
+			Model:     config.Model,
+			TextModel: config.TextModel,
+		}
+		return fakeClient
+	}
+	app.newOpenAIImageClient = func(*image.OpenAIConfig) promptAwareImageClient {
+		t.Fatal("unexpected OpenAI image client construction")
+		return nil
 	}
 
 	outputPath, err := app.generateImagesWithPrompt(context.Background(), "ябълка", "custom prompt", "apple", tempDir)
@@ -176,11 +168,6 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 }
 
 func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -190,11 +177,6 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -214,6 +196,11 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 			GeminiTTSModel:    "sentinel-gemini-model",
 			OpenAIInstruction: "Speak clearly.",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
 	}
 
 	outputPath, err := app.generateAudio(context.Background(), "ябълка", cardDir)
@@ -267,11 +254,6 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioUsesRandomGeminiVoiceAndAttribution(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
@@ -281,11 +263,6 @@ func TestGenerateAudioUsesRandomGeminiVoiceAndAttribution(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -305,6 +282,11 @@ func TestGenerateAudioUsesRandomGeminiVoiceAndAttribution(t *testing.T) {
 			GeminiTTSModel: "gemini-2.5-flash-preview-tts",
 			GeminiVoice:    "",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
 	}
 
 	outputPath, err := app.generateAudio(context.Background(), "ябълка", cardDir)
@@ -367,11 +349,6 @@ func TestGenerateAudioUsesRandomGeminiVoiceAndAttribution(t *testing.T) {
 }
 
 func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
@@ -379,17 +356,6 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	audio.GeminiVoices = []string{"Charon", "Kore", "Leda"}
 
 	var attemptedVoices []string
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
-		return &fakeAudioProvider{
-			generateFunc: func(_ string, _ string) error {
-				if config.GeminiVoice == "Charon" {
-					return audio.ErrGeminiNoAudioData
-				}
-				return nil
-			},
-		}, nil
-	}
 
 	tempDir := t.TempDir()
 	outputPath := filepath.Join(tempDir, "audio.wav")
@@ -404,6 +370,17 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 			GoogleAPIKey:   "google-key",
 			GeminiTTSModel: "gemini-2.5-flash-preview-tts",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
+		return &fakeAudioProvider{
+			generateFunc: func(_ string, _ string) error {
+				if config.GeminiVoice == "Charon" {
+					return audio.ErrGeminiNoAudioData
+				}
+				return nil
+			},
+		}, nil
 	}
 
 	voice, err := audio.RunWithVoiceFallbacks("Charon", func(candidate string) error {
@@ -422,11 +399,6 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 }
 
 func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -436,11 +408,6 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -459,6 +426,11 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 			OpenAIModel:       "gpt-4o-mini-tts",
 			OpenAIInstruction: "Speak clearly.",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
 	}
 
 	frontPath, backPath, err := app.generateAudioBgBg(context.Background(), "ябълка", "круша", cardDir)
@@ -526,11 +498,6 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioFrontUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -540,11 +507,6 @@ func TestGenerateAudioFrontUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -563,6 +525,11 @@ func TestGenerateAudioFrontUsesSharedOpenAIVoices(t *testing.T) {
 			OpenAIModel:       "gpt-4o-mini-tts",
 			OpenAIInstruction: "Speak clearly.",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
 	}
 
 	outputPath, err := app.generateAudioFront(context.Background(), "ябълка", cardDir)
@@ -604,11 +571,6 @@ func TestGenerateAudioFrontUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioBackUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -618,11 +580,6 @@ func TestGenerateAudioBackUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -641,6 +598,11 @@ func TestGenerateAudioBackUsesSharedOpenAIVoices(t *testing.T) {
 			OpenAIModel:       "gpt-4o-mini-tts",
 			OpenAIInstruction: "Speak clearly.",
 		},
+	}
+	app.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
 	}
 
 	outputPath, err := app.generateAudioBack(context.Background(), "круша", cardDir)
@@ -682,20 +644,12 @@ func TestGenerateAudioBackUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioProviderFactoryError(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
 	})
 
 	audio.OpenAIVoices = []string{"sentinel-error-voice"}
-	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
-		return nil, errors.New("provider factory failed")
-	}
 
 	tempDir := t.TempDir()
 	cardDir := filepath.Join(tempDir, "card")
@@ -714,6 +668,9 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 			OpenAIModel:       "gpt-4o-mini-tts",
 			OpenAIInstruction: "Speak clearly.",
 		},
+	}
+	app.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return nil, errors.New("provider factory failed")
 	}
 
 	_, err := app.generateAudioFront(context.Background(), "ябълка", cardDir)

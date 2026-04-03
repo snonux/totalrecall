@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,6 +23,63 @@ func GenerateCardID(bulgarianWord string) string {
 
 	// Combine timestamp and hash
 	return fmt.Sprintf("%d_%s", epochMillis, hashStr)
+}
+
+// FindCardDirectory searches outputDir for a subdirectory whose word.txt
+// (or legacy _word.txt) matches the given word. Returns the directory path
+// or an empty string if not found.
+func FindCardDirectory(outputDir, word string) string {
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return ""
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		dirPath := filepath.Join(outputDir, entry.Name())
+		wordFile := filepath.Join(dirPath, "word.txt")
+
+		if data, err := os.ReadFile(wordFile); err == nil {
+			if strings.TrimSpace(string(data)) == word {
+				return dirPath
+			}
+		} else {
+			// Backward-compatible fallback: old format used _word.txt
+			wordFile = filepath.Join(dirPath, "_word.txt")
+			if data, err := os.ReadFile(wordFile); err == nil {
+				if strings.TrimSpace(string(data)) == word {
+					return dirPath
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// FindOrCreateCardDirectory returns the existing card directory for word inside
+// outputDir, or creates a new one with a generated card ID. It also writes
+// word.txt so subsequent calls can find the directory.
+func FindOrCreateCardDirectory(outputDir, word string) string {
+	if dir := FindCardDirectory(outputDir, word); dir != "" {
+		return dir
+	}
+
+	cardID := GenerateCardID(word)
+	wordDir := filepath.Join(outputDir, cardID)
+	if err := os.MkdirAll(wordDir, 0755); err != nil {
+		fmt.Printf("Warning: failed to create word directory: %v\n", err)
+		return outputDir
+	}
+
+	if err := os.WriteFile(filepath.Join(wordDir, "word.txt"), []byte(word), 0644); err != nil {
+		fmt.Printf("Warning: failed to save word metadata: %v\n", err)
+	}
+
+	return wordDir
 }
 
 // SanitizeFilename creates a safe filename from a string.

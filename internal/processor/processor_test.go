@@ -369,11 +369,6 @@ func TestGUIConfigForRunModeHonorsExplicitNanoBananaModelFlags(t *testing.T) {
 }
 
 func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -383,11 +378,6 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	flags := cli.NewFlags()
@@ -397,6 +387,11 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 
 	if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
@@ -420,11 +415,6 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
@@ -434,11 +424,6 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	tempDir := t.TempDir()
 	flags := cli.NewFlags()
@@ -447,6 +432,11 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	if err := p.generateAudioBgBg(context.Background(), "ябълка", "круша"); err != nil {
 		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
 	}
@@ -506,20 +496,12 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 }
 
 func TestGenerateAudioProviderFactoryError(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.OpenAIVoices...)
 	t.Cleanup(func() {
 		audio.OpenAIVoices = originalVoices
 	})
 
 	audio.OpenAIVoices = []string{"sentinel-failure-voice"}
-	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
-		return nil, errors.New("provider factory failed")
-	}
 
 	tempDir := t.TempDir()
 	flags := cli.NewFlags()
@@ -528,6 +510,9 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 	flags.AudioProvider = "openai"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return nil, errors.New("provider factory failed")
+	}
 	err := p.generateAudio(context.Background(), "ябълка")
 	if err == nil {
 		t.Fatal("generateAudio() expected error from provider factory")
@@ -538,18 +523,8 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 }
 
 func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -566,6 +541,11 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	flags.AudioFormat = "mp3"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
@@ -633,10 +613,6 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 }
 
 func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
@@ -645,11 +621,6 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -665,6 +636,11 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
@@ -717,11 +693,6 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 }
 
 func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
@@ -729,17 +700,6 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	audio.GeminiVoices = []string{"Charon", "Kore", "Leda"}
 
 	var attemptedVoices []string
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
-		return &fakeAudioProvider{
-			generateFunc: func(_ string, _ string) error {
-				if config.GeminiVoice == "Charon" {
-					return audio.ErrGeminiNoAudioData
-				}
-				return nil
-			},
-		}, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -754,6 +714,17 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
+		return &fakeAudioProvider{
+			generateFunc: func(_ string, _ string) error {
+				if config.GeminiVoice == "Charon" {
+					return audio.ErrGeminiNoAudioData
+				}
+				return nil
+			},
+		}, nil
+	}
 	p.randomIntn = func(int) int { return 0 }
 	output := captureStdout(t, func() {
 		if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
@@ -788,24 +759,11 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 }
 
 func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
 	})
 	audio.GeminiVoices = []string{"Charon"}
-
-	newAudioProvider = func(*audio.Config) (audio.Provider, error) {
-		return &fakeAudioProvider{
-			generateFunc: func(_ string, _ string) error {
-				return audio.ErrGeminiNoAudioData
-			},
-		}, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -820,6 +778,13 @@ func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return &fakeAudioProvider{
+			generateFunc: func(_ string, _ string) error {
+				return audio.ErrGeminiNoAudioData
+			},
+		}, nil
+	}
 	err := p.generateAudio(context.Background(), "ябълка")
 	if !errors.Is(err, audio.ErrGeminiNoAudioData) {
 		t.Fatalf("generateAudio() error = %v, want wrapped ErrGeminiNoAudioData", err)
@@ -830,10 +795,6 @@ func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
 }
 
 func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
 	originalVoices := append([]string(nil), audio.GeminiVoices...)
 	t.Cleanup(func() {
 		audio.GeminiVoices = originalVoices
@@ -842,11 +803,6 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfigs []*audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfigs = append(capturedConfigs, &copyConfig)
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -862,6 +818,11 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	flags.AudioProvider = "gemini"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfigs = append(capturedConfigs, &copyConfig)
+		return fakeProvider, nil
+	}
 	if err := p.generateAudioBgBg(context.Background(), "ябълка!?", "круша."); err != nil {
 		t.Fatalf("generateAudioBgBg() unexpected error: %v", err)
 	}
@@ -895,18 +856,8 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 }
 
 func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -923,6 +874,11 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 	flags.AudioFormat = "wav"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	wordDir := p.findOrCreateWordDirectory("ябълка!?")
 	if err := p.generateAudioWithVoiceAndFilenameInDir(context.Background(), "ябълка!?", "alloy", "audio", wordDir); err != nil {
 		t.Fatalf("generateAudioWithVoiceAndFilenameInDir() unexpected error: %v", err)
@@ -973,18 +929,8 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 }
 
 func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -1000,6 +946,11 @@ func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
 	flags.AudioFormat = "mp3"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	if err := p.generateAudio(context.Background(), "ябълка"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
@@ -1048,18 +999,8 @@ func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
 }
 
 func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
-	originalFactory := newAudioProvider
-	t.Cleanup(func() {
-		newAudioProvider = originalFactory
-	})
-
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
-	newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
-		copyConfig := *config
-		capturedConfig = &copyConfig
-		return fakeProvider, nil
-	}
 
 	originalConfig := viper.New()
 	*originalConfig = *viper.GetViper()
@@ -1077,6 +1018,11 @@ func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
 	flags.OpenAIModel = "tts-1"
 
 	p := NewProcessor(flags)
+	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
+		copyConfig := *config
+		capturedConfig = &copyConfig
+		return fakeProvider, nil
+	}
 	if err := p.generateAudio(context.Background(), "ябълка!?"); err != nil {
 		t.Fatalf("generateAudio() unexpected error: %v", err)
 	}
@@ -1223,16 +1169,8 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	viper.Set("image.nanobanana_model", "custom-image-model")
 	viper.Set("image.nanobanana_text_model", "custom-text-model")
 
-	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
-		*capturedConfig = *config
-		return stubSearcher
-	}
-	t.Cleanup(func() {
-		newNanoBananaImageClient = originalConstructor
-	})
 
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
@@ -1240,6 +1178,10 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	flags.ImageAPISpecified = true
 
 	p := NewProcessor(flags)
+	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+		*capturedConfig = *config
+		return stubSearcher
+	}
 	if err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple"); err != nil {
 		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
 	}
@@ -1280,14 +1222,7 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	viper.Reset()
 	viper.Set("image.provider", "nanobanana")
 
-	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{downloadErr: errors.New("download failed")}
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
-		return stubSearcher
-	}
-	t.Cleanup(func() {
-		newNanoBananaImageClient = originalConstructor
-	})
 
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
@@ -1295,6 +1230,9 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	flags.ImageAPISpecified = true
 
 	p := NewProcessor(flags)
+	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+		return stubSearcher
+	}
 	err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple")
 	if err == nil {
 		t.Fatal("downloadImagesWithTranslation() expected error from failed download")
@@ -1328,16 +1266,8 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	viper.Set("image.nanobanana_model", "config-image-model")
 	viper.Set("image.nanobanana_text_model", "config-text-model")
 
-	originalConstructor := newNanoBananaImageClient
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
-		*capturedConfig = *config
-		return stubSearcher
-	}
-	t.Cleanup(func() {
-		newNanoBananaImageClient = originalConstructor
-	})
 
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
@@ -1345,6 +1275,10 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	flags.ImageAPISpecified = false
 
 	p := NewProcessor(flags)
+	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+		*capturedConfig = *config
+		return stubSearcher
+	}
 	if err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple"); err != nil {
 		t.Fatalf("downloadImagesWithTranslation() unexpected error: %v", err)
 	}
@@ -1435,15 +1369,7 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 	viper.Set("image.nanobanana_model", "config-image-model")
 	viper.Set("image.nanobanana_text_model", "config-text-model")
 
-	originalConstructor := newNanoBananaImageClient
 	capturedConfig := new(image.NanoBananaConfig)
-	newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
-		*capturedConfig = *config
-		return &stubImageSearcher{}
-	}
-	t.Cleanup(func() {
-		newNanoBananaImageClient = originalConstructor
-	})
 
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
@@ -1455,6 +1381,10 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 	flags.NanoBananaTextModelSpecified = true
 
 	p := NewProcessor(flags)
+	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+		*capturedConfig = *config
+		return &stubImageSearcher{}
+	}
 	searcher, err := p.newNanoBananaImageSearcher()
 	if err != nil {
 		t.Fatalf("newNanoBananaImageSearcher() unexpected error: %v", err)

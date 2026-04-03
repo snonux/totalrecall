@@ -105,6 +105,11 @@ type Application struct {
 	// Active operations tracking
 	activeOperations map[string]int // Map of word -> count of active operations
 	activeOpMu       sync.Mutex     // Mutex for activeOperations map
+
+	// Injectable factory functions — replaced in tests to avoid real API calls.
+	newOpenAIImageClient    func(*image.OpenAIConfig) promptAwareImageClient
+	newNanoBananaImageClient func(*image.NanoBananaConfig) promptAwareImageClient
+	newAudioProvider        func(*audio.Config) (audio.Provider, error)
 }
 
 // Config holds GUI application configuration
@@ -218,6 +223,11 @@ func New(config *Config) *Application {
 		cardContexts:     make(map[string]context.CancelFunc),
 		activeOperations: make(map[string]int),
 		autoPlayEnabled:  config.AutoPlay, // Use config setting
+
+		// Production defaults for factory functions; replaced in tests.
+		newOpenAIImageClient:    func(c *image.OpenAIConfig) promptAwareImageClient { return image.NewOpenAIClient(c) },
+		newNanoBananaImageClient: func(c *image.NanoBananaConfig) promptAwareImageClient { return image.NewNanoBananaClient(c) },
+		newAudioProvider:        audio.NewProvider,
 	}
 
 	// Initialize the word processing queue
