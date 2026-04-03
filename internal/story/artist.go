@@ -13,26 +13,30 @@ import (
 )
 
 const (
-	comicPageCount = 3
+	// storyPageCount is the number of 9-panel story pages (excluding cover/back).
+	storyPageCount = 3
 
-	// comicPromptMaxChars caps each panel's story excerpt in the NanoBanana prompt.
-	comicPromptMaxChars = 800
+	// comicPageAspectRatio: portrait (3:4) matches a standard comic book page
+	// and gives the model room for a 3×3 panel grid.
+	comicPageAspectRatio = "3:4"
+
+	// comicPromptMaxChars caps each page's story excerpt in the NanoBanana prompt.
+	comicPromptMaxChars = 900
 
 	// bibleModel is the Gemini text model used to generate the character bible.
 	bibleModel = "gemini-2.5-flash"
 
-	// bibleTimeout gives Gemini up to 60 s to produce the character bible.
-	bibleTimeout = 60 * time.Second
+	// bibleTimeout gives Gemini up to 90 s to produce the character bible.
+	bibleTimeout = 90 * time.Second
 
-	// bibleMaxTokens must be large enough to cover Gemini 2.5 Flash's internal
-	// thinking tokens plus the ~180-word visible bible output.  A small budget
-	// (e.g. 512) is silently consumed by thinking before any text is emitted.
-	bibleMaxTokens = int32(2048)
+	// bibleMaxTokens matches the story generator's proven budget.
+	// No ThinkingConfig is set — the model manages token allocation itself,
+	// which is the same approach used by the working story generator.
+	bibleMaxTokens = int32(8192)
 )
 
-// comicStyles is the pool from which the strip style is drawn each run.
-// Ultra realistic is selected 90% of the time; the remaining 10% comes from
-// the other styles to provide occasional visual variety.
+// comicStyles is the pool from which the page style is drawn each run.
+// Ultra realistic is selected 90% of the time.
 var comicStyles = []string{
 	"ultra realistic comic strip with photographic detail and dramatic lighting",
 	"classic American comic book with bold ink outlines, halftone dots, and primary colors",
@@ -46,14 +50,21 @@ var comicStyles = []string{
 	"cyberpunk neon art with glowing outlines, dark backgrounds, and electric accent colors",
 }
 
-// characterBiblePrompt instructs Gemini to produce a concise visual reference
-// that will be prepended verbatim to every panel prompt.
+// characterBiblePrompt instructs Gemini to produce a strict visual reference
+// prepended verbatim to every panel, cover, and back-cover prompt.
 const characterBiblePrompt = `You are a comic-book art director. Read the Bulgarian story below and write a
-CHARACTER CONSISTENCY GUIDE in English for an illustrator. Cover every character that appears:
-name, age estimate, hair (colour + style), eye colour, skin tone, build, and exact clothing worn
-throughout the story. Then describe the setting (location, time of day, weather, key props) and
-the overall lighting / colour mood. Be very specific — this guide will be copy-pasted into every
-panel prompt to lock visual consistency. Maximum 180 words. No headers, just dense prose.
+CHARACTER CONSISTENCY GUIDE in English for an illustrator.
+
+For every named character provide: name, age estimate, hair (colour + style), eye colour,
+skin tone, build, and the EXACT clothing they wear — specify garment, colour, pattern, and fit.
+Clothing must NOT change between panels unless the story explicitly describes a change;
+if no change is described, list the same outfit for all appearances.
+
+Also describe: the setting (location, time of day, weather, key props) and overall
+lighting / colour mood.
+
+Be extremely specific — this guide will be copy-pasted into every panel prompt to lock visual
+consistency. Maximum 220 words. No headers, just dense descriptive prose.
 
 Story:
 `
@@ -100,11 +111,14 @@ func NewArtist(config *ArtistConfig) *Artist {
 	}
 }
 
-// DrawComicPages generates one image per story section (comicPageCount total).
-// A character bible is produced first and embedded in every panel prompt so
-// characters, clothes, and setting stay visually consistent across all pages.
-// Files are saved as comic_page_1.png … comic_page_N.png; attribution files
-// are auto-written by the Downloader. Returns the list of saved image paths.
+// DrawComicPages generates 5 images total:
+//   - comic_cover.png   — full-bleed cover
+//   - comic_page_1.png … comic_page_3.png — 9-panel (3×3) story pages
+//   - comic_back.png    — back cover
+//
+// A character bible is built first and injected into every prompt so
+// characters, clothing, and setting stay consistent across all pages.
+// Returns the list of saved image paths in order.
 func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 	style := a.style
 	if style == "" {
@@ -114,33 +128,50 @@ func (a *Artist) DrawComicPages(storyText string) ([]string, error) {
 
 	bible, err := a.buildCharacterBible(storyText)
 	if err != nil {
-		// Non-fatal: warn and continue without the bible rather than aborting.
-		fmt.Printf("  Warning: character bible generation failed (%v); panels may vary\n", err)
+		fmt.Printf("  Warning: character bible failed (%v); panels may vary\n", err)
 		bible = ""
 	} else {
 		fmt.Printf("  Character bible ready (%d chars)\n", len(bible))
 	}
 
-	sections := splitIntoSections(storyText, comicPageCount)
 	var paths []string
 
+	// 1. Cover
+	fmt.Println("  Generating cover page...")
+	if p, err := a.generateSinglePage(buildCoverPrompt(storyText, style, bible), "comic_cover"); err != nil {
+		fmt.Printf("  Warning: cover generation failed: %v\n", err)
+	} else {
+		paths = append(paths, p)
+	}
+
+	// 2. Story pages (9-panel grids)
+	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
-		fmt.Printf("  Generating comic page %d/%d...\n", pageNum, comicPageCount)
-
-		path, err := a.drawPage(section, pageNum, comicPageCount, style, bible)
+		fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
+		p, err := a.generateSinglePage(
+			buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible),
+			fmt.Sprintf("comic_page_%d", pageNum),
+		)
 		if err != nil {
-			return paths, fmt.Errorf("comic page %d failed: %w", pageNum, err)
+			return paths, fmt.Errorf("story page %d failed: %w", pageNum, err)
 		}
-		paths = append(paths, path)
+		paths = append(paths, p)
+	}
+
+	// 3. Back cover
+	fmt.Println("  Generating back cover...")
+	if p, err := a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible), "comic_back"); err != nil {
+		fmt.Printf("  Warning: back cover generation failed: %v\n", err)
+	} else {
+		paths = append(paths, p)
 	}
 
 	return paths, nil
 }
 
-// buildCharacterBible calls Gemini to produce a concise visual reference card
-// describing every character and the setting. This is prepended to each panel
-// prompt to lock character appearance across all generated images.
+// buildCharacterBible calls Gemini to produce a strict visual reference card.
+// No ThinkingConfig is set — same pattern as the working story generator.
 func (a *Artist) buildCharacterBible(storyText string) (string, error) {
 	if a.apiKey == "" {
 		return "", fmt.Errorf("no API key for character bible generation")
@@ -153,7 +184,6 @@ func (a *Artist) buildCharacterBible(storyText string) (string, error) {
 		return "", fmt.Errorf("create genai client: %w", err)
 	}
 
-	thinkingBudget := int32(0) // disable thinking — short factual extraction, no reasoning needed
 	ctx, cancel := context.WithTimeout(context.Background(), bibleTimeout)
 	defer cancel()
 
@@ -161,7 +191,6 @@ func (a *Artist) buildCharacterBible(storyText string) (string, error) {
 		[]*genai.Content{genai.NewContentFromText(characterBiblePrompt+storyText, genai.RoleUser)},
 		&genai.GenerateContentConfig{
 			MaxOutputTokens: bibleMaxTokens,
-			ThinkingConfig:  &genai.ThinkingConfig{ThinkingBudget: &thinkingBudget},
 		},
 	)
 	if err != nil {
@@ -170,37 +199,60 @@ func (a *Artist) buildCharacterBible(storyText string) (string, error) {
 
 	bible := strings.TrimSpace(resp.Text())
 	if bible == "" {
-		return "", fmt.Errorf("gemini returned empty character bible")
+		reason := "unknown"
+		if len(resp.Candidates) > 0 {
+			reason = string(resp.Candidates[0].FinishReason)
+		}
+		return "", fmt.Errorf("empty response (finish reason: %s)", reason)
 	}
 
 	return bible, nil
 }
 
-// drawPage generates a single comic page with the given style and bible.
-func (a *Artist) drawPage(section string, pageNum, totalPages int, style, bible string) (string, error) {
+// generateSinglePage downloads and saves one image for the given prompt.
+func (a *Artist) generateSinglePage(prompt, fileNamePattern string) (string, error) {
 	opts := image.DefaultSearchOptions("vocabulary story")
-	opts.CustomPrompt = buildPagePrompt(section, pageNum, totalPages, style, bible)
+	opts.CustomPrompt = prompt
+	opts.AspectRatio = comicPageAspectRatio
 
 	downloader := image.NewDownloader(a.nbClient, &image.DownloadOptions{
 		OutputDir:         a.outputDir,
 		OverwriteExisting: true,
 		CreateDir:         true,
-		FileNamePattern:   fmt.Sprintf("comic_page_%d", pageNum),
+		FileNamePattern:   fileNamePattern,
 		MaxSizeBytes:      20 * 1024 * 1024,
 	})
 
 	_, savedPath, err := downloader.DownloadBestMatchWithOptions(context.Background(), opts)
-	if err != nil {
-		return "", err
-	}
-
-	return savedPath, nil
+	return savedPath, err
 }
 
-// buildPagePrompt constructs the NanoBanana prompt for one panel.
-// The character bible is injected between the style directive and the scene
-// excerpt so the model has the visual reference before reading the scene.
-func buildPagePrompt(section string, pageNum, totalPages int, style, bible string) string {
+// buildCoverPrompt constructs the front-cover image prompt.
+func buildCoverPrompt(storyText, style, bible string) string {
+	// Use a short excerpt as a teaser on the cover prompt.
+	teaser := strings.TrimSpace(storyText)
+	if len(teaser) > 300 {
+		teaser = teaser[:300]
+		if idx := strings.LastIndex(teaser, " "); idx > 0 {
+			teaser = teaser[:idx]
+		}
+		teaser += "…"
+	}
+
+	bibleBlock := bibleSection(bible, "cover")
+	return fmt.Sprintf(
+		"Art style: %s.%s\n"+
+			"COMIC BOOK FRONT COVER — single full-bleed illustration, no panel grid. "+
+			"Large bold title text at the top: \"BULGARIAN VOCABULARY ADVENTURE\". "+
+			"Show the main character(s) in a dynamic, eye-catching pose with the story setting "+
+			"behind them. Dramatic, inviting, professional comic cover composition. "+
+			"Story teaser:\n\n%s",
+		style, bibleBlock, teaser,
+	)
+}
+
+// buildStoryPagePrompt constructs a 9-panel grid page prompt.
+func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string) string {
 	excerpt := strings.TrimSpace(section)
 	if len(excerpt) > comicPromptMaxChars {
 		excerpt = excerpt[:comicPromptMaxChars]
@@ -210,19 +262,51 @@ func buildPagePrompt(section string, pageNum, totalPages int, style, bible strin
 		excerpt += "…"
 	}
 
-	bibleBlock := ""
-	if bible != "" {
-		bibleBlock = fmt.Sprintf("\nCHARACTER & SETTING REFERENCE (follow exactly — this is panel %d of %d):\n%s\n", pageNum, totalPages, bible)
-	}
-
+	bibleBlock := bibleSection(bible, fmt.Sprintf("story page %d of %d", pageNum, totalPages))
 	return fmt.Sprintf(
-		"Art style: %s.%s\nPanel %d of %d. Scene from a Bulgarian vocabulary story:\n\n%s",
+		"Art style: %s.%s\n"+
+			"Comic book story page %d of %d. Layout: a 3×3 grid of 9 panels filling the page, "+
+			"each panel showing a distinct moment from the excerpt below. "+
+			"All characters MUST look identical across every panel — same face, hair, and clothing "+
+			"as described in the reference above. Story excerpt:\n\n%s",
 		style, bibleBlock, pageNum, totalPages, excerpt,
 	)
 }
 
-// pickStyle returns a randomly chosen art style.
-// Ultra realistic is selected 90% of the time.
+// buildBackCoverPrompt constructs the back-cover image prompt.
+func buildBackCoverPrompt(storyText, style, bible string) string {
+	// Use the last ~200 chars of the story as the resolution hint.
+	ending := strings.TrimSpace(storyText)
+	if len(ending) > 200 {
+		ending = ending[len(ending)-200:]
+		if idx := strings.Index(ending, " "); idx > 0 {
+			ending = ending[idx+1:]
+		}
+	}
+
+	bibleBlock := bibleSection(bible, "back cover")
+	return fmt.Sprintf(
+		"Art style: %s.%s\n"+
+			"COMIC BOOK BACK COVER — single full-bleed illustration, no panel grid. "+
+			"A calm, warm, conclusive scene from the story's ending. "+
+			"Small text area at the bottom for a short blurb (leave space). "+
+			"Story ending hint:\n\n%s",
+		style, bibleBlock, ending,
+	)
+}
+
+// bibleSection formats the character bible as a labelled block for the prompt.
+// Returns empty string when bible is empty.
+func bibleSection(bible, context string) string {
+	if bible == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"\nCHARACTER & SETTING REFERENCE (%s — follow exactly, do NOT change clothing):\n%s\n",
+		context, bible,
+	)
+}
+
 func pickStyle() string {
 	if rand.Float64() < 0.9 {
 		return comicStyles[0]
@@ -230,8 +314,6 @@ func pickStyle() string {
 	return comicStyles[1+rand.IntN(len(comicStyles)-1)]
 }
 
-// splitIntoSections divides text into n roughly equal parts on paragraph
-// boundaries where possible, falling back to equal character splits.
 func splitIntoSections(text string, n int) []string {
 	paragraphs := splitParagraphs(text)
 	if len(paragraphs) >= n {

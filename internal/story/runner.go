@@ -124,7 +124,7 @@ func (r *Runner) Run(batchFile string) error {
 // drawComicPages generates comicPageCount images with a shared character bible
 // for visual consistency; errors are non-fatal so story.txt is always accessible.
 func (r *Runner) drawComicPages(storyText string) {
-	fmt.Printf("Generating %d comic pages...\n", comicPageCount)
+	fmt.Printf("Generating %d comic pages...\n", storyPageCount+2) // 2 = cover + back cover
 	paths, err := r.artist.DrawComicPages(storyText)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: comic page generation failed: %v\n", err)
