@@ -1,0 +1,10 @@
+# Story Narration — Fallback Placeholder
+#
+# Gemini TTS narration was not produced (missing API key or generation error).
+#
+# To generate narration manually, run again with GOOGLE_API_KEY set, or
+# use the ElevenLabs TTS API as an alternative:
+#   POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}
+#   with the contents of story.txt and save the result as story_narration.mp3
+#
+# Reference: https://elevenlabs.io/docs/api-reference/text-to-speech

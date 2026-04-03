@@ -33,6 +33,10 @@ type RunnerConfig struct {
 	// Style overrides the random art-style pick when non-empty.
 	// Accepts any free-form description; it is passed verbatim to the image model.
 	Style string
+	// Theme overrides the random story genre when non-empty (e.g. "a thrilling space
+	// adventure with aliens and spaceships"). Passed verbatim as the genre line in the
+	// Gemini story prompt so the model writes in that genre instead of a random one.
+	Theme string
 	// NarratorVoice picks a specific Gemini cinematic voice for narration.
 	// Empty → random pick from the curated cinematic pool each run.
 	NarratorVoice string
@@ -53,13 +57,14 @@ func NewRunner(config *RunnerConfig) *Runner {
 		dir = config.OutputDir
 	}
 
-	var apiKey, textModel, imageModel, imageTextModel, style, narratorVoice string
+	var apiKey, textModel, imageModel, imageTextModel, style, theme, narratorVoice string
 	if config != nil {
 		apiKey = config.APIKey
 		textModel = config.TextModel
 		imageModel = config.ImageModel
 		imageTextModel = config.ImageTextModel
 		style = config.Style
+		theme = config.Theme
 		narratorVoice = config.NarratorVoice
 	}
 
@@ -78,6 +83,7 @@ func NewRunner(config *RunnerConfig) *Runner {
 		generator: NewGenerator(&Config{
 			APIKey:    apiKey,
 			TextModel: textModel,
+			Theme:     theme,
 		}),
 		artist: NewArtist(&ArtistConfig{
 			APIKey:    apiKey,
@@ -106,31 +112,47 @@ func (r *Runner) Run(batchFile string) error {
 		return fmt.Errorf("batch file %q contains no words", batchFile)
 	}
 
+	// GenerateFull produces the story AND character bible in one Gemini call so the
+	// bible is always available without a second API round-trip.
 	fmt.Printf("Generating story for %d words...\n", len(entries))
-	storyText, err := r.generator.Generate(entries)
+	result, err := r.generator.GenerateFull(entries)
 	if err != nil {
 		return fmt.Errorf("story generation failed: %w", err)
 	}
 
-	if err := r.saveStoryText(storyText, dir); err != nil {
+	if result.Bible != "" {
+		fmt.Printf("  Character bible ready from story generation (%d chars)\n", len(result.Bible))
+	}
+
+	// Derive a slug from the generated title and create the comics subfolder.
+	// All output files (images, PDF, story text, narration) go into comics/<slug>/.
+	slug := slugify(result.Title)
+	if result.Title != "" {
+		fmt.Printf("  Comic title: %q (slug: %s)\n", result.Title, slug)
+	}
+	comicsDir := filepath.Join(dir, "comics", slug)
+	if err := os.MkdirAll(comicsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create comics dir %s: %w", comicsDir, err)
+	}
+	// Point the artist at the per-comic subfolder for image output.
+	r.artist.outputDir = comicsDir
+
+	if err := r.saveStoryText(result.StoryText, slug, comicsDir); err != nil {
 		return err
 	}
 
-	r.drawComicPages(storyText)
+	r.drawComicPages(result.StoryText, result.Bible, slug)
 
-	return r.handleNarration(storyText, dir)
+	return r.handleNarration(result.StoryText, slug, comicsDir)
 }
 
 // drawComicPages generates the 5 comic images and assembles them into a PDF.
+// The pre-built bible (from story generation) is passed to DrawComicPages so
+// no extra Gemini call is needed for character consistency.
 // Errors are non-fatal — story.txt is always accessible regardless of image failures.
-func (r *Runner) drawComicPages(storyText string) {
-	dir := "."
-	if r.config != nil && r.config.OutputDir != "" {
-		dir = r.config.OutputDir
-	}
-
+func (r *Runner) drawComicPages(storyText, bible, titleSlug string) {
 	fmt.Printf("Generating %d comic pages...\n", storyPageCount+2) // 2 = cover + back cover
-	paths, err := r.artist.DrawComicPages(storyText)
+	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: comic page generation failed: %v\n", err)
 	}
@@ -142,8 +164,8 @@ func (r *Runner) drawComicPages(storyText string) {
 		return
 	}
 
-	// Assemble all generated pages into a single PDF in reading order.
-	pdfPath, err := AssembleComicPDF(dir, paths)
+	// Assemble all generated pages into a single PDF named after the comic title.
+	pdfPath, err := AssembleComicPDF(r.artist.outputDir, titleSlug, paths)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: PDF assembly failed: %v\n", err)
 		return
@@ -152,40 +174,40 @@ func (r *Runner) drawComicPages(storyText string) {
 }
 
 // handleNarration generates a cinematic MP3 via Gemini TTS when a narrator is
-// available, or falls back to writing story_tts_todo.txt.  Narration failure is
+// available, or falls back to writing <slug>_tts_todo.txt.  Narration failure is
 // non-fatal: the placeholder is written instead so the pipeline always finishes.
-func (r *Runner) handleNarration(storyText, dir string) error {
+func (r *Runner) handleNarration(storyText, titleSlug, dir string) error {
 	if r.narrator == nil {
-		return r.saveTTSPlaceholder(dir)
+		return r.saveTTSPlaceholder(titleSlug, dir)
 	}
 
-	mp3Path := filepath.Join(dir, "story_narration.mp3")
+	mp3Path := filepath.Join(dir, titleSlug+"_narration.mp3")
 	fmt.Printf("Generating cinematic narration (voice: %s)...\n", r.narrator.voice)
 	if err := r.narrator.Narrate(storyText, mp3Path); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: narration failed: %v\n", err)
-		return r.saveTTSPlaceholder(dir)
+		return r.saveTTSPlaceholder(titleSlug, dir)
 	}
 
 	fmt.Printf("Narration saved: %s\n", mp3Path)
 	return nil
 }
 
-// saveStoryText writes the generated story to story.txt in dir.
-func (r *Runner) saveStoryText(text, dir string) error {
-	path := filepath.Join(dir, "story.txt")
+// saveStoryText writes the generated story to <slug>_story.txt in dir.
+func (r *Runner) saveStoryText(text, titleSlug, dir string) error {
+	path := filepath.Join(dir, titleSlug+"_story.txt")
 	if err := os.WriteFile(path, []byte(text+"\n"), 0644); err != nil {
-		return fmt.Errorf("failed to write story.txt: %w", err)
+		return fmt.Errorf("failed to write story file: %w", err)
 	}
 	fmt.Printf("Story saved: %s\n", path)
 	return nil
 }
 
-// saveTTSPlaceholder writes story_tts_todo.txt as a fallback when narration
+// saveTTSPlaceholder writes <slug>_tts_todo.txt as a fallback when narration
 // is unavailable or fails.
-func (r *Runner) saveTTSPlaceholder(dir string) error {
-	path := filepath.Join(dir, "story_tts_todo.txt")
+func (r *Runner) saveTTSPlaceholder(titleSlug, dir string) error {
+	path := filepath.Join(dir, titleSlug+"_tts_todo.txt")
 	if err := os.WriteFile(path, []byte(ttsTodoContent), 0644); err != nil {
-		return fmt.Errorf("failed to write story_tts_todo.txt: %w", err)
+		return fmt.Errorf("failed to write TTS placeholder: %w", err)
 	}
 	fmt.Printf("TTS placeholder saved: %s\n", path)
 	return nil

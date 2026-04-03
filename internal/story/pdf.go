@@ -9,10 +9,11 @@ import (
 
 // AssembleComicPDF combines the 5 comic images (cover, 3 story pages, back cover)
 // into a single portrait PDF using ImageMagick's convert command.
+// The PDF is named <titleSlug>.pdf and placed in outputDir.
 // The PDF pages are in reading order: front cover → story pages → back cover.
 // Returns the path to the written PDF, or an error if ImageMagick is not available
 // or any of the required source images are missing.
-func AssembleComicPDF(outputDir string, imagePaths []string) (string, error) {
+func AssembleComicPDF(outputDir, titleSlug string, imagePaths []string) (string, error) {
 	if len(imagePaths) == 0 {
 		return "", fmt.Errorf("no comic images to assemble into PDF")
 	}
@@ -21,7 +22,7 @@ func AssembleComicPDF(outputDir string, imagePaths []string) (string, error) {
 		return "", fmt.Errorf("ImageMagick 'convert' not found — install ImageMagick to generate the PDF")
 	}
 
-	pdfPath := filepath.Join(outputDir, "comic.pdf")
+	pdfPath := filepath.Join(outputDir, titleSlug+".pdf")
 
 	// Build the convert command:
 	//   convert -density 150 page1.png page2.png ... output.pdf
