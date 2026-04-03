@@ -63,10 +63,12 @@ var comicStyles = []string{
 // gemini-2.5-flash allocates its thinking budget correctly instead of returning empty.
 const bibleSystemInstruction = `You are a comic-book art director producing a CHARACTER CONSISTENCY GUIDE in English for an illustrator.
 
-For every named HUMAN character provide: name, age estimate, hair (colour + style), eye colour,
-skin tone, build, and the EXACT clothing they wear — specify garment, colour, pattern, and fit.
-Clothing must NOT change between panels unless the story explicitly describes a change;
-if no change is described, list the same outfit for all appearances.
+For every named HUMAN character provide: name, EXACT age (e.g. "8-year-old girl", "65-year-old woman"),
+hair (colour + style), eye colour, skin tone, build, and the EXACT clothing they wear —
+specify garment, colour, pattern, and fit.
+The character's apparent age MUST NOT change across any panel, page, cover, or back cover —
+they must always look the same age. Clothing must NOT change between panels unless the story
+explicitly describes a change; if no change is described, list the same outfit for all appearances.
 
 For every named ANIMAL character provide: name, species, exact breed, fur/feather/scale colour
 and pattern, eye colour, size, any distinctive markings, and typical body posture.
@@ -78,7 +80,7 @@ Also describe: the setting (location, time of day, weather, key props) and overa
 lighting / colour mood.
 
 Be extremely specific — this guide will be copy-pasted into every panel prompt to lock visual
-consistency. Maximum 280 words. No headers, just dense descriptive prose.`
+consistency. Maximum 300 words. No headers, just dense descriptive prose.`
 
 // blurbSystemInstruction is the SystemInstruction role for the back-cover blurb call.
 const blurbSystemInstruction = `You are a comic-book editor writing back-cover marketing copy.
@@ -284,12 +286,14 @@ func buildCoverPrompt(storyText, style, bible string) string {
 			"thick outlines, high contrast against the background, taking up the top 20%% of the image. "+
 			"This title MUST be legible and unmissable.\n"+
 			"Remaining layout rules:\n"+
-			"  • MAIN ART: below the title, a single dramatic illustration of the main character(s) "+
-			"and any animals in a dynamic pose, richly detailed story setting behind them.\n"+
+			"  • MAIN ART: below the title, a dramatic illustration of EXACTLY the named characters "+
+			"from the story (as described in the reference above) — same faces, same ages, same "+
+			"clothing, same animals. Do NOT invent new characters or use generic stand-ins.\n"+
 			"  • COVER LINES: 2–3 short teaser phrases in bold display type (e.g. 'A Summer Adventure!').\n"+
 			"  • BOTTOM STRIP: price box bottom-left, issue number bottom-right — "+
 			"classic Silver-Age / Bronze-Age comic production design.\n"+
-			"Characters and animals MUST match the reference exactly. Story teaser:\n\n%s",
+			"IMPORTANT: only the characters named in the reference may appear on this cover. "+
+			"Same age, same face, same clothing as in the interior pages. Story teaser:\n\n%s",
 		style, bibleBlock, teaser,
 	)
 }
@@ -311,7 +315,8 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"Comic book story page %d of %d. Layout: a 3×3 grid of 9 panels filling the page, "+
 			"each panel showing a distinct moment from the excerpt below.\n"+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
-			"  • Human characters: identical face, hair colour/style, and clothing to the reference.\n"+
+			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
+			"to the reference — a child must never look older or younger than defined.\n"+
 			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
 			"NEVER substitute a different animal or a generic version of the species.\n"+
 			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
@@ -351,13 +356,15 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
 			"  • MAIN ART: a calm, warm, resolved scene filling the upper 60%% of the cover — "+
-			"the main character(s) and any animals in a peaceful or triumphant ending moment, "+
-			"with the full story setting behind them.\n"+
+			"EXACTLY the named characters from the story (as described in the reference above) "+
+			"in a peaceful or triumphant ending moment, with the full story setting behind them. "+
+			"Do NOT invent new characters or use generic stand-ins.\n"+
 			"  • BLURB BOX: %s\n"+
 			"  • BOTTOM STRIP: barcode box bottom-left (black-and-white barcode graphic), "+
 			"series title 'BULGARIAN VOCABULARY ADVENTURE' bottom-right — "+
 			"classic comic book back-cover production design.\n"+
-			"Characters and animals MUST match the reference above exactly. "+
+			"IMPORTANT: only the characters named in the reference may appear on this back cover. "+
+			"Same age, same face, same clothing, same animals as in the interior pages. "+
 			"Story ending hint:\n\n%s",
 		style, bibleBlock, blurbBoxInstruction, ending,
 	)
