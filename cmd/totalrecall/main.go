@@ -13,6 +13,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
+	"codeberg.org/snonux/totalrecall/internal/story"
 )
 
 func main() {
@@ -54,6 +55,22 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	if flags.ListModels {
 		lister := models.NewLister(cli.GetOpenAIKey(), cli.GetGoogleAPIKey(), os.Stdout)
 		return lister.ListAvailableModels()
+	}
+
+	// Handle --story flag: generate a vocabulary story + comic image into CWD.
+	// This is deliberately placed before processor creation because it does not
+	// need the full processor pipeline (no Anki cards, no per-word audio).
+	if flags.StoryFile != "" {
+		runner := story.NewRunner(&story.RunnerConfig{
+			APIKey:         cli.GetGoogleAPIKey(),
+			TextModel:      flags.NanoBananaTextModel,
+			ImageModel:     flags.NanoBananaModel,
+			ImageTextModel: flags.NanoBananaTextModel,
+			OutputDir:      ".",
+			Style:          flags.StoryStyle,
+			NarratorVoice:  flags.NarratorVoice,
+		})
+		return runner.Run(flags.StoryFile)
 	}
 
 	// Auto-adjust image size for DALL-E 3

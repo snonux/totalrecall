@@ -35,6 +35,14 @@ It has mainly been vibe coded using Claude Code CLI.
   - **Config-driven selection**: Set `image.provider` to `openai` or `nanobanana`
   - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
+- **Vocabulary story generation** (`--story`):
+  - Generates a ~500-word Bulgarian story that naturally uses every word in a batch file
+  - Produces 3 comic-book-style pages via Nano Banana image generation
+  - Art style is chosen randomly per run (90% ultra-realistic; 10% from a curated pool of styles such as manga, watercolor, noir, pop art, etc.)
+  - Override with `--story-style` for a specific look
+  - **Cinematic narration** via Gemini TTS (`story_narration.mp3`) — dramatic pacing, expressive intonation, random voice from a curated cinematic pool (Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar); override with `--narrator-voice`
+  - Outputs `story.txt`, `comic_page_1–3.png`, `story_narration.mp3` to the current directory
+  - Falls back to `story_tts_todo.txt` if narration fails
 - Anki-compatible export
 - Random voice variants and speech speed
 
@@ -159,6 +167,35 @@ Key features:
 5. Archive existing cards directory:
    ```bash
    totalrecall --archive                        # Archives cards to ~/.local/state/totalrecall/archive/cards-TIMESTAMP
+   ```
+
+6. Generate a vocabulary story + comic strip from a batch file:
+   ```bash
+   totalrecall --story words.txt
+   ```
+
+   Outputs to the current directory:
+   - `story.txt` — ~500-word Bulgarian story using every word naturally
+   - `comic_page_1.png`, `comic_page_2.png`, `comic_page_3.png` — three comic-book pages illustrating the story arc
+   - `comic_page_N_attribution.txt` — attribution for each image
+   - `story_narration.mp3` — cinematic Gemini TTS narration (random voice from Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar)
+   - `story_tts_todo.txt` — written instead of `story_narration.mp3` only if narration fails
+
+   The art style is chosen randomly each run (90% ultra-realistic, 10% other styles). Override with `--story-style`:
+   ```bash
+   totalrecall --story words.txt --story-style "ultra realistic comic strip with photographic detail and dramatic lighting"
+   totalrecall --story words.txt --story-style "Japanese manga with clean linework and speed lines"
+   totalrecall --story words.txt --story-style "retro 1960s pop art in the style of Roy Lichtenstein"
+   ```
+
+   The narrator voice is chosen randomly from a cinematic pool each run. Override with `--narrator-voice`:
+   ```bash
+   totalrecall --story words.txt --narrator-voice Charon    # deep, authoritative
+   totalrecall --story words.txt --narrator-voice Fenrir    # strong, resonant
+   totalrecall --story words.txt --narrator-voice Enceladus # breathy, intimate
+   totalrecall --story words.txt --narrator-voice Algieba   # smooth, warm
+   totalrecall --story words.txt --narrator-voice Aoede     # breezy, expressive
+   totalrecall --story words.txt --narrator-voice Schedar   # steady, grounded
    ```
 
 #### Batch file format

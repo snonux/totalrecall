@@ -65,6 +65,11 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3; Gemini TTS writes wav natively and auto-converts to mp3 with ffmpeg, which is now the default)")
 	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (default: Nano Banana; use openai to switch, config file image.provider also applies when unset)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
+	cmd.Flags().StringVar(&flags.StoryFile, "story", "", "Generate a vocabulary story + comic image from a batch-format file (outputs to current directory)")
+	cmd.Flags().StringVar(&flags.StoryStyle, "story-style", "", "Art style for comic pages (default: random). E.g. \"ultra realistic comic strip with photographic detail and dramatic lighting\"")
+	cmd.Flags().StringVar(&flags.NarratorVoice, "narrator-voice", "",
+		"Gemini voice for cinematic story narration (default: random from cinematic pool). "+
+			"Valid values: Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
 	cmd.Flags().BoolVar(&flags.GenerateAnki, "anki", false, "Generate Anki import file (APKG format by default, use --anki-csv for legacy CSV)")
