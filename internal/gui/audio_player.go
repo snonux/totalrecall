@@ -12,7 +12,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
@@ -67,12 +66,13 @@ func NewAudioPlayer() *AudioPlayer {
 
 	p.statusLabel = widget.NewLabel("No audio loaded")
 
-	// Create phonetic label
+	// Create phonetic label — wraps so long IPA strings are never clipped.
 	p.phoneticLabel = widget.NewLabel("")
 	p.phoneticLabel.TextStyle = fyne.TextStyle{
 		Bold:   true,
 		Italic: true,
 	}
+	p.phoneticLabel.Wrapping = fyne.TextWrapWord
 
 	// Initially disable controls
 	p.playButton.Disable()
@@ -81,17 +81,15 @@ func NewAudioPlayer() *AudioPlayer {
 	p.playBackLabel.Hide()
 	p.stopButton.Disable()
 
-	// Create main container with phonetic display
-	p.container = container.NewHBox(
-		container.NewVBox(
-			container.NewHBox(p.playButton, p.playButtonLabel),
-			container.NewHBox(p.playBackButton, p.playBackLabel),
-		),
-		p.stopButton,
-		p.phoneticLabel,
-		layout.NewSpacer(),
-		p.statusLabel,
+	// Layout: buttons on the left, status on the right, phonetic fills the middle.
+	// Using NewBorder so the phonetic label expands horizontally rather than being
+	// squeezed to its minimum width in an HBox.
+	buttons := container.NewVBox(
+		container.NewHBox(p.playButton, p.playButtonLabel),
+		container.NewHBox(p.playBackButton, p.playBackLabel),
 	)
+	leftControls := container.NewHBox(buttons, p.stopButton)
+	p.container = container.NewBorder(nil, nil, leftControls, p.statusLabel, p.phoneticLabel)
 
 	p.ExtendBaseWidget(p)
 	return p
