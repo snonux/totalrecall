@@ -116,22 +116,21 @@ func (r *Runner) Run(batchFile string) error {
 		return err
 	}
 
-	r.drawComicPages(storyText)
+	r.drawComicStrip(storyText)
 
 	return r.handleNarration(storyText, dir)
 }
 
-// drawComicPages generates the comic strip pages; errors are non-fatal so
-// story.txt is always accessible even when image generation fails.
-func (r *Runner) drawComicPages(storyText string) {
-	fmt.Printf("Generating %d comic pages...\n", comicPageCount)
-	imagePaths, err := r.artist.DrawComicPages(storyText)
+// drawComicStrip generates a single tall comic strip image; errors are
+// non-fatal so story.txt is always accessible even when image generation fails.
+func (r *Runner) drawComicStrip(storyText string) {
+	fmt.Println("Generating comic strip...")
+	imagePath, err := r.artist.DrawComicStrip(storyText)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: comic image generation failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: comic strip generation failed: %v\n", err)
+		return
 	}
-	for _, p := range imagePaths {
-		fmt.Printf("Comic page saved: %s\n", p)
-	}
+	fmt.Printf("Comic strip saved: %s\n", imagePath)
 }
 
 // handleNarration generates a cinematic MP3 via Gemini TTS when a narrator is

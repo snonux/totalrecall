@@ -28,6 +28,7 @@ type SearchOptions struct {
 	ImageType    string // Type: "photo", "illustration", "vector", "all"
 	Orientation  string // Orientation: "horizontal", "vertical", "all"
 	CustomPrompt string // Custom prompt for AI image generation
+	AspectRatio  string // Override aspect ratio (e.g. "9:16"); empty = provider default
 }
 
 // DefaultSearchOptions returns sensible defaults for Bulgarian word searches

@@ -19,11 +19,13 @@ const (
 	// Gemini TTS reads style instructions from the user-turn prompt, so embedding
 	// the directive here (rather than as a SystemInstruction) is the supported way
 	// to control voice style, pacing, and emotional delivery.
-	cinematicInstruction = `Read the following Bulgarian story as a cinematic narrator.
-Use dramatic pacing, natural pauses between sentences, and a warm authoritative tone.
-Speak with emotional depth appropriate to the scene — slow down for tender moments,
-build energy for exciting passages. This is a language-learning story; pronounce
-Bulgarian words clearly and with expressive intonation.
+	cinematicInstruction = `You are a dramatic cinematic narrator performing a Bulgarian story.
+Deliver this as a professional movie trailer narrator would: deep, resonant, and commanding.
+Use long dramatic pauses before key moments. Build tension with slower, deliberate pacing,
+then accelerate through action. Drop your voice low and gravelly for mysterious or serious
+passages; let warmth and energy rise for joyful or triumphant ones. Breathe life into every
+sentence — this should sound like an epic film, not a reading exercise. Pronounce all
+Bulgarian words with authentic clarity and expressive intonation.
 
 `
 )

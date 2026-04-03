@@ -71,7 +71,7 @@ func TestNanoBananaClient_Search_CustomPromptSkipsTextGeneration(t *testing.T) {
 	}
 
 	var gotPrompt string
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt, _ string) ([]byte, string, error) {
 		gotPrompt = prompt
 		return mustPNGBytes(t), "image/png", nil
 	}
@@ -149,7 +149,7 @@ func TestNanoBananaClient_Search_GeneratedPromptFlow(t *testing.T) {
 		return "", nil
 	}
 
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt, _ string) ([]byte, string, error) {
 		gotPrompt = prompt
 		return mustJPEGBytes(t), "image/jpeg", nil
 	}
@@ -249,7 +249,7 @@ func TestNanoBananaClient_Search_TranslationFailureFallsBackToQuery(t *testing.T
 		return "", nil
 	}
 
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt, _ string) ([]byte, string, error) {
 		return mustPNGBytes(t), "image/png", nil
 	}
 
@@ -297,7 +297,7 @@ func TestNanoBananaClient_Search_TrivialSceneFallsBackToSubjectPrompt(t *testing
 	}
 
 	var gotPrompt string
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, prompt, _ string) ([]byte, string, error) {
 		gotPrompt = prompt
 		return mustPNGBytes(t), "image/png", nil
 	}
@@ -342,7 +342,7 @@ func TestNanoBananaClient_Search_ImageGenerationError(t *testing.T) {
 		return "", nil
 	}
 
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _, _ string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("image generation failed")
 	}
 
@@ -376,7 +376,7 @@ func TestNanoBananaClient_Search_CustomPromptPreservesTranslationMetadata(t *tes
 		t.Fatal("unexpected text generation for custom prompt")
 		return "", nil
 	}
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _, _ string) ([]byte, string, error) {
 		return mustPNGBytes(t), "image/png", nil
 	}
 
@@ -409,7 +409,7 @@ func TestNanoBananaClient_Search_CustomPromptIgnoresWhitespaceTranslation(t *tes
 		t.Fatal("unexpected text generation for custom prompt")
 		return "", nil
 	}
-	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _ string) ([]byte, string, error) {
+	nanoBananaGenerateImage = func(_ context.Context, _ *NanoBananaClient, _, _ string) ([]byte, string, error) {
 		return mustPNGBytes(t), "image/png", nil
 	}
 

@@ -56,8 +56,8 @@ var newNanoBananaClient = genai.NewClient
 var nanoBananaGenerateText = func(ctx context.Context, c *NanoBananaClient, model, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
 	return c.generateText(ctx, model, systemPrompt, userPrompt, temperature, maxOutputTokens)
 }
-var nanoBananaGenerateImage = func(ctx context.Context, c *NanoBananaClient, prompt string) ([]byte, string, error) {
-	return c.generateImage(ctx, prompt)
+var nanoBananaGenerateImage = func(ctx context.Context, c *NanoBananaClient, prompt, aspectRatio string) ([]byte, string, error) {
+	return c.generateImage(ctx, prompt, aspectRatio)
 }
 
 // NewNanoBananaClient creates a new Nano Banana client.
@@ -105,10 +105,16 @@ func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]S
 		c.PromptCallback(prompt)
 	}
 
-	fmt.Printf("Nano Banana Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
-	fmt.Printf("Nano Banana Image Generation: Using model '%s' with aspect ratio '%s'\n", c.modelName(), nanoBananaAspectRatio)
+	// Resolve aspect ratio: use caller override if provided, else the default.
+	aspectRatio := nanoBananaAspectRatio
+	if opts.AspectRatio != "" {
+		aspectRatio = opts.AspectRatio
+	}
 
-	imageBytes, mimeType, err := nanoBananaGenerateImage(ctx, c, prompt)
+	fmt.Printf("Nano Banana Image Generation Prompt (%d chars): %s\n", len(prompt), prompt)
+	fmt.Printf("Nano Banana Image Generation: Using model '%s' with aspect ratio '%s'\n", c.modelName(), aspectRatio)
+
+	imageBytes, mimeType, err := nanoBananaGenerateImage(ctx, c, prompt, aspectRatio)
 	if err != nil {
 		if searchErr, ok := err.(*SearchError); ok {
 			return nil, searchErr
@@ -380,11 +386,14 @@ func (c *NanoBananaClient) generateText(ctx context.Context, model, systemPrompt
 	return text, nil
 }
 
-func (c *NanoBananaClient) generateImage(ctx context.Context, prompt string) ([]byte, string, error) {
+func (c *NanoBananaClient) generateImage(ctx context.Context, prompt, aspectRatio string) ([]byte, string, error) {
+	if aspectRatio == "" {
+		aspectRatio = nanoBananaAspectRatio
+	}
 	cfg := &genai.GenerateContentConfig{
 		ResponseModalities: []string{string(genai.ModalityImage)},
 		ImageConfig: &genai.ImageConfig{
-			AspectRatio: nanoBananaAspectRatio,
+			AspectRatio: aspectRatio,
 		},
 	}
 
