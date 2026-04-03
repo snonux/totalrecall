@@ -27,7 +27,10 @@ const (
 	phoneticTimeout      = 30 * time.Second
 	phoneticRetryCount   = 3
 	phoneticTemperature  = 0.3
-	phoneticMaxTokens    = 50
+	// 200 tokens gives ample room for IPA of multi-syllable Bulgarian phrases.
+	// 50 was too tight: Gemini 2.5 Flash can emit several thinking tokens before
+	// the IPA bracket pair, causing the output to be silently truncated mid-symbol.
+	phoneticMaxTokens = 200
 	phoneticSystemPrompt = "You are a Bulgarian language expert. Provide only the IPA (International Phonetic Alphabet) transcription for Bulgarian words. Return ONLY the IPA transcription in square brackets, nothing else. No explanations, no word labels, just the IPA."
 )
 
