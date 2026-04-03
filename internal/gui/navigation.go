@@ -497,7 +497,11 @@ func (a *Application) startFileCheckTicker() {
 	ticker := time.NewTicker(2 * time.Second)
 	a.fileCheckTicker = ticker
 
+	// Track this goroutine in wg so the shutdown handler waits for it to exit.
+	// The ctx.Done() case ensures it exits promptly when the application closes.
+	a.wg.Add(1)
 	go func() {
+		defer a.wg.Done()
 		for {
 			select {
 			case <-ticker.C:
@@ -800,17 +804,24 @@ func (a *Application) deleteCurrentWord() {
 	// Start a cleanup goroutine to guard against directory recreation by racing
 	// in-flight operations. Instead of a fixed sleep, poll hasActiveOperations
 	// so the cleanup runs as soon as all operations for this word complete.
+	// Tracked in wg and respects ctx.Done() so the app can shut down cleanly.
+	a.wg.Add(1)
 	go func() {
+		defer a.wg.Done()
 		ticker := time.NewTicker(50 * time.Millisecond)
 		defer ticker.Stop()
 		timeout := time.NewTimer(5 * time.Second)
 		defer timeout.Stop()
 
-		// Wait until all active operations for this word finish or timeout elapses.
+		// Wait until all active operations for this word finish, timeout elapses,
+		// or the application is shutting down.
 		for {
 			select {
 			case <-timeout.C:
 				// Proceed even if some operations are still pending.
+			case <-a.ctx.Done():
+				// Application is shutting down — skip the cleanup.
+				return
 			case <-ticker.C:
 				if a.hasActiveOperations(deletedWord) {
 					continue
