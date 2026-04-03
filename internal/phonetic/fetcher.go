@@ -91,6 +91,8 @@ var fetchOpenAIPhonetic = func(ctx context.Context, client *openai.Client, word 
 
 var fetchGeminiPhonetic = func(ctx context.Context, client *genai.Client, word string) (string, error) {
 	temp := float32(phoneticTemperature)
+	thinkingBudget := int32(0) // IPA lookup needs no reasoning; disable thinking so
+	// it doesn't consume MaxOutputTokens before any visible text is emitted.
 	resp, err := client.Models.GenerateContent(ctx, defaultGeminiModel, []*genai.Content{
 		genai.NewContentFromText(buildGeminiPhoneticPrompt(word), genai.RoleUser),
 	}, &genai.GenerateContentConfig{
@@ -99,6 +101,7 @@ var fetchGeminiPhonetic = func(ctx context.Context, client *genai.Client, word s
 		},
 		Temperature:     &temp,
 		MaxOutputTokens: phoneticMaxTokens,
+		ThinkingConfig:  &genai.ThinkingConfig{ThinkingBudget: &thinkingBudget},
 	})
 	if err != nil {
 		return "", fmt.Errorf("gemini API error: %w", err)
