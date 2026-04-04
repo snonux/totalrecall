@@ -29,11 +29,15 @@ const (
 
 	// pageMaxRetries is the number of times a story page generation is retried
 	// before being skipped. Gemini image generation occasionally returns no data
-	// due to transient safety filter hits or API hiccups; a retry usually succeeds.
-	pageMaxRetries = 3
+	// due to transient safety filter hits, API hiccups, or rate limiting; a retry
+	// after a pause usually succeeds. 5 attempts with progressive backoff gives
+	// the rate-limiter enough time to recover without burning the whole quota.
+	pageMaxRetries = 5
 
-	// pageRetryPause is the wait between story page retries.
-	pageRetryPause = 10 * time.Second
+	// pageRetryBase is multiplied by the attempt number to produce a progressive
+	// backoff: 15 s → 30 s → 45 s → 60 s. The growing pause lets the tool
+	// recover from rate-limit windows automatically instead of failing silently.
+	pageRetryBase = 15 * time.Second
 
 	// comicPageAspectRatio: 16:9 is the closest supported widescreen ratio for
 	// the ThinkPad X1 Gen 9 (2560×1600 / 16:10), filling the display with minimal
@@ -274,45 +278,48 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 }
 
 // generateStoryPage attempts to generate a single story page up to pageMaxRetries
-// times. It returns the saved path and image bytes on success, or empty strings
-// after all retries are exhausted (non-fatal — the caller continues with the next
-// page so the PDF is never aborted by a single transient API failure).
+// times using progressive backoff (pageRetryBase × attempt). Growing pauses let
+// rate-limit windows clear automatically. Non-fatal on exhaustion — the caller
+// continues so the PDF is never aborted by a single transient failure.
 func (a *Artist) generateStoryPage(prompt, fileName string, pageNum int, refs [][]byte) (string, []byte) {
 	fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
-	for attempt := 1; attempt <= pageMaxRetries; attempt++ {
-		p, pageBytes, err := a.generateSinglePage(prompt, fileName, refs)
-		if err == nil {
-			return p, pageBytes
-		}
-		if attempt < pageMaxRetries {
-			fmt.Printf("  Story page %d attempt %d failed (%v), retrying in %s...\n",
-				pageNum, attempt, err, pageRetryPause)
-			time.Sleep(pageRetryPause)
-		} else {
-			fmt.Printf("  Warning: story page %d failed after %d attempts: %v\n",
-				pageNum, pageMaxRetries, err)
-		}
-	}
-	return "", nil
+	return a.retryPage(pageMaxRetries, func(attempt int) (string, []byte, error) {
+		return a.generateSinglePage(prompt, fileName, refs)
+	}, fmt.Sprintf("story page %d", pageNum))
 }
 
-// generatePageWithRetry attempts to generate a single comic page (cover or back
-// cover) up to pageMaxRetries times. Returns the saved path and image bytes on
-// success, or ("", nil) after all retries are exhausted (non-fatal).
+// generatePageWithRetry attempts to generate a single comic page (cover, gallery,
+// or back cover) up to pageMaxRetries times with progressive backoff. Non-fatal.
 func (a *Artist) generatePageWithRetry(prompt, fileName string, refs [][]byte, label string) (string, []byte) {
 	fmt.Printf("  Generating %s...\n", label)
-	for attempt := 1; attempt <= pageMaxRetries; attempt++ {
-		p, imgBytes, err := a.generateSinglePage(prompt, fileName, refs)
+	return a.retryPage(pageMaxRetries, func(attempt int) (string, []byte, error) {
+		return a.generateSinglePage(prompt, fileName, refs)
+	}, label)
+}
+
+// retryPage is the shared retry loop used by generateStoryPage and
+// generatePageWithRetry. Each failed attempt waits pageRetryBase × attempt
+// before the next try, giving rate-limit windows time to clear:
+//
+//	attempt 1 fails → wait 15 s
+//	attempt 2 fails → wait 30 s
+//	attempt 3 fails → wait 45 s
+//	attempt 4 fails → wait 60 s
+//	attempt 5 fails → log warning, return ("", nil)
+func (a *Artist) retryPage(maxAttempts int, generateFn func(attempt int) (string, []byte, error), label string) (string, []byte) {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		p, imgBytes, err := generateFn(attempt)
 		if err == nil {
 			return p, imgBytes
 		}
-		if attempt < pageMaxRetries {
+		if attempt < maxAttempts {
+			pause := pageRetryBase * time.Duration(attempt)
 			fmt.Printf("  Warning: %s attempt %d/%d failed (%v), retrying in %s...\n",
-				label, attempt, pageMaxRetries, err, pageRetryPause)
-			time.Sleep(pageRetryPause)
+				label, attempt, maxAttempts, err, pause)
+			time.Sleep(pause)
 		} else {
 			fmt.Printf("  Warning: %s failed after %d attempts: %v\n",
-				label, pageMaxRetries, err)
+				label, maxAttempts, err)
 		}
 	}
 	return "", nil
