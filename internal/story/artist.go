@@ -516,10 +516,6 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
 			renderReq+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
-			"  • LOCATION: every panel on this page MUST be set in the EXACT location described in "+
-			"the story excerpt below. Do NOT show any other location that appears earlier or later "+
-			"in the story. If the excerpt is set in the jungle, ALL panels show jungle. "+
-			"If the excerpt is set on Mars, ALL panels show Mars. Follow the excerpt strictly.\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
 			"to the reference — a child must never look older or younger than defined.\n"+
 			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
