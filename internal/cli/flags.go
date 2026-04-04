@@ -23,7 +23,8 @@ type Flags struct {
 	StoryFile            string // --story <file>: generate vocabulary story + comic image
 	StoryStyle           string // --story-style: override the random art style (empty = random)
 	StoryTheme           string // --story-theme: override the random genre pick (empty = random)
-	StoryNoUltraRealistic bool  // --no-ultra-realistic: disable photorealistic rendering requirement
+	StoryNoUltraRealistic bool   // --no-ultra-realistic: disable photorealistic rendering requirement
+	StorySlug            string // --story-slug: force a specific output slug/directory (empty = auto from title)
 	NarratorVoice        string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
 	SkipAudio         bool
 	SkipImages        bool

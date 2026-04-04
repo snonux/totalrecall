@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -217,7 +218,9 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	// 1. Cover — generated without refs (it is the visual baseline).
 	// Retried up to pageMaxRetries times; failure is non-fatal but the cover
 	// is omitted from the PDF and no anchor reference is established.
-	p, coverBytes := a.generatePageWithRetry(buildCoverPrompt(storyText, style, bible, a.renderReq()), titleSlug+"_cover", nil, "cover page")
+	p, coverBytes := a.loadOrGenerate(titleSlug+"_cover", func() (string, []byte) {
+		return a.generatePageWithRetry(buildCoverPrompt(storyText, style, bible, a.renderReq()), titleSlug+"_cover", nil, "cover page")
+	})
 	if p != "" {
 		paths = append(paths, p)
 		recentRefs = appendRef(recentRefs, coverBytes) // cover becomes the anchor reference
@@ -232,7 +235,9 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 		pageNum := i + 1
 		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries, a.renderReq())
 		fileName := fmt.Sprintf("%s_page_%d", titleSlug, pageNum)
-		p, pageBytes := a.generateStoryPage(prompt, fileName, pageNum, recentRefs)
+		p, pageBytes := a.loadOrGenerate(fileName, func() (string, []byte) {
+			return a.generateStoryPage(prompt, fileName, pageNum, recentRefs)
+		})
 		if p != "" {
 			paths = append(paths, p)
 			recentRefs = appendRef(recentRefs, pageBytes)
@@ -246,8 +251,10 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 		galleryNum := i + 1
 		prompt := buildGalleryPagePrompt(style, bible, galleryNum, a.renderReq())
 		fileName := fmt.Sprintf("%s_gallery_%d", titleSlug, galleryNum)
-		gp, galleryBytes := a.generatePageWithRetry(prompt, fileName, recentRefs,
-			fmt.Sprintf("gallery page %d/%d", galleryNum, galleryPageCount))
+		gp, galleryBytes := a.loadOrGenerate(fileName, func() (string, []byte) {
+			return a.generatePageWithRetry(prompt, fileName, recentRefs,
+				fmt.Sprintf("gallery page %d/%d", galleryNum, galleryPageCount))
+		})
 		if gp != "" {
 			paths = append(paths, gp)
 			recentRefs = appendRef(recentRefs, galleryBytes)
@@ -256,7 +263,9 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 
 	// 4. Back cover — receives the same rolling refs as the last gallery page.
 	// Retried up to pageMaxRetries times; failure is non-fatal.
-	p, _ = a.generatePageWithRetry(buildBackCoverPrompt(storyText, style, bible, blurb, a.renderReq()), titleSlug+"_back", recentRefs, "back cover")
+	p, _ = a.loadOrGenerate(titleSlug+"_back", func() (string, []byte) {
+		return a.generatePageWithRetry(buildBackCoverPrompt(storyText, style, bible, blurb, a.renderReq()), titleSlug+"_back", recentRefs, "back cover")
+	})
 	if p != "" {
 		paths = append(paths, p)
 	}
@@ -307,6 +316,26 @@ func (a *Artist) generatePageWithRetry(prompt, fileName string, refs [][]byte, l
 		}
 	}
 	return "", nil
+}
+
+// loadOrGenerate returns the saved path and image bytes for fileName.
+// If the PNG already exists on disk it is loaded and returned without an API
+// call — skipping regeneration of pages that were produced in a previous run.
+// If the file is missing, generateFn is called to produce it. This lets a
+// re-run fill in only the pages that failed previously without wasting quota.
+func (a *Artist) loadOrGenerate(fileName string, generateFn func() (string, []byte)) (string, []byte) {
+	path := filepath.Join(a.outputDir, fileName+".png")
+	if _, err := os.Stat(path); err == nil {
+		// Page exists — load bytes for the reference chain and skip the API call.
+		b, readErr := os.ReadFile(path)
+		if readErr != nil {
+			fmt.Printf("  Warning: could not read existing %s for chaining: %v\n", fileName+".png", readErr)
+			return path, nil
+		}
+		fmt.Printf("  Skipping %s (already exists)\n", fileName+".png")
+		return path, b
+	}
+	return generateFn()
 }
 
 // appendRef adds imgBytes to refs and keeps at most 2 entries (cover anchor +

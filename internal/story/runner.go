@@ -47,6 +47,11 @@ type RunnerConfig struct {
 	// NarratorVoice picks a specific Gemini cinematic voice for narration.
 	// Empty → random pick from the curated cinematic pool each run.
 	NarratorVoice string
+	// Slug overrides the auto-generated title slug used as the output directory
+	// name and file prefix. When non-empty the runner skips slug derivation and
+	// uses this value directly. Combine with loadOrGenerate's skip-existing logic
+	// to repair a partial comic run without regenerating already-present pages.
+	Slug string
 }
 
 // Runner orchestrates the full pipeline: text → image → narration.
@@ -137,10 +142,13 @@ func (r *Runner) Run(batchFile string) error {
 		fmt.Printf("  Character bible ready from story generation (%d chars)\n", len(result.Bible))
 	}
 
-	// Derive a slug from the generated title and create the comics subfolder.
+	// Derive a slug from the generated title, or use the forced slug from config.
 	// All output files (images, PDF, story text, narration) go into comics/<slug>/.
 	slug := slugify(result.Title)
-	if result.Title != "" {
+	if r.config != nil && r.config.Slug != "" {
+		slug = r.config.Slug
+		fmt.Printf("  Comic title: %q (slug forced: %s)\n", result.Title, slug)
+	} else if result.Title != "" {
 		fmt.Printf("  Comic title: %q (slug: %s)\n", result.Title, slug)
 	}
 	comicsDir := filepath.Join(dir, "comics", slug)
