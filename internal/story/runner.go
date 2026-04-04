@@ -40,6 +40,10 @@ type RunnerConfig struct {
 	// adventure with aliens and spaceships"). Passed verbatim as the genre line in the
 	// Gemini story prompt so the model writes in that genre instead of a random one.
 	Theme string
+	// UltraRealistic controls whether the renderingRequirement photorealistic
+	// instruction is injected into every image prompt.
+	// nil → random 50/50 each run; true → always on; false → always off (--no-ultra-realistic).
+	UltraRealistic *bool
 	// NarratorVoice picks a specific Gemini cinematic voice for narration.
 	// Empty → random pick from the curated cinematic pool each run.
 	NarratorVoice string
@@ -61,6 +65,8 @@ func NewRunner(config *RunnerConfig) *Runner {
 	}
 
 	var apiKey, textModel, imageModel, imageTextModel, style, theme, narratorVoice string
+	// Resolve ultraRealistic: nil config or nil pointer → random 50/50 pick each run.
+	ultraRealistic := pickUltraRealistic()
 	if config != nil {
 		apiKey = config.APIKey
 		textModel = config.TextModel
@@ -69,6 +75,9 @@ func NewRunner(config *RunnerConfig) *Runner {
 		style = config.Style
 		theme = config.Theme
 		narratorVoice = config.NarratorVoice
+		if config.UltraRealistic != nil {
+			ultraRealistic = *config.UltraRealistic
+		}
 	}
 
 	// Narrator init failure (e.g. missing key) is non-fatal — handleNarration
@@ -89,11 +98,12 @@ func NewRunner(config *RunnerConfig) *Runner {
 			Theme:     theme,
 		}),
 		artist: NewArtist(&ArtistConfig{
-			APIKey:    apiKey,
-			Model:     imageModel,
-			TextModel: imageTextModel,
-			OutputDir: dir,
-			Style:     style,
+			APIKey:         apiKey,
+			Model:          imageModel,
+			TextModel:      imageTextModel,
+			OutputDir:      dir,
+			Style:          style,
+			UltraRealistic: ultraRealistic,
 		}),
 		narrator: narrator,
 	}

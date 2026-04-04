@@ -20,10 +20,11 @@ type Flags struct {
 	ImageAPI          string
 	ImageAPISpecified bool
 	BatchFile         string
-	StoryFile         string // --story <file>: generate vocabulary story + comic image
-	StoryStyle        string // --story-style: override the random art style (empty = random)
-	StoryTheme        string // --story-theme: override the random genre pick (empty = random)
-	NarratorVoice     string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
+	StoryFile            string // --story <file>: generate vocabulary story + comic image
+	StoryStyle           string // --story-style: override the random art style (empty = random)
+	StoryTheme           string // --story-theme: override the random genre pick (empty = random)
+	StoryNoUltraRealistic bool  // --no-ultra-realistic: disable photorealistic rendering requirement
+	NarratorVoice        string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
 	SkipAudio         bool
 	SkipImages        bool
 	GenerateAnki      bool

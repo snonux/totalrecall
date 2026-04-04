@@ -69,6 +69,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 			OutputDir:      ".",
 			Style:          flags.StoryStyle,
 			Theme:          flags.StoryTheme,
+			UltraRealistic: storyUltraRealistic(flags.StoryNoUltraRealistic),
 			NarratorVoice:  flags.NarratorVoice,
 		})
 		return runner.Run(flags.StoryFile)
@@ -138,4 +139,16 @@ func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 	app.Run()
 
 	return nil
+}
+
+// storyUltraRealistic converts the --no-ultra-realistic bool flag into a *bool
+// for RunnerConfig. When noUltraRealistic is true, returns a pointer to false
+// (forcing standard comic style). When false (flag not set), returns nil so
+// the runner picks randomly 50/50 each run.
+func storyUltraRealistic(noUltraRealistic bool) *bool {
+	if noUltraRealistic {
+		v := false
+		return &v
+	}
+	return nil // nil → random pick in NewRunner
 }

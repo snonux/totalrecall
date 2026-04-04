@@ -68,6 +68,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.StoryFile, "story", "", "Generate a vocabulary story + comic image from a batch-format file (outputs to current directory)")
 	cmd.Flags().StringVar(&flags.StoryStyle, "story-style", "", "Art style for comic pages (default: random). E.g. \"ultra realistic comic strip with photographic detail and dramatic lighting\"")
 	cmd.Flags().StringVar(&flags.StoryTheme, "story-theme", "", "Genre/theme for the story (default: random). E.g. \"a thrilling space adventure with aliens and spaceships\"")
+	cmd.Flags().BoolVar(&flags.StoryNoUltraRealistic, "no-ultra-realistic", false, "Disable photorealistic rendering requirement; produces standard comic-book style output")
 	cmd.Flags().StringVar(&flags.NarratorVoice, "narrator-voice", "",
 		"Gemini voice for cinematic story narration (default: random from cinematic pool). "+
 			"Valid values: Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar")

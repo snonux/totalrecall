@@ -61,6 +61,7 @@ const (
 	// renderingRequirement is appended to every image prompt (cover, story pages,
 	// back cover, gallery) to push the model toward photorealistic output even
 	// within a comic grid layout. Centralised here so it is easy to tune.
+	// Omitted when Artist.ultraRealistic is false (--no-ultra-realistic flag).
 	renderingRequirement = "RENDERING REQUIREMENT: every panel and illustration must look " +
 		"like a real photograph — photorealistic skin texture, fabric detail, lighting, " +
 		"and environment. NOT a drawing, painting, or illustration. Real-world photo quality.\n"
@@ -120,26 +121,33 @@ type ArtistConfig struct {
 	TextModel string // NanoBanana text/prompt model
 	OutputDir string // target directory; defaults to "."
 	Style     string // overrides the random art-style pick when non-empty
+	// UltraRealistic controls whether renderingRequirement is injected into every
+	// prompt. Default true (ultra-realistic). Set false via --no-ultra-realistic
+	// to produce standard comic-book style output without the photo requirement.
+	UltraRealistic bool
 }
 
 // Artist generates comic-book pages that illustrate the story.
 type Artist struct {
-	nbClient  image.ImageClient
-	apiKey    string // used for the character-bible Gemini call
-	outputDir string
-	style     string
+	nbClient       image.ImageClient
+	apiKey         string // used for the character-bible Gemini call
+	outputDir      string
+	style          string
+	ultraRealistic bool // false → omit renderingRequirement from all prompts
 }
 
 // NewArtist creates an Artist backed by the NanoBanana image generator.
 func NewArtist(config *ArtistConfig) *Artist {
 	dir := "."
 	var apiKey, style string
+	ultraRealistic := true // default on
 	var nbConfig *image.NanoBananaConfig
 
 	if config != nil {
 		dir = orDefault(config.OutputDir, ".")
 		apiKey = config.APIKey
 		style = config.Style
+		ultraRealistic = config.UltraRealistic
 		nbConfig = &image.NanoBananaConfig{
 			APIKey:    config.APIKey,
 			Model:     config.Model,
@@ -148,10 +156,11 @@ func NewArtist(config *ArtistConfig) *Artist {
 	}
 
 	return &Artist{
-		nbClient:  image.NewNanoBananaClient(nbConfig),
-		apiKey:    apiKey,
-		outputDir: dir,
-		style:     style,
+		nbClient:       image.NewNanoBananaClient(nbConfig),
+		apiKey:         apiKey,
+		outputDir:      dir,
+		style:          style,
+		ultraRealistic: ultraRealistic,
 	}
 }
 
@@ -173,6 +182,11 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 		style = pickStyle()
 	}
 	fmt.Printf("  Comic style: %s\n", style)
+	if a.ultraRealistic {
+		fmt.Println("  Rendering mode: ultra-realistic (photorealistic panels)")
+	} else {
+		fmt.Println("  Rendering mode: standard comic style")
+	}
 
 	bible, blurb := a.resolveHelperTexts(storyText, prebuiltBible)
 
@@ -186,7 +200,7 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	// 1. Cover — generated without refs (it is the visual baseline).
 	// Retried up to pageMaxRetries times; failure is non-fatal but the cover
 	// is omitted from the PDF and no anchor reference is established.
-	p, coverBytes := a.generatePageWithRetry(buildCoverPrompt(storyText, style, bible), titleSlug+"_cover", nil, "cover page")
+	p, coverBytes := a.generatePageWithRetry(buildCoverPrompt(storyText, style, bible, a.renderReq()), titleSlug+"_cover", nil, "cover page")
 	if p != "" {
 		paths = append(paths, p)
 		recentRefs = appendRef(recentRefs, coverBytes) // cover becomes the anchor reference
@@ -199,7 +213,7 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
-		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries)
+		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries, a.renderReq())
 		fileName := fmt.Sprintf("%s_page_%d", titleSlug, pageNum)
 		p, pageBytes := a.generateStoryPage(prompt, fileName, pageNum, recentRefs)
 		if p != "" {
@@ -213,7 +227,7 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	// They act as alternative covers and use the accumulated refs for consistency.
 	for i := range galleryPageCount {
 		galleryNum := i + 1
-		prompt := buildGalleryPagePrompt(style, bible, galleryNum)
+		prompt := buildGalleryPagePrompt(style, bible, galleryNum, a.renderReq())
 		fileName := fmt.Sprintf("%s_gallery_%d", titleSlug, galleryNum)
 		gp, galleryBytes := a.generatePageWithRetry(prompt, fileName, recentRefs,
 			fmt.Sprintf("gallery page %d/%d", galleryNum, galleryPageCount))
@@ -225,7 +239,7 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 
 	// 4. Back cover — receives the same rolling refs as the last gallery page.
 	// Retried up to pageMaxRetries times; failure is non-fatal.
-	p, _ = a.generatePageWithRetry(buildBackCoverPrompt(storyText, style, bible, blurb), titleSlug+"_back", recentRefs, "back cover")
+	p, _ = a.generatePageWithRetry(buildBackCoverPrompt(storyText, style, bible, blurb, a.renderReq()), titleSlug+"_back", recentRefs, "back cover")
 	if p != "" {
 		paths = append(paths, p)
 	}
@@ -388,8 +402,17 @@ func (a *Artist) generateSinglePage(prompt, fileNamePattern string, refs [][]byt
 	return savedPath, imgBytes, nil
 }
 
+// renderReq returns the renderingRequirement string when ultraRealistic is true,
+// or an empty string when --no-ultra-realistic is set. Used in all prompt builders.
+func (a *Artist) renderReq() string {
+	if a.ultraRealistic {
+		return renderingRequirement
+	}
+	return ""
+}
+
 // buildCoverPrompt constructs the front-cover image prompt.
-func buildCoverPrompt(storyText, style, bible string) string {
+func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 	// Use a short excerpt as a teaser on the cover prompt.
 	teaser := strings.TrimSpace(storyText)
 	if len(teaser) > 300 {
@@ -407,7 +430,7 @@ func buildCoverPrompt(storyText, style, bible string) string {
 			"All text on the cover (cover lines, banners, labels) MUST be in Bulgarian "+
 			"Cyrillic script. The masthead title must also be rendered in a striking comic-book font.\n\n"+
 			"Art style: %s.%s\n"+
-			renderingRequirement+
+			renderReq+
 			"TRADITIONAL COMIC BOOK FRONT COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"MANDATORY MASTHEAD — the most important visual element on this cover:\n"+
@@ -444,7 +467,7 @@ func buildCoverPrompt(storyText, style, bible string) string {
 // labels each word visually inside the panels — making each page a learning tool.
 // The Bulgarian language requirement is placed at the very top so it is processed
 // before all other instructions.
-func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string, entries []batch.WordEntry) string {
+func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string, entries []batch.WordEntry, renderReq string) string {
 	excerpt := strings.TrimSpace(section)
 	if len(excerpt) > comicPromptMaxChars {
 		excerpt = excerpt[:comicPromptMaxChars]
@@ -474,7 +497,7 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"Each panel is separated by a thin black gutter line. "+
 			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
-			renderingRequirement+
+			renderReq+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
 			"to the reference — a child must never look older or younger than defined.\n"+
@@ -512,7 +535,7 @@ func buildVocabBlock(entries []batch.WordEntry) string {
 // buildBackCoverPrompt constructs the back-cover image prompt.
 // blurb is an English marketing summary generated by Gemini; when non-empty it is
 // embedded verbatim in the blurb-box instruction so the image model renders it.
-func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
+func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) string {
 	// Use the last ~200 chars of the story as a visual hint for the scene.
 	ending := strings.TrimSpace(storyText)
 	if len(ending) > 200 {
@@ -540,7 +563,7 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 			"All visible text (blurb box, labels, banners) MUST be in Bulgarian Cyrillic script. "+
 			"English text anywhere on the back cover is STRICTLY FORBIDDEN.\n\n"+
 			"Art style: %s.%s\n"+
-			renderingRequirement+
+			renderReq+
 			"TRADITIONAL COMIC BOOK BACK COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
@@ -571,12 +594,12 @@ var galleryPoses = []string{
 // buildGalleryPagePrompt constructs a text-free close-up character art page prompt.
 // galleryNum (1-based) selects the pose from galleryPoses so each page is distinct.
 // No text, no panels, no speech bubbles — pure full-bleed illustration.
-func buildGalleryPagePrompt(style, bible string, galleryNum int) string {
+func buildGalleryPagePrompt(style, bible string, galleryNum int, renderReq string) string {
 	pose := galleryPoses[(galleryNum-1)%len(galleryPoses)]
 	bibleBlock := bibleSection(bible, fmt.Sprintf("gallery page %d", galleryNum))
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
-			renderingRequirement+
+			renderReq+
 			"FULL-BLEED CHARACTER ART PAGE — portrait orientation, single illustration.\n"+
 			"NO text of any kind. NO title. NO labels. NO speech bubbles. NO panel borders. NO UI elements.\n"+
 			"This is a text-free variant cover / gallery page. Pure art only.\n\n"+
@@ -606,6 +629,12 @@ func pickStyle() string {
 		return comicStyles[0]
 	}
 	return comicStyles[1+rand.IntN(len(comicStyles)-1)]
+}
+
+// pickUltraRealistic returns true (photorealistic) or false (comic style) with
+// equal probability, giving each run a 50/50 chance of either look.
+func pickUltraRealistic() bool {
+	return rand.Float64() < 0.5
 }
 
 func splitIntoSections(text string, n int) []string {

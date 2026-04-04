@@ -36,13 +36,19 @@ It has mainly been vibe coded using Claude Code CLI.
   - Scene generation creates memorable contexts for each word
 - Batch processing of multiple words
 - **Vocabulary story generation** (`--story`):
-  - Generates a ~500-word Bulgarian story that naturally uses every word in a batch file
-  - Produces 3 comic-book-style pages via Nano Banana image generation
-  - Art style is chosen randomly per run (90% ultra-realistic; 10% from a curated pool of styles such as manga, watercolor, noir, pop art, etc.)
-  - Override with `--story-style` for a specific look
-  - **Cinematic narration** via Gemini TTS (`story_narration.mp3`) — dramatic pacing, expressive intonation, random voice from a curated cinematic pool (Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar); override with `--narrator-voice`
-  - Outputs `story.txt`, `comic_page_1–3.png`, `story_narration.mp3` to the current directory
-  - Falls back to `story_tts_todo.txt` if narration fails
+  - Generates a ~250-word Bulgarian story that naturally uses every word in a batch file
+  - All human characters are adults; story genre/setting driven by `--story-theme`
+  - Produces **10 pages** per comic: cover + 5 story pages (2×2 panel grid) + 3 gallery pages (close-up character art) + back cover
+  - All output saved under `comics/<title-slug>/` with files named `<slug>_*.png`
+  - Art style chosen randomly per run (90% ultra-realistic, 10% curated pool: manga, watercolor, noir, pop art, etc.); override with `--story-style`
+  - **Rendering mode** chosen randomly 50/50 each run: ultra-realistic (photorealistic panels) or standard comic style; force standard with `--no-ultra-realistic`
+  - **Iterative character consistency**: each page is generated with the cover + previous page as pixel references so characters stay visually consistent
+  - **Character bible**: Gemini generates a detailed visual guide (age, clothing, colours) used in every prompt
+  - **Cinematic narration** via Gemini TTS (`<slug>_narration.mp3`) — Bulgarian phonology, dramatic pacing, random voice from a curated pool; override with `--narrator-voice`
+    - Intro teaser (15 s, different voice) + main story chunks (~100 words each) + epilogue with ambient music
+    - Falls back to `<slug>_tts_todo.txt` if narration fails
+  - **Vocabulary learning file** (`<slug>_comic_vocabulary.txt`) — word list with translations + full story text
+  - **Theme file** (`<slug>_theme.txt`) — records the `--story-theme` used for easy reproduction
 - Anki-compatible export
 - Random voice variants and speech speed
 
@@ -169,27 +175,36 @@ Key features:
    totalrecall --archive                        # Archives cards to ~/.local/state/totalrecall/archive/cards-TIMESTAMP
    ```
 
-6. Generate a vocabulary story + comic strip from a batch file:
+6. Generate a vocabulary story + comic book from a batch file:
    ```bash
    totalrecall --story words.txt
    ```
 
-   Outputs to the current directory:
-   - `story.txt` — ~500-word Bulgarian story using every word naturally
-   - `comic_page_1.png`, `comic_page_2.png`, `comic_page_3.png` — three comic-book pages illustrating the story arc
-   - `comic_page_N_attribution.txt` — attribution for each image
-   - `story_narration.mp3` — cinematic Gemini TTS narration (random voice from Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar)
-   - `story_tts_todo.txt` — written instead of `story_narration.mp3` only if narration fails
+   Outputs to `comics/<title-slug>/`:
+   - `<slug>_story.txt` — ~250-word Bulgarian story using every word naturally
+   - `<slug>_cover.png` — traditional comic book front cover with Bulgarian title
+   - `<slug>_page_1.png` … `<slug>_page_5.png` — five 2×2-panel story pages (16:9)
+   - `<slug>_gallery_1.png` … `<slug>_gallery_3.png` — three close-up character gallery pages
+   - `<slug>_back.png` — back cover with blurb
+   - `<slug>.pdf` — all pages assembled into a single PDF
+   - `<slug>_narration.mp3` — cinematic Gemini TTS narration with intro, story chunks, and epilogue
+   - `<slug>_comic_vocabulary.txt` — vocabulary words + full story text for learning
+   - `<slug>_theme.txt` — records `--story-theme` for easy reproduction
+   - `<slug>_tts_todo.txt` — written instead of MP3 only if narration fails
 
-   The art style is chosen randomly each run (90% ultra-realistic, 10% other styles). Override with `--story-style`:
+   Customise the story:
    ```bash
-   totalrecall --story words.txt --story-style "ultra realistic comic strip with photographic detail and dramatic lighting"
+   # Set a specific theme/setting
+   totalrecall --story words.txt --story-theme "a Wonder Woman inspired heroine in a futuristic city"
+
+   # Override art style
    totalrecall --story words.txt --story-style "Japanese manga with clean linework and speed lines"
    totalrecall --story words.txt --story-style "retro 1960s pop art in the style of Roy Lichtenstein"
-   ```
 
-   The narrator voice is chosen randomly from a cinematic pool each run. Override with `--narrator-voice`:
-   ```bash
+   # Force standard comic style (default is random 50/50 between ultra-realistic and standard)
+   totalrecall --story words.txt --no-ultra-realistic
+
+   # Choose narrator voice (default: random from pool)
    totalrecall --story words.txt --narrator-voice Charon    # deep, authoritative
    totalrecall --story words.txt --narrator-voice Fenrir    # strong, resonant
    totalrecall --story words.txt --narrator-voice Enceladus # breathy, intimate
