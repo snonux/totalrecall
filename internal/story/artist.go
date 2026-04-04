@@ -432,7 +432,7 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 			"Cyrillic script. The masthead title must also be rendered in a striking comic-book font.\n\n"+
 			"Art style: %s.%s\n"+
 			renderReq+
-			"TRADITIONAL COMIC BOOK FRONT COVER — portrait orientation, single full-bleed illustration.\n"+
+			"TRADITIONAL COMIC BOOK FRONT COVER — single full-bleed illustration, landscape 16:9 format.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"MANDATORY MASTHEAD — the most important visual element on this cover:\n"+
 			"  • Invent a DRAMATIC, STORY-SPECIFIC comic book title that fits the characters and "+
@@ -565,7 +565,7 @@ func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) stri
 			"English text anywhere on the back cover is STRICTLY FORBIDDEN.\n\n"+
 			"Art style: %s.%s\n"+
 			renderReq+
-			"TRADITIONAL COMIC BOOK BACK COVER — portrait orientation, single full-bleed illustration.\n"+
+			"TRADITIONAL COMIC BOOK BACK COVER — single full-bleed illustration, landscape 16:9 format.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
 			"  • MAIN ART: a calm, warm, resolved scene filling the upper 60%% of the cover — "+
@@ -588,10 +588,10 @@ func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) stri
 // Each is a distinct dramatic framing so the pages feel like variant cover art.
 var galleryPoses = []string{
 	"extreme close-up portrait: face and shoulders filling the entire frame, dramatic three-quarter lighting, intense gaze directly at the viewer, fine detail on eyes and expression",
-	"dynamic action pose: full body, low-angle shot looking up at the heroine against the sky or setting backdrop, confident stance, hair and clothing caught in motion",
-	"atmospheric mid-shot: waist-up, the heroine silhouetted or lit by the ambient environment (bioluminescence, sunset, neon glow), looking off into the distance with a sense of wonder or resolve",
+	"dynamic action pose: full body, low-angle shot looking up at the main character against the sky or setting backdrop, confident stance, hair and clothing caught in motion",
+	"atmospheric mid-shot: waist-up, the main character silhouetted or lit by the ambient environment (bioluminescence, sunset, neon glow), looking off into the distance with a sense of wonder or resolve",
 	"profile close-up: side view of face and upper body, soft rim lighting tracing the jawline and hair, contemplative expression, rich background bokeh",
-	"power stance full-body: the heroine seen from the front at eye level, arms relaxed but ready, environment filling the frame behind her, golden-hour or dramatic storm light",
+	"power stance full-body: the main character seen from the front at eye level, arms relaxed but ready, environment filling the frame behind them, golden-hour or dramatic storm light",
 }
 
 // buildGalleryPagePrompt constructs a text-free close-up character art page prompt.
@@ -608,9 +608,9 @@ func buildGalleryPagePrompt(style, bible string, galleryNum int, renderReq strin
 			"NO text of any kind. NO title. NO labels. NO speech bubbles. NO panel borders. NO UI elements.\n"+
 			"This is a text-free character gallery page. Pure art only.\n\n"+
 			"Composition: %s\n\n"+
-			"The subject MUST be EXACTLY the main heroine described in the reference above — "+
-			"same face, same age, same clothing, same companion animal if naturally present. "+
-			"Do NOT invent new characters. Do NOT add any text overlays.\n"+
+			"The subject MUST be EXACTLY the main character(s) described in the reference above — "+
+			"same faces, same genders, same ages, same clothing. Include the companion animal if naturally present. "+
+			"Do NOT invent new characters or change any character's gender. Do NOT add any text overlays.\n"+
 			"Background: the story's setting rendered with full cinematic atmosphere and colour mood.",
 		style, bibleBlock, pose,
 	)
