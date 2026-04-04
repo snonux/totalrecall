@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"codeberg.org/snonux/totalrecall/internal/batch"
 )
@@ -143,6 +144,16 @@ func (r *Runner) Run(batchFile string) error {
 		return err
 	}
 
+	if err := r.saveVocabularyFile(result.StoryText, entries, slug, comicsDir); err != nil {
+		// Non-fatal: vocabulary file is a learning aid, not required for the comic.
+		fmt.Fprintf(os.Stderr, "Warning: could not write vocabulary file: %v\n", err)
+	}
+
+	if err := r.saveThemeFile(slug, comicsDir); err != nil {
+		// Non-fatal: theme file is a convenience record for reproduction.
+		fmt.Fprintf(os.Stderr, "Warning: could not write theme file: %v\n", err)
+	}
+
 	r.drawComicPages(result.StoryText, result.Bible, slug, entries)
 
 	return r.handleNarration(result.StoryText, slug, comicsDir)
@@ -200,6 +211,49 @@ func (r *Runner) saveStoryText(text, titleSlug, dir string) error {
 		return fmt.Errorf("failed to write story file: %w", err)
 	}
 	fmt.Printf("Story saved: %s\n", path)
+	return nil
+}
+
+// saveVocabularyFile writes <slug>_comic_vocabulary.txt — a learning aid that
+// lists the vocabulary words with translations followed by the full story text,
+// so the reader can study the words in context.
+func (r *Runner) saveVocabularyFile(storyText string, entries []batch.WordEntry, titleSlug, dir string) error {
+	path := filepath.Join(dir, titleSlug+"_comic_vocabulary.txt")
+	var sb strings.Builder
+
+	sb.WriteString("# Vocabulary Words\n\n")
+	for _, e := range entries {
+		if e.Translation != "" {
+			sb.WriteString(fmt.Sprintf("  %s — %s\n", e.Bulgarian, e.Translation))
+		} else {
+			sb.WriteString(fmt.Sprintf("  %s\n", e.Bulgarian))
+		}
+	}
+
+	sb.WriteString("\n# Story Text\n\n")
+	sb.WriteString(strings.TrimSpace(storyText))
+	sb.WriteString("\n")
+
+	if err := os.WriteFile(path, []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write vocabulary file: %w", err)
+	}
+	fmt.Printf("Vocabulary saved: %s\n", path)
+	return nil
+}
+
+// saveThemeFile writes <slug>_theme.txt containing the --story-theme value used
+// for this run, so the comic can be reproduced by passing the same theme again.
+func (r *Runner) saveThemeFile(titleSlug, dir string) error {
+	theme := ""
+	if r.config != nil {
+		theme = r.config.Theme
+	}
+	path := filepath.Join(dir, titleSlug+"_theme.txt")
+	content := theme + "\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write theme file: %w", err)
+	}
+	fmt.Printf("Theme saved: %s\n", path)
 	return nil
 }
 

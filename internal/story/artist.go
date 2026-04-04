@@ -57,6 +57,13 @@ const (
 	// helperRetryPause waits before retrying when the model returns an empty
 	// response — typically caused by free-tier RPM exhaustion between rapid calls.
 	helperRetryPause = 15 * time.Second
+
+	// renderingRequirement is appended to every image prompt (cover, story pages,
+	// back cover, gallery) to push the model toward photorealistic output even
+	// within a comic grid layout. Centralised here so it is easy to tune.
+	renderingRequirement = "RENDERING REQUIREMENT: every panel and illustration must look " +
+		"like a real photograph — photorealistic skin texture, fabric detail, lighting, " +
+		"and environment. NOT a drawing, painting, or illustration. Real-world photo quality.\n"
 )
 
 // comicStyles is the pool from which the page style is drawn each run.
@@ -400,6 +407,7 @@ func buildCoverPrompt(storyText, style, bible string) string {
 			"All text on the cover (cover lines, banners, labels) MUST be in Bulgarian "+
 			"Cyrillic script. The masthead title must also be rendered in a striking comic-book font.\n\n"+
 			"Art style: %s.%s\n"+
+			renderingRequirement+
 			"TRADITIONAL COMIC BOOK FRONT COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"MANDATORY MASTHEAD — the most important visual element on this cover:\n"+
@@ -466,6 +474,7 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"Each panel is separated by a thin black gutter line. "+
 			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
+			renderingRequirement+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
 			"to the reference — a child must never look older or younger than defined.\n"+
@@ -531,6 +540,7 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 			"All visible text (blurb box, labels, banners) MUST be in Bulgarian Cyrillic script. "+
 			"English text anywhere on the back cover is STRICTLY FORBIDDEN.\n\n"+
 			"Art style: %s.%s\n"+
+			renderingRequirement+
 			"TRADITIONAL COMIC BOOK BACK COVER — portrait orientation, single full-bleed illustration.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
@@ -566,6 +576,7 @@ func buildGalleryPagePrompt(style, bible string, galleryNum int) string {
 	bibleBlock := bibleSection(bible, fmt.Sprintf("gallery page %d", galleryNum))
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
+			renderingRequirement+
 			"FULL-BLEED CHARACTER ART PAGE — portrait orientation, single illustration.\n"+
 			"NO text of any kind. NO title. NO labels. NO speech bubbles. NO panel borders. NO UI elements.\n"+
 			"This is a text-free variant cover / gallery page. Pure art only.\n\n"+
