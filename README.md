@@ -38,10 +38,12 @@ It has mainly been vibe coded using Claude Code CLI.
 - **Vocabulary story generation** (`--story`):
   - Generates a ~250-word Bulgarian story that naturally uses every word in a batch file
   - All human characters are adults; story genre/setting driven by `--story-theme`
-  - Produces **10 pages** per comic: cover + 5 story pages (2×2 panel grid) + 3 gallery pages (close-up character art) + back cover
+  - Produces **12 pages** per comic: cover + 5 story pages (2×2 panel grid) + 5 gallery pages (close-up character art) + back cover
   - All output saved under `comics/<title-slug>/` with files named `<slug>_*.png`
-  - Art style chosen randomly per run (90% ultra-realistic, 10% curated pool: manga, watercolor, noir, pop art, etc.); override with `--story-style`
-  - **Rendering mode** chosen randomly 50/50 each run: ultra-realistic (photorealistic panels) or standard comic style; force standard with `--no-ultra-realistic`
+  - **Rendering mode** chosen randomly 50/50 each run; force standard with `--no-ultra-realistic`:
+    - *Ultra-realistic*: photography-language style prompt (DSLR, cinematic stills, hyper-realistic) + mandatory photorealistic rendering requirement — produces near-photographic panels
+    - *Standard comic*: comic art style pool (90% "ultra realistic comic strip", 10% manga / watercolor / noir / pop-art etc.)
+  - Art style override: `--story-style` replaces the random pick for both modes
   - **Iterative character consistency**: each page is generated with the cover + previous page as pixel references so characters stay visually consistent
   - **Character bible**: Gemini generates a detailed visual guide (age, clothing, colours) used in every prompt
   - **Cinematic narration** via Gemini TTS (`<slug>_narration.mp3`) — Bulgarian phonology, dramatic pacing, random voice from a curated pool; override with `--narrator-voice`
@@ -184,7 +186,7 @@ Key features:
    - `<slug>_story.txt` — ~250-word Bulgarian story using every word naturally
    - `<slug>_cover.png` — traditional comic book front cover with Bulgarian title
    - `<slug>_page_1.png` … `<slug>_page_5.png` — five 2×2-panel story pages (16:9)
-   - `<slug>_gallery_1.png` … `<slug>_gallery_3.png` — three close-up character gallery pages
+   - `<slug>_gallery_1.png` … `<slug>_gallery_5.png` — five close-up character gallery pages
    - `<slug>_back.png` — back cover with blurb
    - `<slug>.pdf` — all pages assembled into a single PDF
    - `<slug>_narration.mp3` — cinematic Gemini TTS narration with intro, story chunks, and epilogue

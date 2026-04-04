@@ -68,8 +68,16 @@ const (
 		"and environment. NOT a drawing, painting, or illustration. Real-world photo quality.\n"
 )
 
-// comicStyles is the pool from which the page style is drawn each run.
-// Ultra realistic is selected 90% of the time.
+// realisticStyles is the style pool used when ultra-realistic mode is active.
+// These descriptions avoid "comic strip" / "illustration" language so the image
+// model produces photographic output rather than comic-book artwork.
+var realisticStyles = []string{
+	"ultra-realistic DSLR photography, cinematic 35mm lens, natural lighting, hyper-detailed textures",
+	"cinematic still photography, golden-hour lighting, shallow depth of field, photojournalism quality",
+	"hyper-realistic photography, studio-quality lighting, sharp focus, true-to-life colours and textures",
+}
+
+// comicStyles is the pool used when standard comic style is active.
 var comicStyles = []string{
 	"ultra realistic comic strip with photographic detail and dramatic lighting",
 	"classic American comic book with bold ink outlines, halftone dots, and primary colors",
@@ -180,7 +188,15 @@ func NewArtist(config *ArtistConfig) *Artist {
 func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entries []batch.WordEntry) ([]string, error) {
 	style := a.style
 	if style == "" {
-		style = pickStyle()
+		// Ultra-realistic mode uses photography-only language so the image model
+		// produces photographic output. The comicStyles pool contains "comic strip"
+		// which dominates the model's style interpretation even when the
+		// renderingRequirement const is present — hence a separate pool is needed.
+		if a.ultraRealistic {
+			style = realisticStyles[rand.IntN(len(realisticStyles))]
+		} else {
+			style = pickStyle()
+		}
 	}
 	fmt.Printf("  Comic style: %s\n", style)
 	if a.ultraRealistic {
