@@ -15,9 +15,23 @@ import (
 )
 
 const (
-	// storyPageCount is the number of story pages (excluding cover/back).
+	// storyPageCount is the number of story pages (excluding cover/back/gallery).
 	// Each page uses a 2×2 grid of 4 panels in landscape (16:9) format.
-	storyPageCount = 3
+	// cover + 5 story pages + 3 gallery pages + back cover = 10 total.
+	storyPageCount = 5
+
+	// galleryPageCount is the number of text-free close-up character art pages
+	// inserted between the story pages and the back cover. Each is a full-bleed
+	// single illustration of the hero/heroine in a distinct dramatic pose.
+	galleryPageCount = 3
+
+	// pageMaxRetries is the number of times a story page generation is retried
+	// before being skipped. Gemini image generation occasionally returns no data
+	// due to transient safety filter hits or API hiccups; a retry usually succeeds.
+	pageMaxRetries = 3
+
+	// pageRetryPause is the wait between story page retries.
+	pageRetryPause = 10 * time.Second
 
 	// comicPageAspectRatio: 16:9 is the closest supported widescreen ratio for
 	// the ThinkPad X1 Gen 9 (2560×1600 / 16:10), filling the display with minimal
@@ -163,42 +177,98 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	var recentRefs [][]byte
 
 	// 1. Cover — generated without refs (it is the visual baseline).
-	fmt.Println("  Generating cover page...")
-	p, coverBytes, err := a.generateSinglePage(buildCoverPrompt(storyText, style, bible), titleSlug+"_cover", nil)
-	if err != nil {
-		fmt.Printf("  Warning: cover generation failed: %v\n", err)
-	} else {
+	// Retried up to pageMaxRetries times; failure is non-fatal but the cover
+	// is omitted from the PDF and no anchor reference is established.
+	p, coverBytes := a.generatePageWithRetry(buildCoverPrompt(storyText, style, bible), titleSlug+"_cover", nil, "cover page")
+	if p != "" {
 		paths = append(paths, p)
 		recentRefs = appendRef(recentRefs, coverBytes) // cover becomes the anchor reference
 	}
 
-	// 2. Story pages (7-panel landscape: 3+4 rows) — each receives cover + previous page as refs.
+	// 2. Story pages — each receives cover + previous page as refs.
+	// Failures are non-fatal: up to pageMaxRetries attempts per page, then a
+	// warning is logged and generation continues with the next page so the PDF
+	// always contains as many pages as the API manages to produce.
 	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
-		fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
-		p, pageBytes, err := a.generateSinglePage(
-			buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries),
-			fmt.Sprintf("%s_page_%d", titleSlug, pageNum),
-			recentRefs,
-		)
-		if err != nil {
-			return paths, fmt.Errorf("story page %d failed: %w", pageNum, err)
+		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries)
+		fileName := fmt.Sprintf("%s_page_%d", titleSlug, pageNum)
+		p, pageBytes := a.generateStoryPage(prompt, fileName, pageNum, recentRefs)
+		if p != "" {
+			paths = append(paths, p)
+			recentRefs = appendRef(recentRefs, pageBytes)
 		}
-		paths = append(paths, p)
-		recentRefs = appendRef(recentRefs, pageBytes)
 	}
 
-	// 3. Back cover — receives the same rolling refs as the last story page.
-	fmt.Println("  Generating back cover...")
-	p, _, err = a.generateSinglePage(buildBackCoverPrompt(storyText, style, bible, blurb), titleSlug+"_back", recentRefs)
-	if err != nil {
-		fmt.Printf("  Warning: back cover generation failed: %v\n", err)
-	} else {
+	// 3. Gallery pages — text-free close-up character art pages, one per pose.
+	// Each is a full-bleed single illustration; no panels, no text, no speech bubbles.
+	// They act as alternative covers and use the accumulated refs for consistency.
+	for i := range galleryPageCount {
+		galleryNum := i + 1
+		prompt := buildGalleryPagePrompt(style, bible, galleryNum)
+		fileName := fmt.Sprintf("%s_gallery_%d", titleSlug, galleryNum)
+		gp, galleryBytes := a.generatePageWithRetry(prompt, fileName, recentRefs,
+			fmt.Sprintf("gallery page %d/%d", galleryNum, galleryPageCount))
+		if gp != "" {
+			paths = append(paths, gp)
+			recentRefs = appendRef(recentRefs, galleryBytes)
+		}
+	}
+
+	// 4. Back cover — receives the same rolling refs as the last gallery page.
+	// Retried up to pageMaxRetries times; failure is non-fatal.
+	p, _ = a.generatePageWithRetry(buildBackCoverPrompt(storyText, style, bible, blurb), titleSlug+"_back", recentRefs, "back cover")
+	if p != "" {
 		paths = append(paths, p)
 	}
 
 	return paths, nil
+}
+
+// generateStoryPage attempts to generate a single story page up to pageMaxRetries
+// times. It returns the saved path and image bytes on success, or empty strings
+// after all retries are exhausted (non-fatal — the caller continues with the next
+// page so the PDF is never aborted by a single transient API failure).
+func (a *Artist) generateStoryPage(prompt, fileName string, pageNum int, refs [][]byte) (string, []byte) {
+	fmt.Printf("  Generating story page %d/%d...\n", pageNum, storyPageCount)
+	for attempt := 1; attempt <= pageMaxRetries; attempt++ {
+		p, pageBytes, err := a.generateSinglePage(prompt, fileName, refs)
+		if err == nil {
+			return p, pageBytes
+		}
+		if attempt < pageMaxRetries {
+			fmt.Printf("  Story page %d attempt %d failed (%v), retrying in %s...\n",
+				pageNum, attempt, err, pageRetryPause)
+			time.Sleep(pageRetryPause)
+		} else {
+			fmt.Printf("  Warning: story page %d failed after %d attempts: %v\n",
+				pageNum, pageMaxRetries, err)
+		}
+	}
+	return "", nil
+}
+
+// generatePageWithRetry attempts to generate a single comic page (cover or back
+// cover) up to pageMaxRetries times. Returns the saved path and image bytes on
+// success, or ("", nil) after all retries are exhausted (non-fatal).
+func (a *Artist) generatePageWithRetry(prompt, fileName string, refs [][]byte, label string) (string, []byte) {
+	fmt.Printf("  Generating %s...\n", label)
+	for attempt := 1; attempt <= pageMaxRetries; attempt++ {
+		p, imgBytes, err := a.generateSinglePage(prompt, fileName, refs)
+		if err == nil {
+			return p, imgBytes
+		}
+		if attempt < pageMaxRetries {
+			fmt.Printf("  Warning: %s attempt %d/%d failed (%v), retrying in %s...\n",
+				label, attempt, pageMaxRetries, err, pageRetryPause)
+			time.Sleep(pageRetryPause)
+		} else {
+			fmt.Printf("  Warning: %s failed after %d attempts: %v\n",
+				label, pageMaxRetries, err)
+		}
+	}
+	return "", nil
 }
 
 // appendRef adds imgBytes to refs and keeps at most 2 entries (cover anchor +
@@ -385,8 +455,8 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"and panel labels MUST be written in Bulgarian Cyrillic script "+
 			"(например: Здравей! Какво правиш? Побързай!). "+
 			"English text anywhere in the panels is STRICTLY FORBIDDEN — use ONLY Bulgarian.\n\n"+
+			"%s"+ // vocabulary block — before art style so it is never truncated
 			"Art style: %s.%s\n"+
-			"%s"+ // vocabulary block
 			"Comic book story page %d of %d. "+
 			"MANDATORY PANEL LAYOUT — divide the image into exactly 4 panels in a 2×2 grid:\n"+
 			"  • TOP-LEFT panel: scene 1 from the excerpt\n"+
@@ -404,7 +474,7 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
 			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n"+
 			"Story excerpt:\n\n%s",
-		style, bibleBlock, vocabBlock, pageNum, totalPages, excerpt,
+		vocabBlock, style, bibleBlock, pageNum, totalPages, excerpt,
 	)
 }
 
@@ -477,6 +547,34 @@ func buildBackCoverPrompt(storyText, style, bible, blurb string) string {
 			"LANGUAGE REMINDER: all text in Bulgarian Cyrillic — see rule at top. "+
 			"Story ending hint:\n\n%s",
 		style, bibleBlock, blurbBoxInstruction, ending,
+	)
+}
+
+// galleryPoses are the close-up compositions cycled across the 3 gallery pages.
+// Each is a distinct dramatic framing so the pages feel like variant cover art.
+var galleryPoses = []string{
+	"extreme close-up portrait: face and shoulders filling the entire frame, dramatic three-quarter lighting, intense gaze directly at the viewer, fine detail on eyes and expression",
+	"dynamic action pose: full body, low-angle shot looking up at the heroine against the sky or setting backdrop, confident stance, hair and clothing caught in motion",
+	"atmospheric mid-shot: waist-up, the heroine silhouetted or lit by the ambient environment (bioluminescence, sunset, neon glow), looking off into the distance with a sense of wonder or resolve",
+}
+
+// buildGalleryPagePrompt constructs a text-free close-up character art page prompt.
+// galleryNum (1-based) selects the pose from galleryPoses so each page is distinct.
+// No text, no panels, no speech bubbles — pure full-bleed illustration.
+func buildGalleryPagePrompt(style, bible string, galleryNum int) string {
+	pose := galleryPoses[(galleryNum-1)%len(galleryPoses)]
+	bibleBlock := bibleSection(bible, fmt.Sprintf("gallery page %d", galleryNum))
+	return fmt.Sprintf(
+		"Art style: %s.%s\n"+
+			"FULL-BLEED CHARACTER ART PAGE — portrait orientation, single illustration.\n"+
+			"NO text of any kind. NO title. NO labels. NO speech bubbles. NO panel borders. NO UI elements.\n"+
+			"This is a text-free variant cover / gallery page. Pure art only.\n\n"+
+			"Composition: %s\n\n"+
+			"The subject MUST be EXACTLY the main heroine described in the reference above — "+
+			"same face, same age, same clothing, same companion animal if naturally present. "+
+			"Do NOT invent new characters. Do NOT add any text overlays.\n"+
+			"Background: the story's setting rendered with full cinematic atmosphere and colour mood.",
+		style, bibleBlock, pose,
 	)
 }
 

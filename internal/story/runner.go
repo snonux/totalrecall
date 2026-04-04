@@ -152,7 +152,7 @@ func (r *Runner) Run(batchFile string) error {
 // entries carries the vocabulary words so panels can visually feature and label them.
 // Errors are non-fatal — story.txt is always accessible regardless of image failures.
 func (r *Runner) drawComicPages(storyText, bible, titleSlug string, entries []batch.WordEntry) {
-	fmt.Printf("Generating %d comic pages...\n", storyPageCount+2) // 2 = cover + back cover
+	fmt.Printf("Generating %d comic pages...\n", storyPageCount+galleryPageCount+2) // cover + story + gallery + back
 	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug, entries)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: comic page generation failed: %v\n", err)

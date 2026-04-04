@@ -277,8 +277,8 @@ func (c *NanoBananaClient) resolveTranslation(_ context.Context, opts *SearchOpt
 
 func (c *NanoBananaClient) resolvePrompt(ctx context.Context, opts *SearchOptions, translatedWord string) (string, error) {
 	if customPrompt := strings.TrimSpace(opts.CustomPrompt); customPrompt != "" {
-		if len(customPrompt) > 1000 {
-			customPrompt = customPrompt[:997] + "..."
+		if len(customPrompt) > 4000 {
+			customPrompt = customPrompt[:3997] + "..."
 		}
 		fmt.Printf("Using custom prompt: %s\n", customPrompt)
 		return customPrompt, nil
@@ -299,8 +299,8 @@ func (c *NanoBananaClient) buildPrompt(ctx context.Context, opts *SearchOptions)
 	translation := strings.TrimSpace(opts.Translation)
 
 	if customPrompt := strings.TrimSpace(opts.CustomPrompt); customPrompt != "" {
-		if len(customPrompt) > 1000 {
-			customPrompt = customPrompt[:997] + "..."
+		if len(customPrompt) > 4000 {
+			customPrompt = customPrompt[:3997] + "..."
 		}
 		fmt.Printf("Using custom prompt: %s\n", customPrompt)
 		return customPrompt, translation, nil
