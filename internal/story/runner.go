@@ -50,6 +50,9 @@ type RunnerConfig struct {
 	// uses this value directly. Combine with loadOrGenerate's skip-existing logic
 	// to repair a partial comic run without regenerating already-present pages.
 	Slug string
+	// NarrateEnabled controls whether a cinematic MP3 narration is generated
+	// after comic creation. Defaults to false — narration is opt-in via --narrate.
+	NarrateEnabled bool
 }
 
 // Runner orchestrates the full pipeline: text → image → narration.
@@ -172,6 +175,12 @@ func (r *Runner) Run(batchFile string) error {
 
 	r.drawComicPages(result.StoryText, result.Bible, slug, entries)
 
+	// Narration is opt-in (--narrate flag). Skip entirely when not requested
+	// so runs complete faster and don't consume TTS quota unnecessarily.
+	if r.config != nil && !r.config.NarrateEnabled {
+		fmt.Println("Narration skipped (use --narrate to enable).")
+		return nil
+	}
 	return r.handleNarration(result.StoryText, slug, comicsDir)
 }
 

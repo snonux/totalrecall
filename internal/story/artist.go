@@ -550,6 +550,10 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"Each panel is separated by a thin black gutter line. "+
 			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
+			"VARIETY MANDATE — every panel MUST differ from the others in at least 3 of these dimensions: "+
+			"camera angle (close-up, medium shot, wide shot, bird's-eye, low angle), "+
+			"character pose or action, location or background detail, lighting or time-of-day, "+
+			"and foreground objects. Repeating the same angle or composition across panels is FORBIDDEN.\n"+
 			renderReq+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+

@@ -115,6 +115,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 			Theme:          flags.StoryTheme,
 			UltraRealistic: storyUltraRealistic(flags.StoryNoUltraRealistic),
 			NarratorVoice:  flags.NarratorVoice,
+			NarrateEnabled: flags.NarrateEnabled,
 			Slug:           flags.StorySlug,
 		})
 		if err := runner.Run(flags.StoryFile); err != nil {

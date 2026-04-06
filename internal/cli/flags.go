@@ -26,6 +26,7 @@ type Flags struct {
 	StoryNoUltraRealistic bool   // --no-ultra-realistic: disable photorealistic rendering requirement
 	StorySlug             string // --story-slug: force a specific output slug/directory (empty = auto from title)
 	NarratorVoice         string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
+	NarrateEnabled        bool   // --narrate: generate cinematic MP3 narration after --story (default false)
 	VideoEnabled          bool   // --video: whether to prompt for Veo video generation after --story completes
 	SkipAudio             bool
 	SkipImages            bool

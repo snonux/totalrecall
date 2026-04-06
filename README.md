@@ -46,8 +46,9 @@ It has mainly been vibe coded using Claude Code CLI.
   - Art style override: `--story-style` replaces the random pick for both modes
   - **Iterative character consistency**: each page is generated with the cover + previous page as pixel references so characters stay visually consistent
   - **Character bible**: Gemini generates a detailed visual guide (age, clothing, colours) used in every prompt
-  - **Cinematic narration** via Gemini TTS (`<slug>_narration.mp3`) — Bulgarian phonology, dramatic pacing, random voice from a curated pool; override with `--narrator-voice`
-    - Intro teaser (15 s, different voice) + main story chunks (~100 words each) + epilogue with ambient music
+  - **Cinematic narration** via Gemini TTS (opt-in with `--narrate`; off by default to save quota)
+    - Output: `<slug>_narration.mp3` — Bulgarian phonology, dramatic pacing, random voice from a curated pool
+    - Override voice with `--narrator-voice`; intro teaser + main story chunks (~100 words each) + epilogue
     - Falls back to `<slug>_tts_todo.txt` if narration fails
   - **Vocabulary learning file** (`<slug>_comic_vocabulary.txt`) — word list with translations + full story text
   - **Theme file** (`<slug>_theme.txt`) — records the `--story-theme` used for easy reproduction
@@ -189,10 +190,10 @@ Key features:
    - `<slug>_gallery_1.png` … `<slug>_gallery_5.png` — five close-up character gallery pages
    - `<slug>_back.png` — back cover with blurb
    - `<slug>.pdf` — all pages assembled into a single PDF
-   - `<slug>_narration.mp3` — cinematic Gemini TTS narration with intro, story chunks, and epilogue
+   - `<slug>_narration.mp3` — cinematic Gemini TTS narration (only when `--narrate` is passed)
+   - `<slug>_tts_todo.txt` — written if `--narrate` was given but narration failed
    - `<slug>_comic_vocabulary.txt` — vocabulary words + full story text for learning
    - `<slug>_theme.txt` — records `--story-theme` for easy reproduction
-   - `<slug>_tts_todo.txt` — written instead of MP3 only if narration fails
 
    Customise the story:
    ```bash
@@ -206,13 +207,19 @@ Key features:
    # Force standard comic style (default is random 50/50 between ultra-realistic and standard)
    totalrecall --story words.txt --no-ultra-realistic
 
-   # Choose narrator voice (default: random from pool)
-   totalrecall --story words.txt --narrator-voice Charon    # deep, authoritative
-   totalrecall --story words.txt --narrator-voice Fenrir    # strong, resonant
-   totalrecall --story words.txt --narrator-voice Enceladus # breathy, intimate
-   totalrecall --story words.txt --narrator-voice Algieba   # smooth, warm
-   totalrecall --story words.txt --narrator-voice Aoede     # breezy, expressive
-   totalrecall --story words.txt --narrator-voice Schedar   # steady, grounded
+   # Enable cinematic narration (default: off — use --narrate to opt in)
+   totalrecall --story words.txt --narrate
+
+   # Choose narrator voice (default: random from pool; only relevant with --narrate)
+   totalrecall --story words.txt --narrate --narrator-voice Charon    # deep, authoritative
+   totalrecall --story words.txt --narrate --narrator-voice Fenrir    # strong, resonant
+   totalrecall --story words.txt --narrate --narrator-voice Enceladus # breathy, intimate
+   totalrecall --story words.txt --narrate --narrator-voice Algieba   # smooth, warm
+   totalrecall --story words.txt --narrate --narrator-voice Aoede     # breezy, expressive
+   totalrecall --story words.txt --narrate --narrator-voice Schedar   # steady, grounded
+
+   # Repair a partial run (skip existing pages, regenerate missing ones)
+   totalrecall --story words.txt --story-slug my-comic-slug
    ```
 
 #### Optional Gallery Videos (Veo)

@@ -75,6 +75,9 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.NarratorVoice, "narrator-voice", "",
 		"Gemini voice for cinematic story narration (default: random from cinematic pool). "+
 			"Valid values: Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar")
+	cmd.Flags().BoolVar(&flags.NarrateEnabled, "narrate", false,
+		"Generate a cinematic MP3 narration of the story after --story completes (default false). "+
+			"Requires GOOGLE_API_KEY. Use --narrator-voice to pick a specific voice.")
 	cmd.Flags().BoolVar(&flags.VideoEnabled, "video", flags.VideoEnabled,
 		"Prompt to generate Veo videos after comic generation (default true; use --video=false to skip)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
