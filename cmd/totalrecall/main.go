@@ -194,6 +194,10 @@ func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 // --video flag is true (default), it prompts the user to select gallery pages
 // for Veo video generation and then generates the selected videos.
 // Passing --video=false skips the prompt entirely.
+//
+// Video generation failures are intentionally non-fatal: the comic, PDF, and
+// narration are already on disk, so a Veo API error should not invalidate
+// those outputs. Errors are printed as warnings and the function returns nil.
 func runStoryVideos(flags *cli.Flags) error {
 	if !flags.VideoEnabled {
 		return nil
@@ -201,12 +205,19 @@ func runStoryVideos(flags *cli.Flags) error {
 
 	// The story runner writes gallery PNGs into ./comics/<slug>/, so we search
 	// from "." recursively to find them regardless of the exact slug.
-	selected, err := cli.PromptForGalleryVideos(".")
+	// PromptForGalleryVideos returns the actual file paths (not just page numbers)
+	// so GenerateSelectedVideos can locate them without a second directory search.
+	selectedPaths, err := cli.PromptForGalleryVideos(".")
 	if err != nil {
-		return fmt.Errorf("video prompt: %w", err)
+		fmt.Fprintf(os.Stderr, "Warning: video prompt failed: %v\n", err)
+		return nil
 	}
 
-	return cli.GenerateSelectedVideos(cli.GetGoogleAPIKey(), selected, ".")
+	if err := cli.GenerateSelectedVideos(cli.GetGoogleAPIKey(), selectedPaths); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: video generation failed: %v\n", err)
+	}
+
+	return nil
 }
 
 // storyUltraRealistic converts the --no-ultra-realistic bool flag into a *bool

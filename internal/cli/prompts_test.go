@@ -190,3 +190,79 @@ func TestFindGalleryPages_WithFiles(t *testing.T) {
 		t.Errorf("expected 3 paths, got %d", len(paths))
 	}
 }
+
+// TestFindGalleryPages_Recursive verifies that gallery PNGs placed in
+// subdirectories (as the story runner writes them into comics/<slug>/) are
+// found by the recursive walk.
+func TestFindGalleryPages_Recursive(t *testing.T) {
+	root := t.TempDir()
+
+	// Simulate comics/<slug>/ layout.
+	subDir := filepath.Join(root, "comics", "my_story")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("creating subdir: %v", err)
+	}
+
+	for _, name := range []string{
+		"my_story_gallery_1.png",
+		"my_story_gallery_2.png",
+	} {
+		if err := os.WriteFile(filepath.Join(subDir, name), []byte(""), 0644); err != nil {
+			t.Fatalf("creating test file: %v", err)
+		}
+	}
+
+	pages, paths, err := findGalleryPages(root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantPages := []int{1, 2}
+	if !reflect.DeepEqual(pages, wantPages) {
+		t.Errorf("pages = %v, want %v", pages, wantPages)
+	}
+	if len(paths) != 2 {
+		t.Errorf("expected 2 paths, got %d: %v", len(paths), paths)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// filterPathsByPages
+// ---------------------------------------------------------------------------
+
+func TestFilterPathsByPages(t *testing.T) {
+	paths := []string{
+		"/comics/slug/slug_gallery_1.png",
+		"/comics/slug/slug_gallery_2.png",
+		"/comics/slug/slug_gallery_3.png",
+	}
+
+	got := filterPathsByPages(paths, []int{1, 3})
+	want := []string{
+		"/comics/slug/slug_gallery_1.png",
+		"/comics/slug/slug_gallery_3.png",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("filterPathsByPages = %v, want %v", got, want)
+	}
+}
+
+func TestFilterPathsByPages_All(t *testing.T) {
+	paths := []string{
+		"/comics/slug/slug_gallery_1.png",
+		"/comics/slug/slug_gallery_2.png",
+	}
+
+	got := filterPathsByPages(paths, []int{1, 2})
+	if !reflect.DeepEqual(got, paths) {
+		t.Errorf("filterPathsByPages all = %v, want %v", got, paths)
+	}
+}
+
+func TestFilterPathsByPages_Empty(t *testing.T) {
+	paths := []string{"/comics/slug/slug_gallery_1.png"}
+	got := filterPathsByPages(paths, []int{})
+	if len(got) != 0 {
+		t.Errorf("expected empty result, got %v", got)
+	}
+}

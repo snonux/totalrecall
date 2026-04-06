@@ -14,11 +14,16 @@ import (
 // PromptForGalleryVideos lists all *_gallery_*.png files found under outputDir
 // (searching recursively), shows them to the user, and asks whether they want
 // to generate videos. If the user agrees, it asks which pages to generate
-// (e.g. "1,3,5" or "all") and returns the parsed list of page numbers.
+// (e.g. "1,3,5" or "all") and returns the paths of the selected PNGs.
+//
+// Returning paths (rather than page numbers) lets the caller pass them
+// directly to GenerateSelectedVideos without a second directory lookup,
+// which would fail because gallery images live in a per-comic subdirectory
+// (comics/<slug>/) rather than in the top-level output directory.
 //
 // Returns an empty slice when the user declines or enters nothing.
 // Returns an error only on unexpected I/O or parse failures.
-func PromptForGalleryVideos(outputDir string) ([]int, error) {
+func PromptForGalleryVideos(outputDir string) ([]string, error) {
 	pages, pngPaths, err := findGalleryPages(outputDir)
 	if err != nil {
 		return nil, err
@@ -39,7 +44,31 @@ func PromptForGalleryVideos(outputDir string) ([]int, error) {
 		return nil, nil
 	}
 
-	return askPageSelection(pages)
+	selectedPages, err := askPageSelection(pages)
+	if err != nil {
+		return nil, err
+	}
+
+	return filterPathsByPages(pngPaths, selectedPages), nil
+}
+
+// filterPathsByPages returns only those paths whose embedded page number
+// appears in the selectedPages slice. The result preserves the order from
+// pngPaths (which is already sorted alphabetically by findGalleryPages).
+func filterPathsByPages(pngPaths []string, selectedPages []int) []string {
+	pageSet := make(map[int]struct{}, len(selectedPages))
+	for _, p := range selectedPages {
+		pageSet[p] = struct{}{}
+	}
+
+	result := make([]string, 0, len(selectedPages))
+	for _, path := range pngPaths {
+		n := extractPageNumber(filepath.Base(path))
+		if _, ok := pageSet[n]; ok {
+			result = append(result, path)
+		}
+	}
+	return result
 }
 
 // findGalleryPages walks outputDir recursively looking for *_gallery_*.png

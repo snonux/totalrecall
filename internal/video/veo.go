@@ -90,6 +90,52 @@ func (g *VeoGenerator) GenerateVideoFromGallery(ctx context.Context, galleryPath
 	return mp4Path, nil
 }
 
+// GenerateVideoFromPath reads the gallery PNG at the given absolute (or
+// relative) imgPath, calls the Veo API, and writes the resulting MP4 to the
+// same directory that contains imgPath.  It returns the absolute path of the
+// saved MP4 or an error.
+//
+// This variant is preferred over GenerateVideoFromGallery when the caller
+// already knows the exact image path (e.g. from a recursive directory walk),
+// because it avoids a second glob search and always writes the video next to
+// its source image.
+func (g *VeoGenerator) GenerateVideoFromPath(ctx context.Context, imgPath string) (string, error) {
+	imgBytes, err := os.ReadFile(imgPath)
+	if err != nil {
+		return "", fmt.Errorf("veo: reading gallery image %s: %w", imgPath, err)
+	}
+
+	// Derive the page number from the file name for saveMP4 naming purposes.
+	pageNum := pageNumFromPath(imgPath)
+
+	prompt := buildVeoPrompt()
+
+	log.Printf("veo: generating video from %s", imgPath)
+
+	// Write the MP4 next to the source image so gallery + video stay together.
+	outputDir := filepath.Dir(imgPath)
+
+	return g.generateAndSave(ctx, imgBytes, prompt, outputDir, imgPath, pageNum)
+}
+
+// pageNumFromPath extracts the gallery page number from a file name of the
+// form "<slug>_gallery_<N>.png".  Returns 0 when the name does not match.
+func pageNumFromPath(imgPath string) int {
+	base := filepath.Base(imgPath)
+	name := strings.TrimSuffix(base, ".png")
+	const marker = "_gallery_"
+	idx := strings.LastIndex(name, marker)
+	if idx < 0 {
+		return 0
+	}
+	numStr := name[idx+len(marker):]
+	var n int
+	if _, err := fmt.Sscanf(numStr, "%d", &n); err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
 // loadGalleryImage finds the gallery PNG for the given page number and returns
 // its path and raw bytes. It searches galleryPath for any file whose name
 // matches the pattern "*_gallery_<N>.png".
