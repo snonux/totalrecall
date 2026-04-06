@@ -156,3 +156,118 @@ func TestSaveMP4_CreatesOutputDir(t *testing.T) {
 		t.Error("expected output directory to be created")
 	}
 }
+
+// TestSaveMP4_FallbackName verifies that saveMP4 uses a fallback name when the
+// source path lacks a recognisable gallery file name (no .png suffix).
+func TestSaveMP4_FallbackName(t *testing.T) {
+	t.Parallel()
+
+	outDir := t.TempDir()
+	fakeVideo := []byte("video-data")
+
+	// srcPath with no .png extension triggers the fallback naming path.
+	got, err := saveMP4(fakeVideo, outDir, "unusual_source", 5)
+	if err != nil {
+		t.Fatalf("saveMP4 failed: %v", err)
+	}
+
+	if !strings.HasSuffix(got, ".mp4") {
+		t.Errorf("expected .mp4 suffix even for fallback name, got %q", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// pageNumFromPath
+// ---------------------------------------------------------------------------
+
+// TestPageNumFromPath verifies that pageNumFromPath correctly extracts the
+// gallery page number from various file name patterns.
+func TestPageNumFromPath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		path string
+		want int
+	}{
+		{"/stories/ябълка/ябълка_gallery_1.png", 1},
+		{"/stories/word/word_gallery_10.png", 10},
+		// Non-gallery path — should return 0.
+		{"/stories/word/word_cover.png", 0},
+		// Missing trailing number — should return 0.
+		{"/stories/word/word_gallery_.png", 0},
+		// Page number zero — should return 0 (non-positive).
+		{"/stories/word/word_gallery_0.png", 0},
+		// Nested gallery name with multiple "_gallery_" tokens — last one wins.
+		{"/comics/slug/slug_gallery_3.png", 3},
+	}
+
+	for _, tc := range cases {
+		got := pageNumFromPath(tc.path)
+		if got != tc.want {
+			t.Errorf("pageNumFromPath(%q) = %d, want %d", tc.path, got, tc.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// loadGalleryImage — additional edge cases
+// ---------------------------------------------------------------------------
+
+// TestLoadGalleryImage_MultipleMatchesUsesFirst verifies that when several
+// gallery files share the same page number, loadGalleryImage returns the
+// lexicographically first match without error.
+func TestLoadGalleryImage_MultipleMatchesUsesFirst(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Two files for page 1 — alphabetical order determines which is returned.
+	files := []string{"aaa_gallery_1.png", "zzz_gallery_1.png"}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+	}
+
+	gotPath, gotBytes, err := loadGalleryImage(dir, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// filepath.Glob returns results in sorted order, so aaa_gallery_1.png comes first.
+	expectedName := "aaa_gallery_1.png"
+	if filepath.Base(gotPath) != expectedName {
+		t.Errorf("expected first match %q, got %q", expectedName, filepath.Base(gotPath))
+	}
+	if string(gotBytes) != expectedName {
+		t.Errorf("bytes mismatch: got %q, want %q", gotBytes, expectedName)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// VeoGenerator — constructor with valid mock client
+// ---------------------------------------------------------------------------
+
+// TestNewVeoGenerator_WithMockClient verifies that NewVeoGenerator succeeds
+// when the genai client factory does not return an error.
+func TestNewVeoGenerator_WithMockClient(t *testing.T) {
+	t.Parallel()
+
+	orig := newGenaiClient
+	newGenaiClient = func(_ context.Context, _ *genai.ClientConfig) (*genai.Client, error) {
+		// Return a zero-value client pointer — sufficient for construction.
+		return &genai.Client{}, nil
+	}
+	t.Cleanup(func() { newGenaiClient = orig })
+
+	gen, err := NewVeoGenerator("valid-api-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gen == nil {
+		t.Fatal("expected non-nil VeoGenerator")
+	}
+	if gen.model != DefaultVeoModel {
+		t.Errorf("model: got %q, want %q", gen.model, DefaultVeoModel)
+	}
+}

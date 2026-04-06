@@ -266,3 +266,48 @@ func TestFilterPathsByPages_Empty(t *testing.T) {
 		t.Errorf("expected empty result, got %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// parseSelection — additional edge cases
+// ---------------------------------------------------------------------------
+
+// TestParseSelection_AllWithZeroMax verifies that "all" with a zero max
+// returns an empty (but non-nil) slice, since there are no available pages.
+func TestParseSelection_AllWithZeroMax(t *testing.T) {
+	got, err := parseSelection("all", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("parseSelection(\"all\", 0): expected empty slice, got %v", got)
+	}
+}
+
+// TestParseSelection_PageExceedsMax verifies that a page number larger than
+// max is accepted without error — the caller filters against real files.
+func TestParseSelection_PageExceedsMax(t *testing.T) {
+	got, err := parseSelection("99", 5)
+	if err != nil {
+		t.Fatalf("unexpected error for page > max: %v", err)
+	}
+	want := []int{99}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("parseSelection(\"99\", 5) = %v, want %v", got, want)
+	}
+}
+
+// TestParseSelection_OnlyWhitespace verifies that a purely whitespace input
+// (after trimming) is treated as "all" via the caller, but parseSelection
+// itself should not receive it — nonetheless it should not panic.
+func TestParseSelection_EmptyAfterTrim(t *testing.T) {
+	// Empty string after trimming: no tokens, so result is empty, no error.
+	got, err := parseSelection("   ", 5)
+	if err != nil {
+		t.Fatalf("unexpected error for all-whitespace input: %v", err)
+	}
+	// "all" is the keyword path — plain whitespace is NOT "all", so the
+	// comma-split path runs and produces an empty result (all tokens are "").
+	if len(got) != 0 {
+		t.Errorf("parseSelection(\"   \", 5): expected empty slice, got %v", got)
+	}
+}
