@@ -215,6 +215,48 @@ Key features:
    totalrecall --story words.txt --narrator-voice Schedar   # steady, grounded
    ```
 
+#### Optional Gallery Videos (Veo)
+
+After `--story` comic generation completes, the CLI prompts you to generate short MP4 videos from the gallery close-up images using **Google Veo**.
+
+**How it works:**
+
+1. Once the comic pages, PDF, and narration are written to disk the CLI automatically searches `comics/<slug>/` for gallery PNG files.
+2. It lists the found images and asks:
+   ```
+   Found gallery pages:
+     comics/my-story/my-story_gallery_1.png
+     comics/my-story/my-story_gallery_2.png
+     ...
+   Generate videos for these gallery pages? [y/N]:
+   ```
+3. If you confirm, you are asked which pages to animate:
+   ```
+   Which pages? (e.g. 1,3,5 or all) [all]:
+   ```
+4. Each selected gallery PNG is sent to the Veo API and the resulting 8-second MP4 is saved alongside the PNG:
+   ```
+   comics/<slug>/<slug>_gallery_1.mp4
+   comics/<slug>/<slug>_gallery_2.mp4
+   ...
+   ```
+
+**Model:** `veo-2.0-generate-001`
+
+**Cost note:** Veo is a paid Google Cloud feature. Your `GOOGLE_API_KEY` must have billing enabled and the Veo API activated in your Google Cloud project. The prompt will not appear if you pass `--video=false`.
+
+**CLI usage:**
+
+```bash
+# Default: prompt appears after story generation (answer y/N interactively)
+totalrecall --story words.txt
+
+# Skip the video prompt entirely
+totalrecall --story words.txt --video=false
+```
+
+Video generation failures are non-fatal — any errors are printed as warnings and the already-generated comic, PDF, and narration remain intact on disk.
+
 #### Batch file format
 
 Create a text file with Bulgarian words, optionally with English translations or Bulgarian definitions. The tool supports five flexible formats:
