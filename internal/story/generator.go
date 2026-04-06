@@ -359,16 +359,19 @@ func buildPanelScriptPrompt() string {
 		"one per line, in strict chronological story order.\n" +
 		"Format each line exactly as: P{page}-{panel}: {description}\n" +
 		"where page is 1–5 and panel is A (top-left), B (top-right), C (bottom-left), D (bottom-right).\n" +
-		"Each description is 1–2 sentences: WHO is in the panel, WHAT they are doing, " +
-		"WHERE they are, and their expression or body language. Be vivid and specific.\n" +
+		"Each description is 1–2 sentences covering: WHO is in the panel, WHAT they are doing, " +
+		"WHERE they are, their expression or body language, and — REQUIRED for most panels — " +
+		"the exact Bulgarian dialogue or thought text the character says/thinks, written in quotes.\n" +
+		"At least 3 of the 4 panels on every page MUST include Bulgarian dialogue in a speech bubble " +
+		"or thought bubble. The dialogue must come directly from the story and be in Bulgarian Cyrillic.\n" +
 		"The 20 panels must retell the story from beginning to end — " +
 		"each page covers one story beat, each panel advances the action.\n" +
 		"Do NOT repeat the same scene or camera angle on consecutive panels.\n" +
 		"Example format (replace with actual story content):\n" +
-		"P1-A: Maria walks out her front door into morning sunlight, laptop bag on shoulder, looking relieved.\n" +
-		"P1-B: She strides down a busy city street past parked cars, headphones in, smiling.\n" +
-		"P1-C: Close-up of her hand gripping a large steaming coffee cup with both hands.\n" +
-		"P1-D: Maria pauses at a park entrance, gazing at the green trees ahead with anticipation.\n"
+		"P1-A: Maria walks out her front door into morning sunlight, laptop bag on shoulder, saying \"Най-накрая!\" in a speech bubble.\n" +
+		"P1-B: She strides down a busy city street past parked cars, headphones in, thinking \"Толкова хубав ден.\" in a thought bubble.\n" +
+		"P1-C: Close-up of her hand gripping a large steaming coffee cup, the barista handing it over saying \"Заповядайте!\" in a speech bubble.\n" +
+		"P1-D: Maria pauses at a park entrance, gazing at green trees ahead, saying \"Точно това ми трябваше.\" in a speech bubble.\n"
 }
 
 // slugify converts a comic title into a safe directory/file name component.

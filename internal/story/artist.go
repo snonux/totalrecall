@@ -551,6 +551,12 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"Each panel is separated by a thin black gutter line. "+
 			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
+			"MANDATORY SPEECH BUBBLES — this is a comic book; characters MUST speak:\n"+
+			"  • At least 3 of the 4 panels MUST contain a speech bubble or thought bubble.\n"+
+			"  • If the panel description includes quoted dialogue, render it EXACTLY inside a speech bubble.\n"+
+			"  • Speech bubbles have a white background, black outline, and a tail pointing to the speaker.\n"+
+			"  • Thought bubbles use a cloud shape with small circles leading to the thinker.\n"+
+			"  • ALL bubble text is in Bulgarian Cyrillic — never Roman letters.\n"+
 			"VARIETY MANDATE — every panel MUST differ from the others in at least 3 of these dimensions: "+
 			"camera angle (close-up, medium shot, wide shot, bird's-eye, low angle), "+
 			"character pose or action, location or background detail, lighting or time-of-day, "+
