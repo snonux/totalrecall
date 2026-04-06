@@ -4,47 +4,48 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
+	"codeberg.org/snonux/totalrecall/internal/store"
 )
 
 // CardService manages card file discovery, directory creation, persistence,
 // and state loading from the output directory. It is responsible for all
 // non-UI file I/O related to cards, decoupled from UI event-wiring.
+// Directory-scanning and creation are delegated to a store.CardStore so the
+// underlying algorithm is shared with the processor package (DRY).
 type CardService struct {
-	config *Config
+	config    *Config
+	cardStore *store.CardStore
 }
 
 // NewCardService constructs a CardService for the given configuration.
+// It initialises an internal store.CardStore rooted at config.OutputDir.
 func NewCardService(config *Config) *CardService {
-	return &CardService{config: config}
+	return &CardService{
+		config:    config,
+		cardStore: store.New(config.OutputDir),
+	}
 }
 
 // FindCardDirectory finds the directory for a given Bulgarian word.
-// Delegates to the shared internal.FindCardDirectory which also handles the
-// legacy _word.txt fallback for backward compatibility.
+// Delegates to the shared store.CardStore which also handles the legacy
+// _word.txt fallback for backward compatibility.
 func (cs *CardService) FindCardDirectory(word string) string {
-	return internal.FindCardDirectory(cs.config.OutputDir, word)
+	return cs.cardStore.FindCardDirectory(word)
 }
 
 // EnsureWordDirectoryAndMetadata creates a new card directory and writes word
 // metadata to word.txt inside it. Returns the directory path.
+// Uses store.FindOrCreateCardDirectory so the creation logic is not duplicated.
 func (cs *CardService) EnsureWordDirectoryAndMetadata(word string) (string, error) {
-	cardID := internal.GenerateCardID(word)
-	wordDir := filepath.Join(cs.config.OutputDir, cardID)
-	if err := os.MkdirAll(wordDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create card directory: %w", err)
+	wordDir := cs.cardStore.FindOrCreateCardDirectory(word)
+	if wordDir == "" || wordDir == cs.config.OutputDir {
+		return "", fmt.Errorf("failed to create card directory for %q", word)
 	}
-
-	metadataFile := filepath.Join(wordDir, "word.txt")
-	if err := os.WriteFile(metadataFile, []byte(word), 0644); err != nil {
-		return "", fmt.Errorf("failed to save word metadata: %w", err)
-	}
-
 	return wordDir, nil
 }
 
@@ -62,59 +63,10 @@ func (cs *CardService) EnsureCardDirectory(word string) (string, error) {
 // ScanExistingWords scans the output directory for existing card subdirectories
 // and returns a sorted list of the Bulgarian words found. A directory counts
 // only if it contains at least one of: an audio file, an image, or a
-// translation file.
+// translation file. Delegates iteration and word-file reading to the shared
+// store.CardStore so that logic is not duplicated here.
 func (cs *CardService) ScanExistingWords() []string {
-	words := []string{}
-
-	entries, err := os.ReadDir(cs.config.OutputDir)
-	if err != nil {
-		// Directory doesn't exist yet; return empty list silently.
-		return words
-	}
-
-	// Each subdirectory represents a card identified by a card ID.
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		cardID := entry.Name()
-		wordDir := filepath.Join(cs.config.OutputDir, cardID)
-
-		word, ok := cs.readWordFromDir(wordDir)
-		if !ok {
-			continue
-		}
-
-		if cs.dirHasContent(wordDir) {
-			words = append(words, word)
-		}
-	}
-
-	sort.Strings(words)
-	return words
-}
-
-// readWordFromDir reads the Bulgarian word from word.txt (or the legacy
-// _word.txt) inside a card directory. Returns the word and true on success.
-func (cs *CardService) readWordFromDir(wordDir string) (string, bool) {
-	wordFile := filepath.Join(wordDir, "word.txt")
-	wordData, err := os.ReadFile(wordFile)
-	if err != nil {
-		// Try old format with underscore for backward compatibility.
-		wordFile = filepath.Join(wordDir, "_word.txt")
-		wordData, err = os.ReadFile(wordFile)
-		if err != nil {
-			return "", false
-		}
-	}
-
-	word := string(wordData)
-	if word == "" {
-		return "", false
-	}
-
-	return word, true
+	return cs.cardStore.ScanWords(cs.dirHasContent)
 }
 
 // dirHasContent returns true if the card directory contains at least one audio

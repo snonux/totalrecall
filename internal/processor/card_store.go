@@ -1,14 +1,14 @@
 package processor
 
 // CardStore manages the on-disk layout of word card directories.
-// It wraps the low-level internal.FindCardDirectory /
-// internal.FindOrCreateCardDirectory helpers and adds the higher-level
-// isWordFullyProcessed check used by the batch processor to skip words that
-// have already been completely generated.
+// It delegates to the shared store.CardStore (internal/store) for all
+// directory-discovery and creation logic, so those algorithms live in exactly
+// one place (DRY). The methods here add the higher-level isWordFullyProcessed
+// check that is specific to the batch processor.
 //
-// All methods are on *Processor rather than a separate struct to avoid an
-// extra layer of indirection while still keeping the concerns separated into
-// their own file (SRP at the file level, as recommended for Go packages).
+// All methods are on *Processor rather than a separate struct to keep the
+// existing call sites unchanged while still separating concerns at the file
+// level (SRP at the file level, as recommended for Go packages).
 
 import (
 	"os"
@@ -21,16 +21,17 @@ import (
 )
 
 // findOrCreateWordDirectory returns the existing card directory for word
-// inside the configured output directory, creating it when absent.
+// inside the configured output directory, creating it when absent. Delegates
+// to the shared CardStore so the directory-creation algorithm is not duplicated.
 func (p *Processor) findOrCreateWordDirectory(word string) string {
-	return internal.FindOrCreateCardDirectory(p.flags.OutputDir, word)
+	return p.cardStore.FindOrCreateCardDirectory(word)
 }
 
 // findCardDirectory searches the configured output directory for an existing
 // card directory that contains the given word. Returns an empty string when
-// no matching directory is found.
+// no matching directory is found. Delegates to the shared CardStore.
 func (p *Processor) findCardDirectory(word string) string {
-	return internal.FindCardDirectory(p.flags.OutputDir, word)
+	return p.cardStore.FindCardDirectory(word)
 }
 
 // isWordFullyProcessed returns true when the word's card directory already

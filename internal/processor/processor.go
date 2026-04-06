@@ -17,6 +17,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
+	"codeberg.org/snonux/totalrecall/internal/store"
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
@@ -77,6 +78,11 @@ type Processor struct {
 	// so individual methods never call Viper directly.
 	cfg *Config
 
+	// cardStore is the shared CardStore for locating and creating on-disk
+	// card directories. It is initialised from flags.OutputDir in NewProcessor
+	// and used by all card_store.go helpers.
+	cardStore *store.CardStore
+
 	// imageFactories groups the two image-provider construction functions.
 	// Production code uses image.DefaultClientFactories(); tests replace fields.
 	imageFactories image.ClientFactories
@@ -103,6 +109,9 @@ func NewProcessor(flags *cli.Flags, cfg *Config) *Processor {
 		translationCache: translation.NewTranslationCache(),
 		phoneticFetcher:  phonetic.NewFetcher(&phonetic.Config{Provider: phoneticProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		randomIntn:       rand.Intn,
+		// cardStore is rooted at the output directory so card-discovery helpers
+		// never need to know about flags directly.
+		cardStore:        store.New(flags.OutputDir),
 		imageFactories:   image.DefaultClientFactories(),
 		newAudioProvider: audio.NewProvider,
 	}
