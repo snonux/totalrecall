@@ -16,7 +16,6 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
-	"github.com/spf13/viper"
 )
 
 type stubImageSearcher struct {
@@ -146,15 +145,8 @@ func TestNewProcessor(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-
 	flags := cli.NewFlags()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	if p == nil {
 		t.Fatal("NewProcessor returned nil")
@@ -181,15 +173,8 @@ func TestNewProcessor_DefaultPhoneticProviderUsesGemini(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-
 	flags := cli.NewFlags()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderGemini {
 		t.Fatalf("expected default phonetic provider %q, got %q", phonetic.ProviderGemini, got)
@@ -200,16 +185,8 @@ func TestNewProcessor_ExplicitGeminiPhoneticProvider(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("phonetic.provider", "gemini")
-
 	flags := cli.NewFlags()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{PhoneticProvider: "gemini"})
 
 	if got := p.phoneticFetcher.Provider(); got != phonetic.ProviderGemini {
 		t.Fatalf("expected gemini phonetic provider %q, got %q", phonetic.ProviderGemini, got)
@@ -220,15 +197,8 @@ func TestNewProcessor_DefaultTranslationProviderUsesGemini(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-
 	flags := cli.NewFlags()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	_, err := p.translator.TranslateWord("ябълка")
 	if err == nil {
@@ -243,16 +213,8 @@ func TestNewProcessor_ExplicitGeminiTranslationProvider(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("translation.provider", "gemini")
-
 	flags := cli.NewFlags()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{TranslationProvider: "gemini"})
 
 	_, err := p.translator.TranslateWord("ябълка")
 	if err == nil {
@@ -267,20 +229,17 @@ func TestGUIConfigForRunModeUsesNanoBananaDefaultWhenImageAPIIsNotSpecified(t *t
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.nanobanana_model", "config-image-model")
-	viper.Set("image.nanobanana_text_model", "config-text-model")
-
 	flags := cli.NewFlags()
 	flags.AudioFormat = "mp3"
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
-	p := NewProcessor(flags)
+	cfg := &Config{
+		ImageNanoBananaModel:        "config-image-model",
+		ImageNanoBananaModelSet:     true,
+		ImageNanoBananaTextModel:    "config-text-model",
+		ImageNanoBananaTextModelSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 
 	guiConfig := p.GUIConfig()
 	if guiConfig.ImageProvider != gui.DefaultConfig().ImageProvider {
@@ -310,17 +269,10 @@ func TestGUIConfigForRunModeHonorsExplicitImageAPI(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-
 	flags := cli.NewFlags()
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = true
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	guiConfig := p.GUIConfig()
 	if guiConfig.ImageProvider != "openai" {
@@ -338,15 +290,6 @@ func TestGUIConfigForRunModeHonorsExplicitNanoBananaModelFlags(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.nanobanana_model", "config-image-model")
-	viper.Set("image.nanobanana_text_model", "config-text-model")
-
 	flags := cli.NewFlags()
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
@@ -354,7 +297,13 @@ func TestGUIConfigForRunModeHonorsExplicitNanoBananaModelFlags(t *testing.T) {
 	flags.NanoBananaModelSpecified = true
 	flags.NanoBananaTextModel = "flag-text-model"
 	flags.NanoBananaTextModelSpecified = true
-	p := NewProcessor(flags)
+	cfg := &Config{
+		ImageNanoBananaModel:        "config-image-model",
+		ImageNanoBananaModelSet:     true,
+		ImageNanoBananaTextModel:    "config-text-model",
+		ImageNanoBananaTextModelSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 
 	guiConfig := p.GUIConfig()
 	if guiConfig.NanoBananaModel != "flag-image-model" {
@@ -386,7 +335,7 @@ func TestGenerateAudioUsesSharedOpenAIVoices(t *testing.T) {
 	flags.AllVoices = true
 	flags.AudioProvider = "openai"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -431,7 +380,7 @@ func TestGenerateAudioBgBgUsesSharedOpenAIVoices(t *testing.T) {
 	flags.AudioFormat = "mp3"
 	flags.AudioProvider = "openai"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -509,7 +458,7 @@ func TestGenerateAudioProviderFactoryError(t *testing.T) {
 	flags.AudioFormat = "mp3"
 	flags.AudioProvider = "openai"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
 		return nil, errors.New("provider factory failed")
 	}
@@ -526,21 +475,16 @@ func TestGenerateAudioUsesConfiguredGeminiVoiceAndModel(t *testing.T) {
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-	viper.Set("audio.gemini_tts_model", "gemini-2.5-flash-preview-tts")
-	viper.Set("audio.gemini_voice", "Kore")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioFormat = "mp3"
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		AudioProvider:  "gemini",
+		GeminiTTSModel: "gemini-2.5-flash-preview-tts",
+		GeminiVoice:    "Kore",
+	}
+	p := NewProcessor(flags, cfg)
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -622,20 +566,12 @@ func TestGenerateAudioUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioFormat = "mp3"
 	flags.AudioProvider = "gemini"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -701,19 +637,11 @@ func TestGenerateGeminiAudioWithFallbacksRetriesAlternateVoice(t *testing.T) {
 
 	var attemptedVoices []string
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioProvider = "gemini"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		attemptedVoices = append(attemptedVoices, config.GeminiVoice)
 		return &fakeAudioProvider{
@@ -765,19 +693,11 @@ func TestGenerateAudioReturnsExhaustedGeminiFallbackError(t *testing.T) {
 	})
 	audio.GeminiVoices = []string{"Charon"}
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioProvider = "gemini"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
 		return &fakeAudioProvider{
 			generateFunc: func(_ string, _ string) error {
@@ -804,20 +724,12 @@ func TestGenerateAudioBgBgUsesGeminiModelDefaultWhenVoiceNotSet(t *testing.T) {
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfigs []*audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioFormat = "mp3"
 	flags.AudioProvider = "gemini"
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfigs = append(capturedConfigs, &copyConfig)
@@ -859,21 +771,17 @@ func TestGenerateAudioUsesConfiguredAudioFormatWhenOpenAIConfigIsSetOnly(t *test
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "openai")
-	viper.Set("audio.format", "mp3")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioProvider = "openai"
 	flags.AudioFormat = "wav"
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		AudioProvider:  "openai",
+		AudioFormat:    "mp3",
+		AudioFormatSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -932,20 +840,15 @@ func TestGenerateAudioUsesConfiguredOpenAIVoiceFromConfig(t *testing.T) {
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "openai")
-	viper.Set("audio.openai_voice", "shimmer")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioFormat = "mp3"
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		AudioProvider: "openai",
+		OpenAIVoice:   "shimmer",
+	}
+	p := NewProcessor(flags, cfg)
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -1002,22 +905,18 @@ func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
 	fakeProvider := &fakeAudioProvider{}
 	var capturedConfig *audio.Config
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "openai")
-	viper.Set("audio.openai_instruction", "Speak clearly.")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioProvider = "openai"
 	flags.AudioFormat = "mp3"
 	flags.OpenAIModel = "tts-1"
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		AudioProvider:        "openai",
+		OpenAIInstruction:    "Speak clearly.",
+		OpenAIInstructionSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 	p.newAudioProvider = func(config *audio.Config) (audio.Provider, error) {
 		copyConfig := *config
 		capturedConfig = &copyConfig
@@ -1068,14 +967,6 @@ func TestGenerateAudioOmitsOpenAIInstructionsForUnsupportedModel(t *testing.T) {
 }
 
 func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	tempDir := t.TempDir()
 	flags := cli.NewFlags()
 	flags.OutputDir = tempDir
@@ -1083,7 +974,7 @@ func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
 	flags.AudioFormat = "mp3"
 	flags.AnkiCSV = true
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	p.translationCache.Add("ябълка", "apple")
 
 	wordDir := p.findOrCreateWordDirectory("ябълка")
@@ -1120,21 +1011,13 @@ func TestGenerateAnkiFileUsesEffectiveAudioFormatForGemini(t *testing.T) {
 }
 
 func TestIsWordFullyProcessedUsesMultiVoiceAttributionFiles(t *testing.T) {
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("audio.provider", "gemini")
-
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
 	flags.AudioProvider = "gemini"
 	flags.AudioFormat = "mp3"
 	flags.SkipImages = true
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{AudioProvider: "gemini"})
 	wordDir := p.findOrCreateWordDirectory("ябълка")
 	files := map[string]string{
 		"translation.txt":             "ябълка = apple",
@@ -1160,15 +1043,6 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.nanobanana_model", "custom-image-model")
-	viper.Set("image.nanobanana_text_model", "custom-text-model")
-
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
 
@@ -1177,7 +1051,13 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 	flags.ImageAPI = "nanobanana"
 	flags.ImageAPISpecified = true
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		ImageNanoBananaModel:        "custom-image-model",
+		ImageNanoBananaModelSet:     true,
+		ImageNanoBananaTextModel:    "custom-text-model",
+		ImageNanoBananaTextModelSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return stubSearcher
@@ -1214,14 +1094,6 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.provider", "nanobanana")
-
 	stubSearcher := &stubImageSearcher{downloadErr: errors.New("download failed")}
 
 	flags := cli.NewFlags()
@@ -1229,7 +1101,7 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	flags.ImageAPI = "nanobanana"
 	flags.ImageAPISpecified = true
 
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{ImageProvider: "nanobanana"})
 	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		return stubSearcher
 	}
@@ -1256,16 +1128,6 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.provider", "nanobanana")
-	viper.Set("image.nanobanana_model", "config-image-model")
-	viper.Set("image.nanobanana_text_model", "config-text-model")
-
 	stubSearcher := &stubImageSearcher{}
 	capturedConfig := new(image.NanoBananaConfig)
 
@@ -1274,7 +1136,14 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		ImageProvider:               "nanobanana",
+		ImageNanoBananaModel:        "config-image-model",
+		ImageNanoBananaModelSet:     true,
+		ImageNanoBananaTextModel:    "config-text-model",
+		ImageNanoBananaTextModelSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return stubSearcher
@@ -1308,18 +1177,10 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 }
 
 func TestNewImageSearcherRejectsUnknownConfiguredProvider(t *testing.T) {
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.provider", "not-a-real-provider")
-
 	flags := cli.NewFlags()
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{ImageProvider: "not-a-real-provider"})
 
 	_, err := p.newImageSearcher()
 	if err == nil {
@@ -1334,18 +1195,10 @@ func TestNewImageSearcherConfiguredNanoBananaRequiresGoogleAPIKey(t *testing.T) 
 	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.provider", "nanobanana")
-
 	flags := cli.NewFlags()
 	flags.ImageAPI = "openai"
 	flags.ImageAPISpecified = false
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{ImageProvider: "nanobanana"})
 
 	_, err := p.newImageSearcher()
 	if err == nil {
@@ -1360,15 +1213,6 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("GOOGLE_API_KEY", "test-google-key")
 
-	originalConfig := viper.New()
-	*originalConfig = *viper.GetViper()
-	defer func() {
-		*viper.GetViper() = *originalConfig
-	}()
-	viper.Reset()
-	viper.Set("image.nanobanana_model", "config-image-model")
-	viper.Set("image.nanobanana_text_model", "config-text-model")
-
 	capturedConfig := new(image.NanoBananaConfig)
 
 	flags := cli.NewFlags()
@@ -1380,7 +1224,13 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 	flags.NanoBananaTextModel = image.DefaultNanoBananaTextModel
 	flags.NanoBananaTextModelSpecified = true
 
-	p := NewProcessor(flags)
+	cfg := &Config{
+		ImageNanoBananaModel:        "config-image-model",
+		ImageNanoBananaModelSet:     true,
+		ImageNanoBananaTextModel:    "config-text-model",
+		ImageNanoBananaTextModelSet: true,
+	}
+	p := NewProcessor(flags, cfg)
 	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
 		*capturedConfig = *config
 		return &stubImageSearcher{}
@@ -1404,7 +1254,7 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 func TestProcessSingleWord_InvalidWord(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Test with non-Bulgarian text
 	err := p.ProcessSingleWord("hello")
@@ -1429,7 +1279,7 @@ func TestProcessSingleWord_ValidWord(t *testing.T) {
 	flags.OutputDir = t.TempDir()
 	flags.SkipAudio = true
 	flags.SkipImages = true
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	err := p.ProcessSingleWord("ябълка")
 	if err != nil {
@@ -1445,7 +1295,7 @@ func TestProcessSingleWord_ValidWord(t *testing.T) {
 func TestProcessBatch_InvalidFile(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.BatchFile = "/nonexistent/file.txt"
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	err := p.ProcessBatch()
 	if err == nil {
@@ -1470,7 +1320,7 @@ func TestProcessBatch_ValidFile(t *testing.T) {
 	flags.BatchFile = batchFile
 	flags.SkipAudio = true
 	flags.SkipImages = true
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Skip if no OpenAI API key
 	if os.Getenv("OPENAI_API_KEY") == "" {
@@ -1488,7 +1338,7 @@ func TestProcessWordWithTranslation_ProvidedTranslation(t *testing.T) {
 	flags.OutputDir = t.TempDir()
 	flags.SkipAudio = true
 	flags.SkipImages = true
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Skip if no API key (needed for phonetic fetcher)
 	if os.Getenv("OPENAI_API_KEY") == "" {
@@ -1510,7 +1360,7 @@ func TestProcessWordWithTranslation_ProvidedTranslation(t *testing.T) {
 func TestFindOrCreateWordDirectory(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// First call should create directory
 	dir1 := p.findOrCreateWordDirectory("тест")
@@ -1543,7 +1393,7 @@ func TestFindOrCreateWordDirectory(t *testing.T) {
 func TestFindCardDirectory(t *testing.T) {
 	flags := cli.NewFlags()
 	flags.OutputDir = t.TempDir()
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Test with non-existent word
 	dir := p.findCardDirectory("несъществуваща")
@@ -1566,7 +1416,7 @@ func TestGenerateAnkiFile(t *testing.T) {
 	flags.OutputDir = t.TempDir()
 	flags.GenerateAnki = true
 	flags.AnkiCSV = true // Test CSV format
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Add some test translations
 	p.translationCache.Add("ябълка", "apple")
@@ -1598,7 +1448,7 @@ func TestGenerateAnkiFile_APKG(t *testing.T) {
 	flags.GenerateAnki = true
 	flags.AnkiCSV = false // Test APKG format
 	flags.DeckName = "Test Deck"
-	p := NewProcessor(flags)
+	p := NewProcessor(flags, &Config{})
 
 	// Create test word directories with files
 	word1Dir := p.findOrCreateWordDirectory("ябълка")

@@ -1,9 +1,10 @@
 package processor
 
 // AudioCoordinator assembles audio provider configurations, selects voices,
-// generates audio files, and writes attribution/metadata sidecars. It holds
-// the audio-related viperCfg fields and flag references so that the main
-// Processor struct does not need to deal with audio details directly.
+// generates audio files, and writes attribution/metadata sidecars. It reads
+// audio-related values from the processor's Config struct (resolved once at
+// startup) and the CLI flags, so the main Processor struct does not need to
+// deal with audio details directly.
 //
 // All methods are on *Processor rather than a separate struct to avoid an
 // extra layer of indirection while still keeping the concerns separated into
@@ -23,10 +24,10 @@ import (
 )
 
 // audioProviderName returns the configured audio provider name, preferring
-// the viper config value over the CLI flag so config-file settings win.
+// the config-file value over the CLI flag so config-file settings win.
 func (p *Processor) audioProviderName() string {
-	if p.viperCfg.audioProvider != "" {
-		return p.viperCfg.audioProvider
+	if p.cfg.AudioProvider != "" {
+		return p.cfg.AudioProvider
 	}
 	if p != nil && p.flags != nil {
 		return strings.ToLower(strings.TrimSpace(p.flags.AudioProvider))
@@ -35,7 +36,7 @@ func (p *Processor) audioProviderName() string {
 }
 
 // effectiveAudioFormat resolves the audio format from flags and config, with
-// CLI flag taking precedence, then viper config, then provider-specific defaults.
+// CLI flag taking precedence, then the config-file value, then provider-specific defaults.
 func (p *Processor) effectiveAudioFormat() string {
 	if p != nil && p.flags != nil && p.flags.AudioFormatSpecified {
 		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
@@ -43,8 +44,8 @@ func (p *Processor) effectiveAudioFormat() string {
 		}
 	}
 
-	if p.viperCfg.audioFormatSet && p.viperCfg.audioFormat != "" {
-		return p.viperCfg.audioFormat
+	if p.cfg.AudioFormatSet && p.cfg.AudioFormat != "" {
+		return p.cfg.AudioFormat
 	}
 
 	if p != nil && p.flags != nil {
@@ -60,10 +61,10 @@ func (p *Processor) effectiveAudioFormat() string {
 	return "mp3"
 }
 
-// geminiTTSModel returns the Gemini TTS model, preferring viper config over CLI flag.
+// geminiTTSModel returns the Gemini TTS model, preferring the config-file value over the CLI flag.
 func (p *Processor) geminiTTSModel() string {
-	if p.viperCfg.geminiTTSModel != "" {
-		return p.viperCfg.geminiTTSModel
+	if p.cfg.GeminiTTSModel != "" {
+		return p.cfg.GeminiTTSModel
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.GeminiTTSModel)
@@ -71,10 +72,10 @@ func (p *Processor) geminiTTSModel() string {
 	return ""
 }
 
-// geminiVoice returns the Gemini voice, preferring viper config over CLI flag.
+// geminiVoice returns the Gemini voice, preferring the config-file value over the CLI flag.
 func (p *Processor) geminiVoice() string {
-	if p.viperCfg.geminiVoice != "" {
-		return p.viperCfg.geminiVoice
+	if p.cfg.GeminiVoice != "" {
+		return p.cfg.GeminiVoice
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.GeminiVoice)
@@ -82,10 +83,10 @@ func (p *Processor) geminiVoice() string {
 	return ""
 }
 
-// openAIVoice returns the OpenAI voice, preferring viper config over CLI flag.
+// openAIVoice returns the OpenAI voice, preferring the config-file value over the CLI flag.
 func (p *Processor) openAIVoice() string {
-	if p.viperCfg.openAIVoice != "" {
-		return p.viperCfg.openAIVoice
+	if p.cfg.OpenAIVoice != "" {
+		return p.cfg.OpenAIVoice
 	}
 	if p != nil && p.flags != nil {
 		return strings.TrimSpace(p.flags.OpenAIVoice)
@@ -269,15 +270,15 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, 
 	return nil
 }
 
-// buildAudioProviderConfig assembles an audio.Config from flags and viper
-// config. The voice argument is the already-resolved voice string for this call.
+// buildAudioProviderConfig assembles an audio.Config from CLI flags and the
+// resolved processor Config. The voice argument is the already-resolved voice string for this call.
 func (p *Processor) buildAudioProviderConfig(voice string) *audio.Config {
 	audioProvider := p.audioProviderName()
 	audioFormat := p.effectiveAudioFormat()
 
 	// Generate random speed between 0.90 and 1.00 if not explicitly set.
 	speed := p.flags.OpenAISpeed
-	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !p.viperCfg.openAISpeedSet {
+	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !p.cfg.OpenAISpeedSet {
 		speed = 0.90 + rand.Float64()*0.10
 	}
 
@@ -305,7 +306,7 @@ func (p *Processor) buildAudioProviderConfig(voice string) *audio.Config {
 }
 
 // applyOpenAIAudioConfig populates the OpenAI-specific fields of providerConfig,
-// applying viper overrides where the flag value still equals its default.
+// applying config-file overrides where the CLI flag still holds its default value.
 func (p *Processor) applyOpenAIAudioConfig(providerConfig *audio.Config, voice string, speed float64, audioFormat string) {
 	providerConfig.OutputFormat = audioFormat
 	providerConfig.OpenAIModel = p.flags.OpenAIModel
@@ -314,14 +315,14 @@ func (p *Processor) applyOpenAIAudioConfig(providerConfig *audio.Config, voice s
 	providerConfig.OpenAIInstruction = p.flags.OpenAIInstruction
 
 	// Override with config-file values when the CLI flag is still at its default.
-	if p.flags.OpenAIModel == "gpt-4o-mini-tts" && p.viperCfg.openAIModelSet {
-		providerConfig.OpenAIModel = p.viperCfg.openAIModel
+	if p.flags.OpenAIModel == "gpt-4o-mini-tts" && p.cfg.OpenAIModelSet {
+		providerConfig.OpenAIModel = p.cfg.OpenAIModel
 	}
-	if p.flags.OpenAISpeed == 0.9 && p.viperCfg.openAISpeedSet {
-		providerConfig.OpenAISpeed = p.viperCfg.openAISpeed
+	if p.flags.OpenAISpeed == 0.9 && p.cfg.OpenAISpeedSet {
+		providerConfig.OpenAISpeed = p.cfg.OpenAISpeed
 	}
-	if p.flags.OpenAIInstruction == "" && p.viperCfg.openAIInstructionSet {
-		providerConfig.OpenAIInstruction = p.viperCfg.openAIInstruction
+	if p.flags.OpenAIInstruction == "" && p.cfg.OpenAIInstructionSet {
+		providerConfig.OpenAIInstruction = p.cfg.OpenAIInstruction
 	}
 }
 

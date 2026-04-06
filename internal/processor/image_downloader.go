@@ -120,20 +120,20 @@ func (p *Processor) newImageSearcher() (image.ImageClient, error) {
 }
 
 // imageProviderForRunMode resolves the image provider, giving precedence to
-// the CLI flag when it was explicitly set, then the viper config value.
+// the CLI flag when it was explicitly set, then the config-file value.
 func (p *Processor) imageProviderForRunMode() string {
 	if p.flags.ImageAPISpecified {
 		return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 	}
-	if p.viperCfg.imageProvider != "" {
-		return p.viperCfg.imageProvider
+	if p.cfg.ImageProvider != "" {
+		return p.cfg.ImageProvider
 	}
 	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 }
 
-// newOpenAIImageSearcher builds an OpenAI ImageClient from flags and viper
-// config. Config-file overrides are applied only when the flag still holds its
-// default value so explicit CLI flags always win.
+// newOpenAIImageSearcher builds an OpenAI ImageClient from CLI flags and the
+// resolved processor Config. Config-file overrides are applied only when the
+// flag still holds its default value so explicit CLI flags always win.
 func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 	openaiConfig := &image.OpenAIConfig{
 		APIKey:  cli.GetOpenAIKey(),
@@ -143,18 +143,18 @@ func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 		Style:   p.flags.OpenAIImageStyle,
 	}
 
-	// Apply viper overrides when CLI flag holds its zero/default value.
-	if p.flags.OpenAIImageModel == "dall-e-2" && p.viperCfg.imageOpenAIModelSet {
-		openaiConfig.Model = p.viperCfg.imageOpenAIModel
+	// Apply config-file overrides when CLI flag holds its zero/default value.
+	if p.flags.OpenAIImageModel == "dall-e-2" && p.cfg.ImageOpenAIModelSet {
+		openaiConfig.Model = p.cfg.ImageOpenAIModel
 	}
-	if p.flags.OpenAIImageSize == "512x512" && p.viperCfg.imageOpenAISizeSet {
-		openaiConfig.Size = p.viperCfg.imageOpenAISize
+	if p.flags.OpenAIImageSize == "512x512" && p.cfg.ImageOpenAISizeSet {
+		openaiConfig.Size = p.cfg.ImageOpenAISize
 	}
-	if p.flags.OpenAIImageQuality == "standard" && p.viperCfg.imageOpenAIQualitySet {
-		openaiConfig.Quality = p.viperCfg.imageOpenAIQuality
+	if p.flags.OpenAIImageQuality == "standard" && p.cfg.ImageOpenAIQualitySet {
+		openaiConfig.Quality = p.cfg.ImageOpenAIQuality
 	}
-	if p.flags.OpenAIImageStyle == "natural" && p.viperCfg.imageOpenAIStyleSet {
-		openaiConfig.Style = p.viperCfg.imageOpenAIStyle
+	if p.flags.OpenAIImageStyle == "natural" && p.cfg.ImageOpenAIStyleSet {
+		openaiConfig.Style = p.cfg.ImageOpenAIStyle
 	}
 
 	if openaiConfig.APIKey == "" {
@@ -164,8 +164,9 @@ func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 	return p.newOpenAIImageClient(openaiConfig), nil
 }
 
-// newNanoBananaImageSearcher builds a NanoBanana ImageClient from flags and
-// viper config, applying overrides in the same flag-wins-over-config pattern.
+// newNanoBananaImageSearcher builds a NanoBanana ImageClient from CLI flags
+// and the resolved processor Config, applying overrides in the same
+// flag-wins-over-config pattern.
 func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
 	nanoBananaConfig := &image.NanoBananaConfig{
 		APIKey:    cli.GetGoogleAPIKey(),
@@ -173,11 +174,11 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
 		TextModel: p.flags.NanoBananaTextModel,
 	}
 
-	if !p.flags.NanoBananaModelSpecified && p.viperCfg.imageNanoBananaModelSet {
-		nanoBananaConfig.Model = p.viperCfg.imageNanoBananaModel
+	if !p.flags.NanoBananaModelSpecified && p.cfg.ImageNanoBananaModelSet {
+		nanoBananaConfig.Model = p.cfg.ImageNanoBananaModel
 	}
-	if !p.flags.NanoBananaTextModelSpecified && p.viperCfg.imageNanoBananaTextModelSet {
-		nanoBananaConfig.TextModel = p.viperCfg.imageNanoBananaTextModel
+	if !p.flags.NanoBananaTextModelSpecified && p.cfg.ImageNanoBananaTextModelSet {
+		nanoBananaConfig.TextModel = p.cfg.ImageNanoBananaTextModel
 	}
 
 	if nanoBananaConfig.APIKey == "" {

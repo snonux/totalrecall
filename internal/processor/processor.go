@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
 	"codeberg.org/snonux/totalrecall/internal/audio"
@@ -22,80 +20,45 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
-// viperConfig holds all Viper-sourced settings captured once in NewProcessor.
-// Storing them in a struct avoids repeated global Viper access in method bodies
-// and makes the values testable without mutating process-wide Viper state.
-type viperConfig struct {
+// Config holds all configuration-file values resolved once at startup by the
+// composition root (cmd/totalrecall/main.go via cli.NewProcessorConfig).
+// Keeping config in a dedicated struct means the processor package never
+// imports or queries Viper directly, which improves testability and removes
+// tight coupling to the global Viper singleton.
+type Config struct {
 	// Translation & phonetic settings
-	translationProvider    string
-	phoneticProvider       string
-	translationGeminiModel string
+	TranslationProvider    string
+	PhoneticProvider       string
+	TranslationGeminiModel string
 
 	// Audio settings
-	audioProvider        string
-	audioFormat          string
-	audioFormatSet       bool
-	geminiTTSModel       string
-	geminiVoice          string
-	openAIVoice          string
-	openAIModel          string
-	openAIModelSet       bool
-	openAISpeed          float64
-	openAISpeedSet       bool
-	openAIInstruction    string
-	openAIInstructionSet bool
+	AudioProvider        string
+	AudioFormat          string
+	AudioFormatSet       bool
+	GeminiTTSModel       string
+	GeminiVoice          string
+	OpenAIVoice          string
+	OpenAIModel          string
+	OpenAIModelSet       bool
+	OpenAISpeed          float64
+	OpenAISpeedSet       bool
+	OpenAIInstruction    string
+	OpenAIInstructionSet bool
 
 	// Image settings
-	imageProvider               string
-	imageOpenAIModel            string
-	imageOpenAIModelSet         bool
-	imageOpenAISize             string
-	imageOpenAISizeSet          bool
-	imageOpenAIQuality          string
-	imageOpenAIQualitySet       bool
-	imageOpenAIStyle            string
-	imageOpenAIStyleSet         bool
-	imageNanoBananaModel        string
-	imageNanoBananaModelSet     bool
-	imageNanoBananaTextModel    string
-	imageNanoBananaTextModelSet bool
-}
-
-// newViperConfig reads all Viper settings in one pass. Called once from NewProcessor
-// so the processor methods never touch the global Viper instance directly.
-func newViperConfig() viperConfig {
-	return viperConfig{
-		translationProvider:    strings.TrimSpace(viper.GetString("translation.provider")),
-		phoneticProvider:       strings.TrimSpace(viper.GetString("phonetic.provider")),
-		translationGeminiModel: viper.GetString("translation.gemini_model"),
-
-		audioProvider:        strings.ToLower(strings.TrimSpace(viper.GetString("audio.provider"))),
-		audioFormat:          strings.ToLower(strings.TrimSpace(viper.GetString("audio.format"))),
-		audioFormatSet:       viper.IsSet("audio.format"),
-		geminiTTSModel:       strings.TrimSpace(viper.GetString("audio.gemini_tts_model")),
-		geminiVoice:          strings.TrimSpace(viper.GetString("audio.gemini_voice")),
-		openAIVoice:          strings.TrimSpace(viper.GetString("audio.openai_voice")),
-		openAIModel:          viper.GetString("audio.openai_model"),
-		openAIModelSet:       viper.IsSet("audio.openai_model"),
-		openAISpeed:          viper.GetFloat64("audio.openai_speed"),
-		openAISpeedSet:       viper.IsSet("audio.openai_speed"),
-		openAIInstruction:    viper.GetString("audio.openai_instruction"),
-		openAIInstructionSet: viper.IsSet("audio.openai_instruction"),
-
-		imageProvider:               strings.ToLower(strings.TrimSpace(viper.GetString("image.provider"))),
-		imageOpenAIModel:            viper.GetString("image.openai_model"),
-		imageOpenAIModelSet:         viper.IsSet("image.openai_model"),
-		imageOpenAISize:             viper.GetString("image.openai_size"),
-		imageOpenAISizeSet:          viper.IsSet("image.openai_size"),
-		imageOpenAIQuality:          viper.GetString("image.openai_quality"),
-		imageOpenAIQualitySet:       viper.IsSet("image.openai_quality"),
-		imageOpenAIStyle:            viper.GetString("image.openai_style"),
-		imageOpenAIStyleSet:         viper.IsSet("image.openai_style"),
-		imageNanoBananaModel:        strings.TrimSpace(viper.GetString("image.nanobanana_model")),
-		imageNanoBananaModelSet:     viper.IsSet("image.nanobanana_model"),
-		imageNanoBananaTextModel:    strings.TrimSpace(viper.GetString("image.nanobanana_text_model")),
-		imageNanoBananaTextModelSet: viper.IsSet("image.nanobanana_text_model"),
-	}
+	ImageProvider               string
+	ImageOpenAIModel            string
+	ImageOpenAIModelSet         bool
+	ImageOpenAISize             string
+	ImageOpenAISizeSet          bool
+	ImageOpenAIQuality          string
+	ImageOpenAIQualitySet       bool
+	ImageOpenAIStyle            string
+	ImageOpenAIStyleSet         bool
+	ImageNanoBananaModel        string
+	ImageNanoBananaModelSet     bool
+	ImageNanoBananaTextModel    string
+	ImageNanoBananaTextModelSet bool
 }
 
 // Processor handles the main word processing logic.
@@ -109,9 +72,9 @@ type Processor struct {
 	translationCache *translation.TranslationCache
 	phoneticFetcher  *phonetic.Fetcher
 	randomIntn       func(n int) int
-	// viperCfg holds all config-file values read once at construction time,
+	// cfg holds all config-file values resolved once at startup by the caller,
 	// so individual methods never call Viper directly.
-	viperCfg viperConfig
+	cfg *Config
 
 	// Factories — replaced by tests to inject fakes.
 	newOpenAIImageClient     func(*image.OpenAIConfig) image.ImageClient
@@ -120,18 +83,18 @@ type Processor struct {
 }
 
 // NewProcessor creates a new word processor with default production factories.
-// All Viper config values are read once here via newViperConfig() so that no
-// method body ever calls Viper directly.
+// cfg must be fully resolved before calling NewProcessor; the composition root
+// (cmd/totalrecall/main.go) builds it via cli.NewProcessorConfig() so that
+// the processor package never imports or queries Viper.
 // Tests can replace the factory fields on the returned struct to inject fakes.
-func NewProcessor(flags *cli.Flags) *Processor {
-	cfg := newViperConfig()
+func NewProcessor(flags *cli.Flags, cfg *Config) *Processor {
 	openAIKey := cli.GetOpenAIKey()
 	googleAPIKey := cli.GetGoogleAPIKey()
-	translationProvider := translation.Provider(cfg.translationProvider)
-	phoneticProvider := phonetic.Provider(cfg.phoneticProvider)
+	translationProvider := translation.Provider(cfg.TranslationProvider)
+	phoneticProvider := phonetic.Provider(cfg.PhoneticProvider)
 	return &Processor{
 		flags:            flags,
-		viperCfg:         cfg,
+		cfg:              cfg,
 		translator:       translation.NewTranslator(&translation.Config{Provider: translationProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		translationCache: translation.NewTranslationCache(),
 		phoneticFetcher:  phonetic.NewFetcher(&phonetic.Config{Provider: phoneticProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
@@ -501,8 +464,8 @@ func (p *Processor) GUIConfig() *gui.Config {
 
 	openAIKey := cli.GetOpenAIKey()
 	googleAPIKey := cli.GetGoogleAPIKey()
-	translationProvider := translation.Provider(p.viperCfg.translationProvider)
-	phoneticProvider := phonetic.Provider(p.viperCfg.phoneticProvider)
+	translationProvider := translation.Provider(p.cfg.TranslationProvider)
+	phoneticProvider := phonetic.Provider(p.cfg.PhoneticProvider)
 
 	// Construct and inject phonetic/translation dependencies at the composition
 	// root so gui.New() receives ready-to-use instances rather than raw config strings.
@@ -514,7 +477,7 @@ func (p *Processor) GUIConfig() *gui.Config {
 	translator := translation.NewTranslator(&translation.Config{
 		Provider:    translationProvider,
 		OpenAIKey:   openAIKey,
-		GeminiModel: p.viperCfg.translationGeminiModel,
+		GeminiModel: p.cfg.TranslationGeminiModel,
 	})
 
 	return &gui.Config{
@@ -536,7 +499,7 @@ func (p *Processor) GUIConfig() *gui.Config {
 }
 
 // nanoBananaModelForRunMode resolves the NanoBanana image model, preferring
-// the explicit CLI flag value when set, then the viper config value, then the
+// the explicit CLI flag value when set, then the config-file value, then the
 // package default.
 func (p *Processor) nanoBananaModelForRunMode() string {
 	if p != nil && p.flags != nil && p.flags.NanoBananaModelSpecified {
@@ -544,8 +507,8 @@ func (p *Processor) nanoBananaModelForRunMode() string {
 			return model
 		}
 	}
-	if p.viperCfg.imageNanoBananaModel != "" {
-		return p.viperCfg.imageNanoBananaModel
+	if p.cfg.ImageNanoBananaModel != "" {
+		return p.cfg.ImageNanoBananaModel
 	}
 	if p != nil && p.flags != nil {
 		if model := strings.TrimSpace(p.flags.NanoBananaModel); model != "" {
@@ -556,15 +519,15 @@ func (p *Processor) nanoBananaModelForRunMode() string {
 }
 
 // nanoBananaTextModelForRunMode resolves the NanoBanana text (prompt) model
-// using the same precedence as nanoBananaModelForRunMode.
+// using the same CLI-flag-over-config precedence as nanoBananaModelForRunMode.
 func (p *Processor) nanoBananaTextModelForRunMode() string {
 	if p != nil && p.flags != nil && p.flags.NanoBananaTextModelSpecified {
 		if model := strings.TrimSpace(p.flags.NanoBananaTextModel); model != "" {
 			return model
 		}
 	}
-	if p.viperCfg.imageNanoBananaTextModel != "" {
-		return p.viperCfg.imageNanoBananaTextModel
+	if p.cfg.ImageNanoBananaTextModel != "" {
+		return p.cfg.ImageNanoBananaTextModel
 	}
 	if p != nil && p.flags != nil {
 		if model := strings.TrimSpace(p.flags.NanoBananaTextModel); model != "" {
