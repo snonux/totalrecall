@@ -7,19 +7,19 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/video"
 )
 
-// generateSelectedVideos is the CLI runner that animates gallery PNG files
+// GenerateSelectedVideos is the CLI runner that animates gallery PNG files
 // into MP4 clips using Google's Veo model. It processes pages sequentially
 // (Veo generation is slow and API quotas make parallelism impractical).
 //
 // apiKey is the Google/Gemini API key passed by the caller.
-// selected is the list of gallery page numbers to process (from promptForGalleryVideos).
+// selected is the list of gallery page numbers to process (from PromptForGalleryVideos).
 // outputDir is both the directory that contains the gallery PNGs and the
 // destination for the resulting MP4 files (written next to the PNGs).
 //
 // Each page prints a "Generating…" line before the API call and a "Video saved:"
 // line with the output path on success. The function stops and returns on the
 // first error so callers can log it without silently skipping pages.
-func generateSelectedVideos(apiKey string, selected []int, outputDir string) error {
+func GenerateSelectedVideos(apiKey string, selected []int, outputDir string) error {
 	if len(selected) == 0 {
 		return nil
 	}

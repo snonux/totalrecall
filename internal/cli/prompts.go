@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,14 +11,14 @@ import (
 	"strings"
 )
 
-// promptForGalleryVideos lists all *_gallery_*.png files found in outputDir,
-// shows them to the user, and asks whether they want to generate videos.
-// If the user agrees, it asks which pages to generate (e.g. "1,3,5" or "all")
-// and returns the parsed list of page numbers.
+// PromptForGalleryVideos lists all *_gallery_*.png files found under outputDir
+// (searching recursively), shows them to the user, and asks whether they want
+// to generate videos. If the user agrees, it asks which pages to generate
+// (e.g. "1,3,5" or "all") and returns the parsed list of page numbers.
 //
 // Returns an empty slice when the user declines or enters nothing.
 // Returns an error only on unexpected I/O or parse failures.
-func promptForGalleryVideos(outputDir string) ([]int, error) {
+func PromptForGalleryVideos(outputDir string) ([]int, error) {
 	pages, pngPaths, err := findGalleryPages(outputDir)
 	if err != nil {
 		return nil, err
@@ -41,13 +42,31 @@ func promptForGalleryVideos(outputDir string) ([]int, error) {
 	return askPageSelection(pages)
 }
 
-// findGalleryPages globs for *_gallery_*.png files in outputDir and returns
-// the sorted list of page numbers and matching file paths.
+// findGalleryPages walks outputDir recursively looking for *_gallery_*.png
+// files and returns the sorted list of unique page numbers and matching paths.
+// Walking recursively is necessary because the story runner places gallery
+// images in a per-comic subdirectory (comics/<slug>/) rather than directly
+// in the top-level output directory.
 func findGalleryPages(outputDir string) ([]int, []string, error) {
-	pattern := filepath.Join(outputDir, "*_gallery_*.png")
-	matches, err := filepath.Glob(pattern)
+	var matches []string
+
+	err := filepath.WalkDir(outputDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			// Skip unreadable directories rather than aborting the whole walk.
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		base := filepath.Base(path)
+		// Match files that follow the *_gallery_N.png naming convention.
+		if strings.Contains(base, "_gallery_") && strings.HasSuffix(base, ".png") {
+			matches = append(matches, path)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("cli: glob gallery files in %s: %w", outputDir, err)
+		return nil, nil, fmt.Errorf("cli: walking gallery files in %s: %w", outputDir, err)
 	}
 
 	sort.Strings(matches)

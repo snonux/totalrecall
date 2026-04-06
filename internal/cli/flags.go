@@ -26,6 +26,7 @@ type Flags struct {
 	StoryNoUltraRealistic bool   // --no-ultra-realistic: disable photorealistic rendering requirement
 	StorySlug             string // --story-slug: force a specific output slug/directory (empty = auto from title)
 	NarratorVoice         string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
+	VideoEnabled          bool   // --video: whether to prompt for Veo video generation after --story completes
 	SkipAudio             bool
 	SkipImages            bool
 	GenerateAnki          bool
@@ -72,6 +73,7 @@ func NewFlags() *Flags {
 		AudioFormat:         defaults.OutputFormat,
 		AudioProvider:       defaults.Provider,
 		ImageAPI:            "nanobanana",
+		VideoEnabled:        true,
 		DeckName:            "Bulgarian Vocabulary",
 		OpenAIModel:         "gpt-4o-mini-tts",
 		OpenAISpeed:         0.9,

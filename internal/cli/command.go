@@ -75,6 +75,8 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.NarratorVoice, "narrator-voice", "",
 		"Gemini voice for cinematic story narration (default: random from cinematic pool). "+
 			"Valid values: Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar")
+	cmd.Flags().BoolVar(&flags.VideoEnabled, "video", flags.VideoEnabled,
+		"Prompt to generate Veo videos after comic generation (default true; use --video=false to skip)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
 	cmd.Flags().BoolVar(&flags.GenerateAnki, "anki", false, "Generate Anki import file (APKG format by default, use --anki-csv for legacy CSV)")

@@ -117,7 +117,10 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 			NarratorVoice:  flags.NarratorVoice,
 			Slug:           flags.StorySlug,
 		})
-		return runner.Run(flags.StoryFile)
+		if err := runner.Run(flags.StoryFile); err != nil {
+			return err
+		}
+		return runStoryVideos(flags)
 	}
 
 	// Auto-adjust image size for DALL-E 3
@@ -185,6 +188,25 @@ func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 	app.Run()
 
 	return nil
+}
+
+// runStoryVideos is called after the story runner completes. When the
+// --video flag is true (default), it prompts the user to select gallery pages
+// for Veo video generation and then generates the selected videos.
+// Passing --video=false skips the prompt entirely.
+func runStoryVideos(flags *cli.Flags) error {
+	if !flags.VideoEnabled {
+		return nil
+	}
+
+	// The story runner writes gallery PNGs into ./comics/<slug>/, so we search
+	// from "." recursively to find them regardless of the exact slug.
+	selected, err := cli.PromptForGalleryVideos(".")
+	if err != nil {
+		return fmt.Errorf("video prompt: %w", err)
+	}
+
+	return cli.GenerateSelectedVideos(cli.GetGoogleAPIKey(), selected, ".")
 }
 
 // storyUltraRealistic converts the --no-ultra-realistic bool flag into a *bool
