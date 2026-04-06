@@ -59,20 +59,13 @@ func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, tra
 	return nil
 }
 
-// registerPromptCallback wires a prompt-save callback into searchers that
-// support SetPromptCallback. The callback fires during the Search call so the
-// prompt is captured even if the subsequent download fails.
-func (p *Processor) registerPromptCallback(searcher image.ImageClient, wordDir string) {
-	type promptSetter interface {
-		SetPromptCallback(func(prompt string))
-	}
-	promptAware, ok := searcher.(promptSetter)
-	if !ok {
-		return
-	}
-
+// registerPromptCallback wires a prompt-save callback into the searcher. The
+// callback fires during the Search call so the prompt is captured even if the
+// subsequent download fails. All searchers returned by newImageSearcher
+// implement image.PromptAwareClient, so no type-assertion is needed.
+func (p *Processor) registerPromptCallback(searcher image.PromptAwareClient, wordDir string) {
 	promptFile := filepath.Join(wordDir, "image_prompt.txt")
-	promptAware.SetPromptCallback(func(prompt string) {
+	searcher.SetPromptCallback(func(prompt string) {
 		if prompt == "" {
 			return
 		}
@@ -84,8 +77,9 @@ func (p *Processor) registerPromptCallback(searcher image.ImageClient, wordDir s
 
 // saveImagePrompt persists the last prompt used by a searcher that implements
 // GetLastPrompt. This acts as a fallback when the prompt is not available via
-// the callback during the search call itself.
-func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageClient) {
+// the callback during the search call itself. The local promptGetter interface
+// is intentionally narrow: not all PromptAwareClients expose GetLastPrompt.
+func (p *Processor) saveImagePrompt(wordDir string, searcher image.PromptAwareClient) {
 	type promptGetter interface {
 		GetLastPrompt() string
 	}
@@ -106,9 +100,11 @@ func (p *Processor) saveImagePrompt(wordDir string, searcher image.ImageClient) 
 	}
 }
 
-// newImageSearcher creates the appropriate ImageClient based on the configured
-// image provider (openai or nanobanana).
-func (p *Processor) newImageSearcher() (image.ImageClient, error) {
+// newImageSearcher creates the appropriate PromptAwareClient based on the
+// configured image provider (openai or nanobanana). Returning PromptAwareClient
+// instead of ImageClient means callers can call SetPromptCallback directly
+// without a type-assertion.
+func (p *Processor) newImageSearcher() (image.PromptAwareClient, error) {
 	switch p.imageProviderForRunMode() {
 	case "openai":
 		return p.newOpenAIImageSearcher()
@@ -131,10 +127,10 @@ func (p *Processor) imageProviderForRunMode() string {
 	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
 }
 
-// newOpenAIImageSearcher builds an OpenAI ImageClient from CLI flags and the
-// resolved processor Config. Config-file overrides are applied only when the
-// flag still holds its default value so explicit CLI flags always win.
-func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
+// newOpenAIImageSearcher builds an OpenAI PromptAwareClient from CLI flags and
+// the resolved processor Config. Config-file overrides are applied only when
+// the flag still holds its default value so explicit CLI flags always win.
+func (p *Processor) newOpenAIImageSearcher() (image.PromptAwareClient, error) {
 	openaiConfig := &image.OpenAIConfig{
 		APIKey:  cli.GetOpenAIKey(),
 		Model:   p.flags.OpenAIImageModel,
@@ -161,13 +157,13 @@ func (p *Processor) newOpenAIImageSearcher() (image.ImageClient, error) {
 		return nil, fmt.Errorf("OpenAI API key is required for image generation")
 	}
 
-	return p.newOpenAIImageClient(openaiConfig), nil
+	return p.imageFactories.NewOpenAIClient(openaiConfig), nil
 }
 
-// newNanoBananaImageSearcher builds a NanoBanana ImageClient from CLI flags
-// and the resolved processor Config, applying overrides in the same
+// newNanoBananaImageSearcher builds a NanoBanana PromptAwareClient from CLI
+// flags and the resolved processor Config, applying overrides in the same
 // flag-wins-over-config pattern.
-func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
+func (p *Processor) newNanoBananaImageSearcher() (image.PromptAwareClient, error) {
 	nanoBananaConfig := &image.NanoBananaConfig{
 		APIKey:    cli.GetGoogleAPIKey(),
 		Model:     p.flags.NanoBananaModel,
@@ -185,5 +181,5 @@ func (p *Processor) newNanoBananaImageSearcher() (image.ImageClient, error) {
 		return nil, fmt.Errorf("google API key is required for image generation")
 	}
 
-	return p.newNanoBananaImageClient(nanoBananaConfig), nil
+	return p.imageFactories.NewNanoBananaClient(nanoBananaConfig), nil
 }

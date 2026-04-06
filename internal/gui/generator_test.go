@@ -107,7 +107,7 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 		},
 		currentWord: "друго",
 	}
-	app.newNanoBananaImageClient = func(config *image.NanoBananaConfig) promptAwareImageClient {
+	app.imageFactories.NewNanoBananaClient = func(config *image.NanoBananaConfig) image.PromptAwareClient {
 		capturedConfig = &image.NanoBananaConfig{
 			APIKey:    config.APIKey,
 			Model:     config.Model,
@@ -115,7 +115,7 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 		}
 		return fakeClient
 	}
-	app.newOpenAIImageClient = func(*image.OpenAIConfig) promptAwareImageClient {
+	app.imageFactories.NewOpenAIClient = func(*image.OpenAIConfig) image.PromptAwareClient {
 		t.Fatal("unexpected OpenAI image client construction")
 		return nil
 	}

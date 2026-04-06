@@ -131,6 +131,12 @@ func DefaultProviderConfig() *Config {
 	}
 }
 
+// ProviderFactory is the canonical type for functions that construct an audio
+// Provider from a Config. Using a named type avoids duplicating the raw function
+// signature in every package that needs to inject or replace the factory
+// (processor, gui). The production default is audio.NewProvider itself.
+type ProviderFactory func(*Config) (Provider, error)
+
 // NewProvider creates the appropriate audio provider based on configuration.
 // It extracts provider-specific sub-configs so each implementation only
 // receives the fields it needs (ISP).

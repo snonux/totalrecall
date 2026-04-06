@@ -64,8 +64,9 @@ type Config struct {
 // Processor handles the main word processing logic.
 // Audio coordination is in audio_coordinator.go, card directory management is
 // in card_store.go, and image downloading is in image_downloader.go.
-// The factory fields (newOpenAIImageClient, newNanoBananaImageClient, newAudioProvider)
-// are injected at construction time so tests can swap them without mutating global state.
+// Factory functions for image and audio providers are grouped in image.ClientFactories
+// and the audio.ProviderFactory type so the signatures are defined once and
+// shared with the gui package — eliminating parallel field duplication.
 type Processor struct {
 	flags            *cli.Flags
 	translator       *translation.Translator
@@ -76,10 +77,13 @@ type Processor struct {
 	// so individual methods never call Viper directly.
 	cfg *Config
 
-	// Factories — replaced by tests to inject fakes.
-	newOpenAIImageClient     func(*image.OpenAIConfig) image.ImageClient
-	newNanoBananaImageClient func(*image.NanoBananaConfig) image.ImageClient
-	newAudioProvider         func(*audio.Config) (audio.Provider, error)
+	// imageFactories groups the two image-provider construction functions.
+	// Production code uses image.DefaultClientFactories(); tests replace fields.
+	imageFactories image.ClientFactories
+
+	// newAudioProvider constructs an audio.Provider from a Config.
+	// Production code uses audio.NewProvider; tests replace it with a fake.
+	newAudioProvider audio.ProviderFactory
 }
 
 // NewProcessor creates a new word processor with default production factories.
@@ -99,12 +103,7 @@ func NewProcessor(flags *cli.Flags, cfg *Config) *Processor {
 		translationCache: translation.NewTranslationCache(),
 		phoneticFetcher:  phonetic.NewFetcher(&phonetic.Config{Provider: phoneticProvider, OpenAIKey: openAIKey, GoogleAPIKey: googleAPIKey}),
 		randomIntn:       rand.Intn,
-		newOpenAIImageClient: func(config *image.OpenAIConfig) image.ImageClient {
-			return image.NewOpenAIClient(config)
-		},
-		newNanoBananaImageClient: func(config *image.NanoBananaConfig) image.ImageClient {
-			return image.NewNanoBananaClient(config)
-		},
+		imageFactories:   image.DefaultClientFactories(),
 		newAudioProvider: audio.NewProvider,
 	}
 }

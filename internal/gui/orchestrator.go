@@ -19,37 +19,42 @@ import (
 // GenerationOrchestrator coordinates audio, image, and phonetics generation
 // for a single card. It holds all injectable factory functions so tests can
 // substitute fakes without touching the UI layer.
+// image.ClientFactories groups the two image-factory functions so the field
+// definitions are not duplicated between this type and processor.Processor.
 type GenerationOrchestrator struct {
 	config      *Config
 	audioConfig *audio.Config
 	phonetics   *phonetic.Fetcher
 	translator  *translation.Translator
 
-	// Injectable factory functions — replaced in tests to avoid real API calls.
-	newOpenAIImageClient     func(*image.OpenAIConfig) promptAwareImageClient
-	newNanoBananaImageClient func(*image.NanoBananaConfig) promptAwareImageClient
-	newAudioProvider         func(*audio.Config) (audio.Provider, error)
+	// imageFactories groups the two image-provider construction functions.
+	// Production code uses image.DefaultClientFactories(); tests replace fields.
+	imageFactories image.ClientFactories
+
+	// newAudioProvider constructs an audio.Provider from a Config.
+	// Production code uses audio.NewProvider; tests replace it with a fake.
+	newAudioProvider audio.ProviderFactory
 }
 
 // NewGenerationOrchestrator constructs an orchestrator wired to the given app
-// configuration and service dependencies.
+// configuration and service dependencies. imageFactories and newAudio are the
+// injectable test seams — pass image.DefaultClientFactories() and
+// audio.NewProvider for production behaviour.
 func NewGenerationOrchestrator(
 	config *Config,
 	audioCfg *audio.Config,
 	phonetics *phonetic.Fetcher,
 	translator *translation.Translator,
-	newOpenAI func(*image.OpenAIConfig) promptAwareImageClient,
-	newNanoBanana func(*image.NanoBananaConfig) promptAwareImageClient,
-	newAudio func(*audio.Config) (audio.Provider, error),
+	imageFactories image.ClientFactories,
+	newAudio audio.ProviderFactory,
 ) *GenerationOrchestrator {
 	return &GenerationOrchestrator{
-		config:                   config,
-		audioConfig:              audioCfg,
-		phonetics:                phonetics,
-		translator:               translator,
-		newOpenAIImageClient:     newOpenAI,
-		newNanoBananaImageClient: newNanoBanana,
-		newAudioProvider:         newAudio,
+		config:           config,
+		audioConfig:      audioCfg,
+		phonetics:        phonetics,
+		translator:       translator,
+		imageFactories:   imageFactories,
+		newAudioProvider: newAudio,
 	}
 }
 
@@ -478,8 +483,11 @@ func (o *GenerationOrchestrator) imagePromptCallback(cardDir, word string) func(
 }
 
 // newImageSearcher constructs the appropriate image client based on the
-// configured image provider.
-func (o *GenerationOrchestrator) newImageSearcher() (promptAwareImageClient, error) {
+// configured image provider. Returns image.PromptAwareClient so callers can
+// call SetPromptCallback directly without a type-assertion. The factory
+// functions are sourced from imageFactories (the shared image.ClientFactories
+// value) to avoid duplicating the factory signatures in this package.
+func (o *GenerationOrchestrator) newImageSearcher() (image.PromptAwareClient, error) {
 	switch o.config.ImageProvider {
 	case imageProviderOpenAI:
 		if o.config.OpenAIKey == "" {
@@ -494,7 +502,7 @@ func (o *GenerationOrchestrator) newImageSearcher() (promptAwareImageClient, err
 			Style:   "natural",
 		}
 
-		return o.newOpenAIImageClient(openaiConfig), nil
+		return o.imageFactories.NewOpenAIClient(openaiConfig), nil
 
 	case imageProviderNanoBanana:
 		cfg := o.config
@@ -511,7 +519,7 @@ func (o *GenerationOrchestrator) newImageSearcher() (promptAwareImageClient, err
 			TextModel: cfg.NanoBananaTextModel,
 		}
 
-		return o.newNanoBananaImageClient(nanoBananaConfig), nil
+		return o.imageFactories.NewNanoBananaClient(nanoBananaConfig), nil
 
 	default:
 		return nil, fmt.Errorf("unknown image provider: %s", o.config.ImageProvider)

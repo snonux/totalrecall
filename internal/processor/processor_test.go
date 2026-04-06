@@ -1058,7 +1058,7 @@ func TestDownloadImagesWithTranslationUsesNanoBananaConfigAndSavesPrompt(t *test
 		ImageNanoBananaTextModelSet: true,
 	}
 	p := NewProcessor(flags, cfg)
-	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+	p.imageFactories.NewNanoBananaClient = func(config *image.NanoBananaConfig) image.PromptAwareClient {
 		*capturedConfig = *config
 		return stubSearcher
 	}
@@ -1102,7 +1102,7 @@ func TestDownloadImagesWithTranslationPersistsPromptWhenDownloadFails(t *testing
 	flags.ImageAPISpecified = true
 
 	p := NewProcessor(flags, &Config{ImageProvider: "nanobanana"})
-	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+	p.imageFactories.NewNanoBananaClient = func(config *image.NanoBananaConfig) image.PromptAwareClient {
 		return stubSearcher
 	}
 	err := p.downloadImagesWithTranslation(context.Background(), "ябълка", "apple")
@@ -1144,7 +1144,7 @@ func TestDownloadImagesWithTranslationUsesConfiguredNanoBananaWhenImageAPINotSpe
 		ImageNanoBananaTextModelSet: true,
 	}
 	p := NewProcessor(flags, cfg)
-	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+	p.imageFactories.NewNanoBananaClient = func(config *image.NanoBananaConfig) image.PromptAwareClient {
 		*capturedConfig = *config
 		return stubSearcher
 	}
@@ -1231,7 +1231,7 @@ func TestNewNanoBananaImageSearcherExplicitDefaultWinsOverConfig(t *testing.T) {
 		ImageNanoBananaTextModelSet: true,
 	}
 	p := NewProcessor(flags, cfg)
-	p.newNanoBananaImageClient = func(config *image.NanoBananaConfig) image.ImageClient {
+	p.imageFactories.NewNanoBananaClient = func(config *image.NanoBananaConfig) image.PromptAwareClient {
 		*capturedConfig = *config
 		return &stubImageSearcher{}
 	}

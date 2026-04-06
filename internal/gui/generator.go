@@ -6,15 +6,7 @@ import (
 	"time"
 
 	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/image"
 )
-
-// promptAwareImageClient extends ImageClient with prompt-callback support
-// used by the GUI to capture and display the last generated image prompt.
-type promptAwareImageClient interface {
-	image.ImageClient
-	SetPromptCallback(func(prompt string))
-}
 
 // randomVoice picks a random voice from the provided list.
 // Used by GenerationOrchestrator for both OpenAI and Gemini voice selection.

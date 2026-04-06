@@ -109,9 +109,10 @@ type Application struct {
 	// Injectable factory functions — replaced in tests to avoid real API calls.
 	// These are kept on Application so tests can set them before construction
 	// of the orchestrator; New() copies them into the orchestrator.
-	newOpenAIImageClient     func(*image.OpenAIConfig) promptAwareImageClient
-	newNanoBananaImageClient func(*image.NanoBananaConfig) promptAwareImageClient
-	newAudioProvider         func(*audio.Config) (audio.Provider, error)
+	// imageFactories uses the shared image.ClientFactories type so the factory
+	// signatures are defined once in the image package rather than duplicated here.
+	imageFactories   image.ClientFactories
+	newAudioProvider audio.ProviderFactory
 
 	// Service layer — decoupled from the UI event-wiring in Application.
 	cardSvc *CardService            // file discovery, directory management, persistence
@@ -200,9 +201,10 @@ func New(config *Config) *Application {
 		autoPlayEnabled:  config.AutoPlay,
 
 		// Production-default factory functions; replaced in tests.
-		newOpenAIImageClient:     func(c *image.OpenAIConfig) promptAwareImageClient { return image.NewOpenAIClient(c) },
-		newNanoBananaImageClient: func(c *image.NanoBananaConfig) promptAwareImageClient { return image.NewNanoBananaClient(c) },
-		newAudioProvider:         audio.NewProvider,
+		// image.DefaultClientFactories() is the single source of truth for the
+		// image factory signatures shared with the processor package.
+		imageFactories:   image.DefaultClientFactories(),
+		newAudioProvider: audio.NewProvider,
 	}
 
 	a.initAppServices(config)
@@ -285,8 +287,7 @@ func (a *Application) initAppServices(config *Config) {
 		a.audioConfig,
 		a.phoneticFetcher,
 		a.translator,
-		a.newOpenAIImageClient,
-		a.newNanoBananaImageClient,
+		a.imageFactories,
 		a.newAudioProvider,
 	)
 }
@@ -368,8 +369,7 @@ func (a *Application) getOrchestrator() *GenerationOrchestrator {
 		a.audioConfig,
 		a.phoneticFetcher,
 		a.translator,
-		a.newOpenAIImageClient,
-		a.newNanoBananaImageClient,
+		a.imageFactories,
 		a.newAudioProvider,
 	)
 }
