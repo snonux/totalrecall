@@ -258,6 +258,15 @@ func (g *VeoGenerator) pollUntilDone(ctx context.Context, op *genai.GenerateVide
 // downloadVideo extracts the video from a completed operation, downloading bytes
 // via the Files API when the response contains only a URI reference.
 func (g *VeoGenerator) downloadVideo(ctx context.Context, op *genai.GenerateVideosOperation) ([]byte, error) {
+	// Surface any API-level error (e.g. content policy or geographic restriction)
+	// before checking for videos, so the caller gets a meaningful message.
+	if len(op.Error) > 0 {
+		msg, _ := op.Error["message"].(string)
+		if msg == "" {
+			msg = fmt.Sprintf("%v", op.Error)
+		}
+		return nil, fmt.Errorf("veo: %s", msg)
+	}
 	if op.Response == nil || len(op.Response.GeneratedVideos) == 0 {
 		return nil, fmt.Errorf("veo: operation completed but no videos in response")
 	}
