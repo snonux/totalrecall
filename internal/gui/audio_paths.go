@@ -8,38 +8,27 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/anki"
 )
 
+// resolveSingleAudioFile resolves the en-bg audio file path for a card directory.
+// Delegates to the package-level helper used by CardService.
 func (a *Application) resolveSingleAudioFile(wordDir string) string {
-	if audioFile := resolveAudioFileFromMetadata(wordDir, "audio_file"); audioFile != "" {
-		return audioFile
-	}
-
-	return anki.ResolveAudioFile(wordDir, "audio", "")
+	return resolveSingleAudioFileInDir(wordDir)
 }
 
+// resolveBgBgAudioFiles resolves front and back audio file paths for a bg-bg
+// card directory. Delegates to the package-level helper used by CardService.
 func (a *Application) resolveBgBgAudioFiles(wordDir string) (string, string) {
-	front := resolveAudioFileFromMetadata(wordDir, "audio_file")
-	if front == "" {
-		front = anki.ResolveAudioFile(wordDir, "audio_front", "")
-	}
-
-	back := resolveAudioFileFromMetadata(wordDir, "audio_file_back")
-	if back == "" {
-		back = anki.ResolveAudioFile(wordDir, "audio_back", "")
-	}
-
-	return front, back
+	return resolveBgBgAudioFilesInDir(wordDir)
 }
 
+// hasAnyAudioFile returns true if the card directory contains any audio file.
+// Delegates to the package-level helper used by CardService.
 func (a *Application) hasAnyAudioFile(wordDir string) bool {
-	single := a.resolveSingleAudioFile(wordDir)
-	if single != "" {
-		return true
-	}
-
-	front, back := a.resolveBgBgAudioFiles(wordDir)
-	return front != "" || back != ""
+	return hasAnyAudioFileInDir(wordDir)
 }
 
+// resolveAudioFileFromMetadata reads audio_metadata.txt from wordDir and returns
+// the path stored under key. Returns empty string when the key is absent or the
+// file does not exist on disk.
 func resolveAudioFileFromMetadata(wordDir, key string) string {
 	metadata := readAudioMetadata(wordDir)
 	value := strings.TrimSpace(metadata[key])
@@ -58,6 +47,8 @@ func resolveAudioFileFromMetadata(wordDir, key string) string {
 	return ""
 }
 
+// readAudioMetadata parses audio_metadata.txt in wordDir into a key→value map.
+// Returns an empty map when the file does not exist or cannot be read.
 func readAudioMetadata(wordDir string) map[string]string {
 	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
 	data, err := os.ReadFile(metadataFile)
@@ -80,3 +71,7 @@ func readAudioMetadata(wordDir string) map[string]string {
 
 	return values
 }
+
+// anki.ResolveAudioFile is kept here to avoid importing anki in card_service.go
+// directly. The package-level helpers reference it via this file.
+var _ = anki.ResolveAudioFile
