@@ -154,4 +154,3 @@ func NewProvider(config *Config) (Provider, error) {
 		return nil, fmt.Errorf("unknown audio provider: %s", config.Provider)
 	}
 }
-

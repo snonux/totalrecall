@@ -16,25 +16,25 @@ type Flags struct {
 	// AudioFormatSpecified records whether the audio format was explicitly set on the CLI.
 	AudioFormatSpecified bool
 	// AudioProvider selects the text-to-speech backend ("gemini" or "openai").
-	AudioProvider     string
-	ImageAPI          string
-	ImageAPISpecified bool
-	BatchFile         string
-	StoryFile            string // --story <file>: generate vocabulary story + comic image
-	StoryStyle           string // --story-style: override the random art style (empty = random)
-	StoryTheme           string // --story-theme: override the random genre pick (empty = random)
+	AudioProvider         string
+	ImageAPI              string
+	ImageAPISpecified     bool
+	BatchFile             string
+	StoryFile             string // --story <file>: generate vocabulary story + comic image
+	StoryStyle            string // --story-style: override the random art style (empty = random)
+	StoryTheme            string // --story-theme: override the random genre pick (empty = random)
 	StoryNoUltraRealistic bool   // --no-ultra-realistic: disable photorealistic rendering requirement
-	StorySlug            string // --story-slug: force a specific output slug/directory (empty = auto from title)
-	NarratorVoice        string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
-	SkipAudio         bool
-	SkipImages        bool
-	GenerateAnki      bool
-	AnkiCSV           bool
-	DeckName          string
-	ListModels        bool
-	AllVoices         bool
-	NoAutoPlay        bool
-	Archive           bool
+	StorySlug             string // --story-slug: force a specific output slug/directory (empty = auto from title)
+	NarratorVoice         string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
+	SkipAudio             bool
+	SkipImages            bool
+	GenerateAnki          bool
+	AnkiCSV               bool
+	DeckName              string
+	ListModels            bool
+	AllVoices             bool
+	NoAutoPlay            bool
+	Archive               bool
 
 	// OpenAI flags
 	OpenAIModel       string

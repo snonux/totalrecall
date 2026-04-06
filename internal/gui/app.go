@@ -107,9 +107,9 @@ type Application struct {
 	activeOpMu       sync.Mutex     // Mutex for activeOperations map
 
 	// Injectable factory functions — replaced in tests to avoid real API calls.
-	newOpenAIImageClient    func(*image.OpenAIConfig) promptAwareImageClient
+	newOpenAIImageClient     func(*image.OpenAIConfig) promptAwareImageClient
 	newNanoBananaImageClient func(*image.NanoBananaConfig) promptAwareImageClient
-	newAudioProvider        func(*audio.Config) (audio.Provider, error)
+	newAudioProvider         func(*audio.Config) (audio.Provider, error)
 }
 
 // Config holds GUI application configuration
@@ -225,9 +225,9 @@ func New(config *Config) *Application {
 		autoPlayEnabled:  config.AutoPlay, // Use config setting
 
 		// Production defaults for factory functions; replaced in tests.
-		newOpenAIImageClient:    func(c *image.OpenAIConfig) promptAwareImageClient { return image.NewOpenAIClient(c) },
+		newOpenAIImageClient:     func(c *image.OpenAIConfig) promptAwareImageClient { return image.NewOpenAIClient(c) },
 		newNanoBananaImageClient: func(c *image.NanoBananaConfig) promptAwareImageClient { return image.NewNanoBananaClient(c) },
-		newAudioProvider:        audio.NewProvider,
+		newAudioProvider:         audio.NewProvider,
 	}
 
 	// Initialize the word processing queue

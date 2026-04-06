@@ -26,7 +26,7 @@ const (
 	// Without this cap, gemini-2.5-flash exhausts all tokens on reasoning for the
 	// complex combined prompt, making resp.Text() return an empty string.
 	storyFullThinkingBudget = int32(8192)
-	storySystemPrompt = "You are a creative Bulgarian language teacher. Write engaging stories that naturally incorporate vocabulary words to help students learn."
+	storySystemPrompt       = "You are a creative Bulgarian language teacher. Write engaging stories that naturally incorporate vocabulary words to help students learn."
 
 	// storyBibleSeparator is the exact line the model must output between the
 	// story and the character bible. Parsing splits the response on this marker.

@@ -9,8 +9,6 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/batch"
 )
 
-
-
 // ttsTodoContent is written to story_tts_todo.txt as a fallback when Gemini TTS
 // narration fails or no API key is available.  It documents the original
 // ElevenLabs integration placeholder for reference.

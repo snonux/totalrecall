@@ -165,4 +165,3 @@ func TestReadBatchFile_FileNotFound(t *testing.T) {
 		t.Error("Expected error for non-existent file")
 	}
 }
-

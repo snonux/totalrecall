@@ -27,8 +27,8 @@ type SearchOptions struct {
 	Page         int    // Page number (1-based)
 	ImageType    string // Type: "photo", "illustration", "vector", "all"
 	Orientation  string // Orientation: "horizontal", "vertical", "all"
-	CustomPrompt    string  // Custom prompt for AI image generation
-	AspectRatio     string  // Override aspect ratio (e.g. "9:16"); empty = provider default
+	CustomPrompt string // Custom prompt for AI image generation
+	AspectRatio  string // Override aspect ratio (e.g. "9:16"); empty = provider default
 	// ReferenceImages holds raw PNG bytes of previously generated images.
 	// When non-empty, the NanoBanana client sends them as multimodal content
 	// alongside the text prompt so the model can match character appearance

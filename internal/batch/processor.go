@@ -103,4 +103,3 @@ func parseBatchLine(line string) *WordEntry {
 		CardType:         internal.CardTypeEnBg,
 	}
 }
-
