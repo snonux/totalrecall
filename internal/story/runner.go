@@ -173,7 +173,7 @@ func (r *Runner) Run(batchFile string) error {
 		fmt.Fprintf(os.Stderr, "Warning: could not write theme file: %v\n", err)
 	}
 
-	r.drawComicPages(result.StoryText, result.Bible, slug, entries)
+	r.drawComicPages(result.StoryText, result.Bible, slug, entries, result.PanelScript)
 
 	// Narration is opt-in (--narrate flag). Skip entirely when not requested
 	// so runs complete faster and don't consume TTS quota unnecessarily.
@@ -184,12 +184,16 @@ func (r *Runner) Run(batchFile string) error {
 	return r.handleNarration(result.StoryText, slug, comicsDir)
 }
 
-// drawComicPages generates the 5 comic images and assembles them into a PDF.
-// entries carries the vocabulary words so panels can visually feature and label them.
+// drawComicPages generates all 12 comic pages and assembles them into a PDF.
+// panelScript carries the explicit per-panel visual descriptions from Gemini so
+// each panel illustrates the correct story beat in narrative order.
 // Errors are non-fatal — story.txt is always accessible regardless of image failures.
-func (r *Runner) drawComicPages(storyText, bible, titleSlug string, entries []batch.WordEntry) {
+func (r *Runner) drawComicPages(storyText, bible, titleSlug string, entries []batch.WordEntry, panelScript [][]string) {
 	fmt.Printf("Generating %d comic pages...\n", storyPageCount+galleryPageCount+2) // cover + story + gallery + back
-	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug, entries)
+	if len(panelScript) > 0 {
+		fmt.Println("  Panel script ready — panels will follow narrative order.")
+	}
+	paths, err := r.artist.DrawComicPages(storyText, bible, titleSlug, entries, panelScript)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: comic page generation failed: %v\n", err)
 	}

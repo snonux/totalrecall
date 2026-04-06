@@ -190,7 +190,11 @@ func NewArtist(config *ArtistConfig) *Artist {
 // story page prompt so the image model visually features and labels them in panels.
 // titleSlug is used as the file-name prefix; it must already be a safe slug.
 // Returns the list of saved image paths in order.
-func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entries []batch.WordEntry) ([]string, error) {
+// DrawComicPages generates all 12 pages of the comic (cover + 5 story + 5 gallery + back).
+// panelScript is a [page][panel] slice of explicit visual descriptions produced by Gemini;
+// when non-nil it drives each panel directly instead of raw story text excerpts,
+// ensuring the illustrations follow the narrative chronologically and coherently.
+func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entries []batch.WordEntry, panelScript [][]string) ([]string, error) {
 	style := a.style
 	if style == "" {
 		// Ultra-realistic mode uses photography-only language so the image model
@@ -231,13 +235,17 @@ func (a *Artist) DrawComicPages(storyText, prebuiltBible, titleSlug string, entr
 	}
 
 	// 2. Story pages — each receives cover + previous page as refs.
-	// Failures are non-fatal: up to pageMaxRetries attempts per page, then a
-	// warning is logged and generation continues with the next page so the PDF
-	// always contains as many pages as the API manages to produce.
+	// When a panelScript is available, panels are driven by explicit visual descriptions
+	// so the illustrations follow the story chronologically. Raw text excerpts are used
+	// as fallback when the script is absent or incomplete for a given page.
 	sections := splitIntoSections(storyText, storyPageCount)
 	for i, section := range sections {
 		pageNum := i + 1
-		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries, a.renderReq())
+		var pagePanels []string
+		if i < len(panelScript) {
+			pagePanels = panelScript[i]
+		}
+		prompt := buildStoryPagePrompt(section, pageNum, storyPageCount, style, bible, entries, a.renderReq(), pagePanels)
 		fileName := fmt.Sprintf("%s_page_%d", titleSlug, pageNum)
 		p, pageBytes := a.loadOrGenerate(fileName, func() (string, []byte) {
 			return a.generateStoryPage(prompt, fileName, pageNum, recentRefs)
@@ -520,18 +528,15 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 // labels each word visually inside the panels — making each page a learning tool.
 // The Bulgarian language requirement is placed at the very top so it is processed
 // before all other instructions.
-func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string, entries []batch.WordEntry, renderReq string) string {
-	excerpt := strings.TrimSpace(section)
-	if len(excerpt) > comicPromptMaxChars {
-		excerpt = excerpt[:comicPromptMaxChars]
-		if idx := strings.LastIndex(excerpt, " "); idx > 0 {
-			excerpt = excerpt[:idx]
-		}
-		excerpt += "…"
-	}
-
+// buildStoryPagePrompt constructs the image prompt for one 4-panel story page.
+// When pagePanels contains explicit visual descriptions (from the Gemini panel
+// script), those drive each panel directly for narrative coherence. Otherwise
+// the raw story excerpt is used as a fallback.
+func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible string, entries []batch.WordEntry, renderReq string, pagePanels []string) string {
 	bibleBlock := bibleSection(bible, fmt.Sprintf("story page %d of %d", pageNum, totalPages))
 	vocabBlock := buildVocabBlock(entries)
+	panelLayout := buildPanelLayout(section, pagePanels)
+
 	return fmt.Sprintf(
 		// Lead with the hard language constraint so it is processed first.
 		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
@@ -541,12 +546,8 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"English text anywhere in the panels is STRICTLY FORBIDDEN — use ONLY Bulgarian.\n\n"+
 			"%s"+ // vocabulary block — before art style so it is never truncated
 			"Art style: %s.%s\n"+
-			"Comic book story page %d of %d. "+
-			"MANDATORY PANEL LAYOUT — divide the image into exactly 4 panels in a 2×2 grid:\n"+
-			"  • TOP-LEFT panel: scene 1 from the excerpt\n"+
-			"  • TOP-RIGHT panel: scene 2 from the excerpt\n"+
-			"  • BOTTOM-LEFT panel: scene 3 from the excerpt\n"+
-			"  • BOTTOM-RIGHT panel: scene 4 from the excerpt\n"+
+			"Comic book story page %d of %d.\n"+
+			"%s"+ // panel layout (script-driven or excerpt-driven)
 			"Each panel is separated by a thin black gutter line. "+
 			"All 4 panels must be clearly distinct scenes — NOT one continuous image. "+
 			"The full image area must be covered by the 4 panels with no empty space.\n"+
@@ -557,14 +558,48 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			renderReq+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
-			"to the reference — a child must never look older or younger than defined.\n"+
+			"to the reference — a child must never look older or younger as defined.\n"+
 			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
 			"NEVER substitute a different animal or a generic version of the species.\n"+
-			"  • Clothing changes only if this page's excerpt explicitly describes a change.\n"+
-			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n"+
-			"Story excerpt (ALL panels must illustrate THIS excerpt only — no other part of the story):\n\n%s",
-		vocabBlock, style, bibleBlock, pageNum, totalPages, excerpt,
+			"  • Clothing changes only if this page's description explicitly describes a change.\n"+
+			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n",
+		vocabBlock, style, bibleBlock, pageNum, totalPages, panelLayout,
 	)
+}
+
+// buildPanelLayout returns the MANDATORY PANEL LAYOUT block.
+// When pagePanels are provided (from the Gemini panel script) each panel gets
+// an explicit visual instruction; otherwise the raw excerpt is used so every
+// panel can interpret it freely.
+func buildPanelLayout(section string, pagePanels []string) string {
+	labels := [4]string{"TOP-LEFT", "TOP-RIGHT", "BOTTOM-LEFT", "BOTTOM-RIGHT"}
+
+	// Script-driven path: all 4 panel descriptions are non-empty.
+	if len(pagePanels) == 4 && pagePanels[0] != "" && pagePanels[1] != "" && pagePanels[2] != "" && pagePanels[3] != "" {
+		var sb strings.Builder
+		sb.WriteString("MANDATORY PANEL LAYOUT — divide the image into exactly 4 panels in a 2×2 grid.\n")
+		sb.WriteString("Draw each panel EXACTLY as described below — these are the precise scenes to illustrate:\n")
+		for i, label := range labels {
+			sb.WriteString(fmt.Sprintf("  • %s panel: %s\n", label, pagePanels[i]))
+		}
+		return sb.String()
+	}
+
+	// Fallback: excerpt-driven path when the panel script is absent or incomplete.
+	excerpt := strings.TrimSpace(section)
+	if len(excerpt) > comicPromptMaxChars {
+		excerpt = excerpt[:comicPromptMaxChars]
+		if idx := strings.LastIndex(excerpt, " "); idx > 0 {
+			excerpt = excerpt[:idx]
+		}
+		excerpt += "…"
+	}
+	return "MANDATORY PANEL LAYOUT — divide the image into exactly 4 panels in a 2×2 grid:\n" +
+		"  • TOP-LEFT panel: scene 1 from the excerpt\n" +
+		"  • TOP-RIGHT panel: scene 2 from the excerpt\n" +
+		"  • BOTTOM-LEFT panel: scene 3 from the excerpt\n" +
+		"  • BOTTOM-RIGHT panel: scene 4 from the excerpt\n" +
+		"Story excerpt (ALL panels must illustrate THIS excerpt only):\n\n" + excerpt + "\n"
 }
 
 // buildVocabBlock formats the vocabulary entries as a mandatory visual instruction

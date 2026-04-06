@@ -36,6 +36,17 @@ const (
 	// deliver a short English comic title. parseGenerateResult extracts it for
 	// use as the output directory name and file prefix.
 	storyTitleSeparator = "---COMIC TITLE---"
+
+	// storyPanelSeparator marks the start of the 20-line panel visual script.
+	// The script lists one sentence per panel (P1-A … P5-D) so the artist can
+	// draw each panel from an explicit description rather than guessing from
+	// raw prose — this is the primary mechanism for narrative coherence.
+	storyPanelSeparator = "---PANEL SCRIPT---"
+
+	// storyPageCount duplicated here so generator.go can reference it without
+	// importing artist.go (both are in package story; used in buildStoryPromptFull).
+	storyPagesInScript = 5
+	storyPanelsPerPage = 4
 )
 
 // storyGenres is the pool of genres picked randomly each run to keep stories
@@ -73,13 +84,14 @@ func resolveGenre(theme string) string {
 	return pickStoryGenre()
 }
 
-// GenerateResult holds the story text, character bible, and comic title from a
-// single combined Gemini call. All three are produced in the same request —
-// no second API call, no rate limits.
+// GenerateResult holds the story text, character bible, comic title, and panel
+// script from a single combined Gemini call. All four are produced in the same
+// request — no second API call, no rate limits.
 type GenerateResult struct {
-	StoryText string // Bulgarian vocabulary story
-	Bible     string // English character consistency guide for illustrators
-	Title     string // Short English comic title (2-4 words), used as filename slug
+	StoryText   string     // Bulgarian vocabulary story
+	Bible       string     // English character consistency guide for illustrators
+	Title       string     // Short English comic title (2-4 words), used as filename slug
+	PanelScript [][]string // [page][panel] explicit visual description, 5 pages × 4 panels
 }
 
 // Config holds generator settings and API credentials.
@@ -204,7 +216,7 @@ func (g *Generator) GenerateFull(entries []batch.WordEntry) (GenerateResult, err
 	return parseGenerateResult(combined), nil
 }
 
-// parseGenerateResult splits the combined model output on the two separators.
+// parseGenerateResult splits the combined model output on the three separators.
 // Format expected:
 //
 //	<story text>
@@ -212,9 +224,12 @@ func (g *Generator) GenerateFull(entries []batch.WordEntry) (GenerateResult, err
 //	<bible>
 //	---COMIC TITLE---
 //	<title>
+//	---PANEL SCRIPT---
+//	P1-A: ...
+//	...
+//	P5-D: ...
 //
-// If a separator is missing, the corresponding field is left empty and parsing
-// is best-effort so the pipeline can still proceed without all three sections.
+// Missing separators are tolerated — the pipeline continues with empty fields.
 func parseGenerateResult(combined string) GenerateResult {
 	bibleIdx := strings.Index(combined, storyBibleSeparator)
 	if bibleIdx < 0 {
@@ -226,17 +241,59 @@ func parseGenerateResult(combined string) GenerateResult {
 
 	titleIdx := strings.Index(afterBible, storyTitleSeparator)
 	if titleIdx < 0 {
-		return GenerateResult{StoryText: story, Bible: afterBible}
+		return GenerateResult{StoryText: story, Bible: strings.TrimSpace(afterBible)}
 	}
 
 	bible := strings.TrimSpace(afterBible[:titleIdx])
-	title := strings.TrimSpace(afterBible[titleIdx+len(storyTitleSeparator):])
-	// Keep only the first line of the title in case the model adds a blank line.
+	afterTitle := strings.TrimSpace(afterBible[titleIdx+len(storyTitleSeparator):])
+
+	panelIdx := strings.Index(afterTitle, storyPanelSeparator)
+	var title, panelText string
+	if panelIdx < 0 {
+		title = afterTitle
+	} else {
+		title = afterTitle[:panelIdx]
+		panelText = afterTitle[panelIdx+len(storyPanelSeparator):]
+	}
+	// Keep only the first non-empty line of the title.
 	if nl := strings.IndexByte(title, '\n'); nl >= 0 {
-		title = strings.TrimSpace(title[:nl])
+		title = title[:nl]
+	}
+	title = strings.TrimSpace(title)
+
+	return GenerateResult{
+		StoryText:   story,
+		Bible:       bible,
+		Title:       title,
+		PanelScript: parsePanelScript(panelText),
+	}
+}
+
+// parsePanelScript parses the panel script block into a [page][panel] slice.
+// Lines must match the format "P{1-5}-{A-D}: description".
+// Missing or malformed lines produce empty strings so callers can fall back
+// to raw story excerpts for those panels.
+func parsePanelScript(text string) [][]string {
+	script := make([][]string, storyPagesInScript)
+	for i := range script {
+		script[i] = make([]string, storyPanelsPerPage)
 	}
 
-	return GenerateResult{StoryText: story, Bible: bible, Title: title}
+	panelIndex := map[byte]int{'A': 0, 'B': 1, 'C': 2, 'D': 3}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		// Expected prefix: "P1-A: " through "P5-D: "
+		if len(line) < 7 || line[0] != 'P' || line[2] != '-' || line[4] != ':' {
+			continue
+		}
+		page := int(line[1] - '1') // '1'→0 … '5'→4
+		panel, ok := panelIndex[line[3]]
+		if !ok || page < 0 || page >= storyPagesInScript {
+			continue
+		}
+		script[page][panel] = strings.TrimSpace(line[5:])
+	}
+	return script
 }
 
 // buildStoryPrompt creates the simple story-only prompt used by Generate.
@@ -287,7 +344,31 @@ func buildStoryPromptFull(entries []batch.WordEntry, theme string) string {
 	sb.WriteString("story's theme and characters (e.g. 'Stardust Explorers', 'The Clockwork Dragon', ")
 	sb.WriteString("'Mystery at Midnight'). Output only the title — no quotes, no punctuation, no explanation.\n")
 
+	sb.WriteString("\nAfter the title, write exactly this line by itself:\n")
+	sb.WriteString(storyPanelSeparator)
+	sb.WriteString(buildPanelScriptPrompt())
+
 	return sb.String()
+}
+
+// buildPanelScriptPrompt returns the instructions for the 20-panel visual script
+// section appended after ---PANEL SCRIPT---. Kept separate so buildStoryPromptFull
+// stays under 50 lines.
+func buildPanelScriptPrompt() string {
+	return "\n\nWrite exactly 20 visual panel descriptions for the comic illustrator, " +
+		"one per line, in strict chronological story order.\n" +
+		"Format each line exactly as: P{page}-{panel}: {description}\n" +
+		"where page is 1–5 and panel is A (top-left), B (top-right), C (bottom-left), D (bottom-right).\n" +
+		"Each description is 1–2 sentences: WHO is in the panel, WHAT they are doing, " +
+		"WHERE they are, and their expression or body language. Be vivid and specific.\n" +
+		"The 20 panels must retell the story from beginning to end — " +
+		"each page covers one story beat, each panel advances the action.\n" +
+		"Do NOT repeat the same scene or camera angle on consecutive panels.\n" +
+		"Example format (replace with actual story content):\n" +
+		"P1-A: Maria walks out her front door into morning sunlight, laptop bag on shoulder, looking relieved.\n" +
+		"P1-B: She strides down a busy city street past parked cars, headphones in, smiling.\n" +
+		"P1-C: Close-up of her hand gripping a large steaming coffee cup with both hands.\n" +
+		"P1-D: Maria pauses at a park entrance, gazing at the green trees ahead with anticipation.\n"
 }
 
 // slugify converts a comic title into a safe directory/file name component.
