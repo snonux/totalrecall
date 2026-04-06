@@ -410,7 +410,16 @@ func (a *Application) setupUI() {
 	a.setupTooltips()
 
 	// Secondary toolbar button tooltips need a short delay to initialise.
-	time.AfterFunc(500*time.Millisecond, func() {
+	// Tracked via WaitGroup and respects ctx.Done() so the callback never
+	// writes to freed widgets after the window is closed (Go Mistake #62).
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
 		fyne.Do(func() {
 			if exportButton != nil {
 				exportButton.SetToolTip("Export to Anki (x)")
@@ -422,7 +431,7 @@ func (a *Application) setupUI() {
 				helpButton.SetToolTip("Show hotkeys (?)")
 			}
 		})
-	})
+	}()
 
 	a.window.SetOnClosed(a.onWindowClosed)
 	a.setupKeyboardShortcuts()
@@ -522,6 +531,9 @@ func (a *Application) buildTranslationInput() {
 func (a *Application) buildDisplaySection() fyne.CanvasObject {
 	a.imageDisplay = NewImageDisplay()
 	a.audioPlayer = NewAudioPlayer()
+	// Wire the application context into the player so its post-playback goroutine
+	// can check ctx.Done() before writing to widgets (Go Mistake #62).
+	a.audioPlayer.SetContext(a.ctx)
 	a.audioPlayer.SetAutoPlayEnabled(&a.autoPlayEnabled)
 
 	a.imagePromptEntry = NewCustomMultiLineEntry()
@@ -597,6 +609,11 @@ func (a *Application) buildStatusSection() fyne.CanvasObject {
 func (a *Application) onWindowClosed() {
 	if a.fileCheckTicker != nil {
 		a.fileCheckTicker.Stop()
+	}
+	// Stop the word-change debounce timer so its callback cannot fire
+	// after the context is cancelled and widgets are freed.
+	if a.wordChangeTimer != nil {
+		a.wordChangeTimer.Stop()
 	}
 	if a.logViewer != nil {
 		a.logViewer.StopCapture()
@@ -1834,9 +1851,18 @@ func (a *Application) clearUI() {
 }
 
 // setupTooltips sets up all tooltips after the tooltip layer has been created.
-// AfterFunc fires after the tooltip layer is initialized without blocking a goroutine.
+// A tracked goroutine waits 500 ms and then sets tooltips on the main thread.
+// WaitGroup tracking and ctx.Done() ensure the callback never writes to freed
+// widgets after the window is closed (Go Mistake #62).
 func (a *Application) setupTooltips() {
-	time.AfterFunc(500*time.Millisecond, func() {
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
 		fyne.Do(func() {
 			// Navigation button tooltips
 			if a.submitButton != nil {
@@ -1869,8 +1895,8 @@ func (a *Application) setupTooltips() {
 				a.deleteButton.SetToolTip("Delete word (d)")
 			}
 
-			// Export and help button tooltips need to be set after creation
-			// They are set in the main window setup
+			// Export and help button tooltips are set in the main window setup
+			// goroutine (see setupUI) to avoid a double 500 ms wait here.
 
 			// Audio player tooltips
 			if a.audioPlayer != nil && a.audioPlayer.playButton != nil {
@@ -1883,7 +1909,7 @@ func (a *Application) setupTooltips() {
 				a.audioPlayer.stopButton.SetToolTip("Stop audio")
 			}
 		})
-	})
+	}()
 }
 
 // processNextInQueue processes the next word in the queue
@@ -2586,11 +2612,19 @@ func (a *Application) handleWordChange(oldWord, newWord string) {
 			a.updateStatus(fmt.Sprintf("Word changed from '%s' to '%s' - regenerating image...", oldWord, newWord))
 		})
 
-		// Small delay to ensure UI updates
-		time.AfterFunc(100*time.Millisecond, func() {
+		// Small delay to ensure UI updates. Tracked via WaitGroup and respects
+		// ctx.Done() to prevent writing to freed widgets on shutdown (Go Mistake #62).
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			select {
+			case <-a.ctx.Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
 			fyne.Do(func() {
 				a.onRegenerateImage()
 			})
-		})
+		}()
 	}
 }

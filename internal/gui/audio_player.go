@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -35,8 +36,9 @@ type AudioPlayer struct {
 	isBgBg          bool   // Track if this is a bg-bg card
 	isPlaying       bool
 	playCmd         *exec.Cmd
-	voiceInfo       string // Stores voice and speed info
-	autoPlayEnabled *bool  // Pointer to parent's auto-play state
+	voiceInfo       string          // Stores voice and speed info
+	autoPlayEnabled *bool           // Pointer to parent's auto-play state
+	ctx             context.Context // Application context; guards post-playback UI updates
 }
 
 type audioCommandCandidate struct {
@@ -44,9 +46,14 @@ type audioCommandCandidate struct {
 	args []string
 }
 
-// NewAudioPlayer creates a new audio player widget
+// NewAudioPlayer creates a new audio player widget. Call SetContext before use
+// so that post-playback UI updates are guarded against the app shutting down.
 func NewAudioPlayer() *AudioPlayer {
-	p := &AudioPlayer{}
+	p := &AudioPlayer{
+		// Default to a background context so the player is usable even if
+		// SetContext is never called (e.g. in unit tests).
+		ctx: context.Background(),
+	}
 
 	// Create controls (tooltips will be set later after tooltip layer is created)
 	p.playButton = ttwidget.NewButton("", p.onPlay)
@@ -93,6 +100,14 @@ func NewAudioPlayer() *AudioPlayer {
 
 	p.ExtendBaseWidget(p)
 	return p
+}
+
+// SetContext wires the application lifecycle context into the player.
+// The post-playback UI update goroutine checks this context before calling
+// fyne.Do, preventing writes to freed widgets after the window is closed
+// (Go Mistake #62). Must be called before the first playback attempt.
+func (p *AudioPlayer) SetContext(ctx context.Context) {
+	p.ctx = ctx
 }
 
 // CreateRenderer implements fyne.Widget
@@ -154,12 +169,19 @@ func (p *AudioPlayer) setAudioFileInternal(audioFile string, allowAutoPlay bool)
 		statusText := fmt.Sprintf("Audio: %s%s", filepath.Base(audioFile), p.voiceInfo)
 		p.statusLabel.SetText(statusText)
 
-		// Auto-play if enabled and allowed. AfterFunc fires the callback after
-		// the UI has had a chance to render without blocking a goroutine.
+		// Auto-play if enabled and allowed. A short goroutine gives the UI a
+		// chance to render and checks ctx.Done() so it won't write to freed
+		// widgets if the window is closed before the delay expires (Go Mistake #62).
 		if allowAutoPlay && p.autoPlayEnabled != nil && *p.autoPlayEnabled {
-			time.AfterFunc(100*time.Millisecond, func() {
+			ctx := p.ctx
+			go func() {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(100 * time.Millisecond):
+				}
 				fyne.Do(p.onPlay)
-			})
+			}()
 		}
 	} else {
 		p.Clear()
@@ -334,13 +356,16 @@ func (p *AudioPlayer) startPlaybackForFile(audioFile string) error {
 	// Store the command so we can stop it later
 	p.playCmd = cmd
 
-	// Start playback in background
-	// Capture whether this is playing back audio or front audio for proper icon reset
+	// Start playback in background.
+	// Capture which audio track is playing for correct icon reset on completion.
+	// ctx.Done() is checked before fyne.Do so we never write to freed widgets
+	// after the application window has been closed (Go Mistake #62).
 	isPlayingBack := audioFile == p.audioFileBack
+	ctx := p.ctx
 	go func() {
 		err := cmd.Run()
-		if err == nil {
-			// Playback finished normally
+		if err == nil && ctx.Err() == nil {
+			// Playback finished normally and the app is still alive.
 			fyne.Do(func() {
 				p.isPlaying = false
 				// Reset correct button icon based on which audio was playing
