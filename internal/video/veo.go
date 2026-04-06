@@ -21,14 +21,23 @@ const (
 	DefaultVeoModel = "veo-2.0-generate-001"
 
 	// videoDurationSeconds is the clip length requested from Veo.
+	// 8 seconds is the minimum duration supported by the Veo API and produces
+	// clips long enough to convey the flashcard content without excess.
 	videoDurationSeconds = int32(8)
 
 	// videoAspectRatio is the target aspect ratio for generated clips.
+	// 16:9 matches the landscape orientation of the comic-style gallery panels.
 	videoAspectRatio = "16:9"
 
 	// pollInterval is the time to wait between operation status checks.
 	// Veo generation typically takes 1–3 minutes; 15 s keeps polling overhead low.
 	pollInterval = 15 * time.Second
+
+	// maxPollAttempts caps the number of polling iterations so that a hung or
+	// stalled Veo operation does not block the process indefinitely.
+	// At 15 s per attempt, 40 attempts ≈ 10 minutes — well above the observed
+	// worst-case generation time of ~3 minutes.
+	maxPollAttempts = 40
 )
 
 // VeoGenerator wraps the Google GenAI client for Veo video generation.
@@ -219,10 +228,15 @@ func (g *VeoGenerator) startOperation(ctx context.Context, imgBytes []byte, prom
 }
 
 // pollUntilDone repeatedly calls GetVideosOperation until the operation reports
-// completion or the context is cancelled. It sleeps pollInterval between checks.
+// completion, the context is cancelled, or maxPollAttempts is reached.
+// It sleeps pollInterval between checks to avoid hammering the API.
 func (g *VeoGenerator) pollUntilDone(ctx context.Context, op *genai.GenerateVideosOperation) (*genai.GenerateVideosOperation, error) {
-	for !op.Done {
-		log.Printf("veo: operation in progress, waiting %s...", pollInterval)
+	for attempt := 0; !op.Done; attempt++ {
+		if attempt >= maxPollAttempts {
+			return nil, fmt.Errorf("veo: operation did not complete after %d attempts (%s each)", maxPollAttempts, pollInterval)
+		}
+
+		log.Printf("veo: operation in progress, waiting %s (attempt %d/%d)...", pollInterval, attempt+1, maxPollAttempts)
 
 		select {
 		case <-ctx.Done():
