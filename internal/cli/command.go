@@ -69,6 +69,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVar(&flags.StoryStyle, "story-style", "", "Art style for comic pages (default: random). E.g. \"ultra realistic comic strip with photographic detail and dramatic lighting\"")
 	cmd.Flags().StringVar(&flags.StoryTheme, "story-theme", "", "Genre/theme for the story (default: random). E.g. \"a thrilling space adventure with aliens and spaceships\"")
 	cmd.Flags().BoolVar(&flags.StoryNoUltraRealistic, "no-ultra-realistic", false, "Disable photorealistic rendering requirement; produces standard comic-book style output")
+	cmd.Flags().BoolVar(&flags.StoryUltraRealistic, "ultra-realistic", false, "Force photorealistic rendering for all pages (overrides the default random 50/50 pick)")
 	cmd.Flags().StringVar(&flags.StorySlug, "story-slug", "",
 		"Force the output directory slug for --story (e.g. \"ai-jungle-quest\"). "+
 			"Use this to repair a partial run: existing pages are skipped, missing ones are generated.")

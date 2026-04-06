@@ -40,7 +40,7 @@ It has mainly been vibe coded using Claude Code CLI.
   - All human characters are adults; story genre/setting driven by `--story-theme`
   - Produces **12 pages** per comic: cover + 5 story pages (2×2 panel grid) + 5 gallery pages (close-up character art) + back cover
   - All output saved under `comics/<title-slug>/` with files named `<slug>_*.png`
-  - **Rendering mode** chosen randomly 50/50 each run; force standard with `--no-ultra-realistic`:
+  - **Rendering mode** chosen randomly 50/50 each run; force with `--ultra-realistic` or `--no-ultra-realistic`:
     - *Ultra-realistic*: photography-language style prompt (DSLR, cinematic stills, hyper-realistic) + mandatory photorealistic rendering requirement — produces near-photographic panels
     - *Standard comic*: comic art style pool (90% "ultra realistic comic strip", 10% manga / watercolor / noir / pop-art etc.)
   - Art style override: `--story-style` replaces the random pick for both modes
@@ -203,6 +203,9 @@ Key features:
    # Override art style
    totalrecall --story words.txt --story-style "Japanese manga with clean linework and speed lines"
    totalrecall --story words.txt --story-style "retro 1960s pop art in the style of Roy Lichtenstein"
+
+   # Force ultra-realistic photorealistic mode
+   totalrecall --story words.txt --ultra-realistic
 
    # Force standard comic style (default is random 50/50 between ultra-realistic and standard)
    totalrecall --story words.txt --no-ultra-realistic
