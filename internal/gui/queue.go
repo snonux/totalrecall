@@ -153,33 +153,24 @@ func (q *WordQueue) GetQueueStatus() (queued, processing, completed, failed int)
 	return
 }
 
-// GetActiveJobs returns all jobs that are currently queued or processing
+// GetActiveJobs returns all jobs that are currently queued or processing.
+// It uses only q.processing and q.results under the read lock; it does not
+// touch q.jobs, because channel operations must not run while holding the
+// mutex (other goroutines send/receive on q.jobs without the lock).
 func (q *WordQueue) GetActiveJobs() []*WordJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
 	var jobs []*WordJob
-
-	// Add processing jobs
 	for _, job := range q.processing {
 		jobs = append(jobs, job)
 	}
-
-	// Add queued jobs from channel (non-blocking)
-	queuedJobs := make([]*WordJob, 0)
-	for {
-		select {
-		case job := <-q.jobs:
-			queuedJobs = append(queuedJobs, job)
-		default:
-			// Re-add jobs back to queue
-			for _, job := range queuedJobs {
-				q.jobs <- job
-			}
-			jobs = append(jobs, queuedJobs...)
-			return jobs
+	for _, job := range q.results {
+		if job.Status == StatusQueued {
+			jobs = append(jobs, job)
 		}
 	}
+	return jobs
 }
 
 // GetCompletedJobs returns all completed jobs
