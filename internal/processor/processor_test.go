@@ -152,7 +152,7 @@ func TestNewProcessor(t *testing.T) {
 		t.Fatal("NewProcessor returned nil")
 	}
 
-	if p.flags != flags {
+	if p.Flags != flags {
 		t.Error("Processor flags not set correctly")
 	}
 

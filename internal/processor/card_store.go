@@ -51,13 +51,13 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 		"phonetic.txt",
 	}
 
-	if !p.flags.SkipAudio {
+	if !p.Flags.SkipAudio {
 		if !p.hasRequiredAudioFiles(wordDir, &requiredFiles) {
 			return false
 		}
 	}
 
-	if !p.flags.SkipImages {
+	if !p.Flags.SkipImages {
 		if !p.hasRequiredImageFiles(wordDir, &requiredFiles) {
 			return false
 		}
@@ -79,7 +79,7 @@ func (p *Processor) isWordFullyProcessed(word string) bool {
 // Returns false as soon as a required audio file is determined to be missing.
 func (p *Processor) hasRequiredAudioFiles(wordDir string, requiredFiles *[]string) bool {
 	cardType := internal.LoadCardType(wordDir)
-	audioFormat := p.effectiveAudioFormat()
+	audioFormat := p.EffectiveAudioFormat()
 
 	if cardType.IsBgBg() {
 		return p.hasBgBgAudioFiles(wordDir, audioFormat)

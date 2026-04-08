@@ -139,13 +139,13 @@ func (p *Processor) newImageSearcher() (image.PromptAwareClient, error) {
 // imageProviderForRunMode resolves the image provider, giving precedence to
 // the CLI flag when it was explicitly set, then the config-file value.
 func (p *Processor) imageProviderForRunMode() string {
-	if p.flags.ImageAPISpecified {
-		return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
+	if p.Flags.ImageAPISpecified {
+		return strings.ToLower(strings.TrimSpace(p.Flags.ImageAPI))
 	}
-	if p.cfg.ImageProvider != "" {
-		return p.cfg.ImageProvider
+	if p.Config.ImageProvider != "" {
+		return p.Config.ImageProvider
 	}
-	return strings.ToLower(strings.TrimSpace(p.flags.ImageAPI))
+	return strings.ToLower(strings.TrimSpace(p.Flags.ImageAPI))
 }
 
 // newOpenAIImageSearcher builds an OpenAI PromptAwareClient from CLI flags and
@@ -154,24 +154,24 @@ func (p *Processor) imageProviderForRunMode() string {
 func (p *Processor) newOpenAIImageSearcher() (image.PromptAwareClient, error) {
 	openaiConfig := &image.OpenAIConfig{
 		APIKey:  cli.GetOpenAIKey(),
-		Model:   p.flags.OpenAIImageModel,
-		Size:    p.flags.OpenAIImageSize,
-		Quality: p.flags.OpenAIImageQuality,
-		Style:   p.flags.OpenAIImageStyle,
+		Model:   p.Flags.OpenAIImageModel,
+		Size:    p.Flags.OpenAIImageSize,
+		Quality: p.Flags.OpenAIImageQuality,
+		Style:   p.Flags.OpenAIImageStyle,
 	}
 
 	// Apply config-file overrides when CLI flag holds its zero/default value.
-	if p.flags.OpenAIImageModel == "dall-e-2" && p.cfg.ImageOpenAIModelSet {
-		openaiConfig.Model = p.cfg.ImageOpenAIModel
+	if p.Flags.OpenAIImageModel == "dall-e-2" && p.Config.ImageOpenAIModelSet {
+		openaiConfig.Model = p.Config.ImageOpenAIModel
 	}
-	if p.flags.OpenAIImageSize == "512x512" && p.cfg.ImageOpenAISizeSet {
-		openaiConfig.Size = p.cfg.ImageOpenAISize
+	if p.Flags.OpenAIImageSize == "512x512" && p.Config.ImageOpenAISizeSet {
+		openaiConfig.Size = p.Config.ImageOpenAISize
 	}
-	if p.flags.OpenAIImageQuality == "standard" && p.cfg.ImageOpenAIQualitySet {
-		openaiConfig.Quality = p.cfg.ImageOpenAIQuality
+	if p.Flags.OpenAIImageQuality == "standard" && p.Config.ImageOpenAIQualitySet {
+		openaiConfig.Quality = p.Config.ImageOpenAIQuality
 	}
-	if p.flags.OpenAIImageStyle == "natural" && p.cfg.ImageOpenAIStyleSet {
-		openaiConfig.Style = p.cfg.ImageOpenAIStyle
+	if p.Flags.OpenAIImageStyle == "natural" && p.Config.ImageOpenAIStyleSet {
+		openaiConfig.Style = p.Config.ImageOpenAIStyle
 	}
 
 	if openaiConfig.APIKey == "" {
@@ -187,15 +187,15 @@ func (p *Processor) newOpenAIImageSearcher() (image.PromptAwareClient, error) {
 func (p *Processor) newNanoBananaImageSearcher() (image.PromptAwareClient, error) {
 	nanoBananaConfig := &image.NanoBananaConfig{
 		APIKey:    cli.GetGoogleAPIKey(),
-		Model:     p.flags.NanoBananaModel,
-		TextModel: p.flags.NanoBananaTextModel,
+		Model:     p.Flags.NanoBananaModel,
+		TextModel: p.Flags.NanoBananaTextModel,
 	}
 
-	if !p.flags.NanoBananaModelSpecified && p.cfg.ImageNanoBananaModelSet {
-		nanoBananaConfig.Model = p.cfg.ImageNanoBananaModel
+	if !p.Flags.NanoBananaModelSpecified && p.Config.ImageNanoBananaModelSet {
+		nanoBananaConfig.Model = p.Config.ImageNanoBananaModel
 	}
-	if !p.flags.NanoBananaTextModelSpecified && p.cfg.ImageNanoBananaTextModelSet {
-		nanoBananaConfig.TextModel = p.cfg.ImageNanoBananaTextModel
+	if !p.Flags.NanoBananaTextModelSpecified && p.Config.ImageNanoBananaTextModelSet {
+		nanoBananaConfig.TextModel = p.Config.ImageNanoBananaTextModel
 	}
 
 	if nanoBananaConfig.APIKey == "" {

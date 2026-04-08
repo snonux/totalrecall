@@ -9,6 +9,8 @@ package processor
 // All methods are on *Processor rather than a separate struct to avoid an
 // extra layer of indirection while still keeping the concerns separated into
 // their own file (SRP at the file level, as recommended for Go packages).
+// Audio provider name and format resolution live on CLIConfigResolver (embedded
+// on Processor).
 
 import (
 	"context"
@@ -23,90 +25,19 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/cli"
 )
 
-// audioProviderName returns the configured audio provider name, preferring
-// the config-file value over the CLI flag so config-file settings win.
-func (p *Processor) audioProviderName() string {
-	if p.cfg.AudioProvider != "" {
-		return p.cfg.AudioProvider
-	}
-	if p != nil && p.flags != nil {
-		return strings.ToLower(strings.TrimSpace(p.flags.AudioProvider))
-	}
-	return ""
-}
-
-// effectiveAudioFormat resolves the audio format from flags and config, with
-// CLI flag taking precedence, then the config-file value, then provider-specific defaults.
-func (p *Processor) effectiveAudioFormat() string {
-	if p != nil && p.flags != nil && p.flags.AudioFormatSpecified {
-		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
-			return format
-		}
-	}
-
-	if p.cfg.AudioFormatSet && p.cfg.AudioFormat != "" {
-		return p.cfg.AudioFormat
-	}
-
-	if p != nil && p.flags != nil {
-		if format := strings.ToLower(strings.TrimSpace(p.flags.AudioFormat)); format != "" {
-			return format
-		}
-	}
-
-	if p.audioProviderName() == "gemini" {
-		return audio.DefaultProviderConfig().OutputFormat
-	}
-
-	return "mp3"
-}
-
-// geminiTTSModel returns the Gemini TTS model, preferring the config-file value over the CLI flag.
-func (p *Processor) geminiTTSModel() string {
-	if p.cfg.GeminiTTSModel != "" {
-		return p.cfg.GeminiTTSModel
-	}
-	if p != nil && p.flags != nil {
-		return strings.TrimSpace(p.flags.GeminiTTSModel)
-	}
-	return ""
-}
-
-// geminiVoice returns the Gemini voice, preferring the config-file value over the CLI flag.
-func (p *Processor) geminiVoice() string {
-	if p.cfg.GeminiVoice != "" {
-		return p.cfg.GeminiVoice
-	}
-	if p != nil && p.flags != nil {
-		return strings.TrimSpace(p.flags.GeminiVoice)
-	}
-	return ""
-}
-
-// openAIVoice returns the OpenAI voice, preferring the config-file value over the CLI flag.
-func (p *Processor) openAIVoice() string {
-	if p.cfg.OpenAIVoice != "" {
-		return p.cfg.OpenAIVoice
-	}
-	if p != nil && p.flags != nil {
-		return strings.TrimSpace(p.flags.OpenAIVoice)
-	}
-	return ""
-}
-
 // audioVoicesForProvider returns all available voices for the configured provider
 // without requiring a Provider instance (uses the package-level VoicesFor helper).
 func (p *Processor) audioVoicesForProvider() []string {
-	return audio.VoicesFor(p.audioProviderName())
+	return audio.VoicesFor(p.AudioProviderName())
 }
 
 // audioVoiceForProvider selects a single voice for the configured provider.
 // If a specific voice is configured, it is returned; otherwise a random voice
 // from the provider's list is chosen using the injected randomIntn function.
 func (p *Processor) audioVoiceForProvider() string {
-	switch p.audioProviderName() {
+	switch p.AudioProviderName() {
 	case "gemini":
-		if voice := p.geminiVoice(); voice != "" {
+		if voice := p.GeminiVoice(); voice != "" {
 			return voice
 		}
 		voices := p.audioVoicesForProvider()
@@ -115,7 +46,7 @@ func (p *Processor) audioVoiceForProvider() string {
 		}
 		return voices[rand.Intn(len(voices))]
 	default:
-		if voice := p.openAIVoice(); voice != "" {
+		if voice := p.OpenAIVoice(); voice != "" {
 			return voice
 		}
 		voices := p.audioVoicesForProvider()
@@ -131,13 +62,13 @@ func (p *Processor) audioVoiceForProvider() string {
 func (p *Processor) logSelectedAudioVoice(provider, voice string) {
 	switch provider {
 	case "gemini":
-		if p.geminiVoice() != "" {
+		if p.GeminiVoice() != "" {
 			fmt.Printf("  Using specified Gemini voice: %s\n", voice)
 		} else {
 			fmt.Printf("  Using random Gemini voice: %s\n", voice)
 		}
 	default:
-		if p.openAIVoice() != "" {
+		if p.OpenAIVoice() != "" {
 			fmt.Printf("  Using specified voice: %s\n", voice)
 		} else {
 			fmt.Printf("  Using random voice: %s\n", voice)
@@ -150,9 +81,9 @@ func (p *Processor) logSelectedAudioVoice(provider, voice string) {
 // voice is selected (with Gemini fallback retry on empty audio).
 // ctx is threaded down to provider.GenerateAudio so the caller's deadline applies.
 func (p *Processor) generateAudio(ctx context.Context, word string) error {
-	provider := p.audioProviderName()
+	provider := p.AudioProviderName()
 
-	if p.flags.AllVoices {
+	if p.Flags.AllVoices {
 		return p.generateAudioForAllVoices(ctx, word)
 	}
 
@@ -160,7 +91,7 @@ func (p *Processor) generateAudio(ctx context.Context, word string) error {
 	p.logSelectedAudioVoice(provider, voice)
 
 	// For Gemini with no explicit voice, use automatic fallback through all voices.
-	if provider == "gemini" && p.geminiVoice() == "" {
+	if provider == "gemini" && p.GeminiVoice() == "" {
 		_, err := audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
 			if candidate != voice {
 				fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
@@ -192,7 +123,7 @@ func (p *Processor) generateAudioForAllVoices(ctx context.Context, word string) 
 // Both audio files are saved to the same directory as the front-word card.
 // ctx is threaded down to provider.GenerateAudio so the caller's deadline applies.
 func (p *Processor) generateAudioBgBg(ctx context.Context, front, back string) error {
-	provider := p.audioProviderName()
+	provider := p.AudioProviderName()
 
 	voice := p.audioVoiceForProvider()
 	p.logSelectedAudioVoice(provider, voice)
@@ -216,7 +147,7 @@ func (p *Processor) generateAudioBgBg(ctx context.Context, front, back string) e
 	}
 
 	// Use automatic fallback through all Gemini voices when no voice is pinned.
-	if provider == "gemini" && p.geminiVoice() == "" {
+	if provider == "gemini" && p.GeminiVoice() == "" {
 		_, err := audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
 			if candidate != voice {
 				fmt.Printf("  Retrying Gemini audio with voice: %s\n", candidate)
@@ -273,29 +204,29 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, 
 // buildAudioProviderConfig assembles an audio.Config from CLI flags and the
 // resolved processor Config. The voice argument is the already-resolved voice string for this call.
 func (p *Processor) buildAudioProviderConfig(voice string) *audio.Config {
-	audioProvider := p.audioProviderName()
-	audioFormat := p.effectiveAudioFormat()
+	audioProvider := p.AudioProviderName()
+	audioFormat := p.EffectiveAudioFormat()
 
 	// Generate random speed between 0.90 and 1.00 if not explicitly set.
-	speed := p.flags.OpenAISpeed
-	if audioProvider == "openai" && p.flags.OpenAISpeed == 0.9 && !p.cfg.OpenAISpeedSet {
+	speed := p.Flags.OpenAISpeed
+	if audioProvider == "openai" && p.Flags.OpenAISpeed == 0.9 && !p.Config.OpenAISpeedSet {
 		speed = 0.90 + rand.Float64()*0.10
 	}
 
 	providerConfig := audio.DefaultProviderConfig()
 	providerConfig.Provider = audioProvider
-	providerConfig.OutputDir = p.flags.OutputDir
+	providerConfig.OutputDir = p.Flags.OutputDir
 	providerConfig.OpenAIKey = cli.GetOpenAIKey()
 	providerConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
 
 	switch audioProvider {
 	case "gemini":
 		providerConfig.OutputFormat = audioFormat
-		providerConfig.GeminiTTSModel = p.geminiTTSModel()
+		providerConfig.GeminiTTSModel = p.GeminiTTSModel()
 		if voice != "" {
 			providerConfig.GeminiVoice = voice
 		} else {
-			providerConfig.GeminiVoice = p.geminiVoice()
+			providerConfig.GeminiVoice = p.GeminiVoice()
 		}
 		providerConfig.GeminiSpeed = 1.0
 	default:
@@ -309,20 +240,20 @@ func (p *Processor) buildAudioProviderConfig(voice string) *audio.Config {
 // applying config-file overrides where the CLI flag still holds its default value.
 func (p *Processor) applyOpenAIAudioConfig(providerConfig *audio.Config, voice string, speed float64, audioFormat string) {
 	providerConfig.OutputFormat = audioFormat
-	providerConfig.OpenAIModel = p.flags.OpenAIModel
+	providerConfig.OpenAIModel = p.Flags.OpenAIModel
 	providerConfig.OpenAIVoice = voice
 	providerConfig.OpenAISpeed = speed
-	providerConfig.OpenAIInstruction = p.flags.OpenAIInstruction
+	providerConfig.OpenAIInstruction = p.Flags.OpenAIInstruction
 
 	// Override with config-file values when the CLI flag is still at its default.
-	if p.flags.OpenAIModel == "gpt-4o-mini-tts" && p.cfg.OpenAIModelSet {
-		providerConfig.OpenAIModel = p.cfg.OpenAIModel
+	if p.Flags.OpenAIModel == "gpt-4o-mini-tts" && p.Config.OpenAIModelSet {
+		providerConfig.OpenAIModel = p.Config.OpenAIModel
 	}
-	if p.flags.OpenAISpeed == 0.9 && p.cfg.OpenAISpeedSet {
-		providerConfig.OpenAISpeed = p.cfg.OpenAISpeed
+	if p.Flags.OpenAISpeed == 0.9 && p.Config.OpenAISpeedSet {
+		providerConfig.OpenAISpeed = p.Config.OpenAISpeed
 	}
-	if p.flags.OpenAIInstruction == "" && p.cfg.OpenAIInstructionSet {
-		providerConfig.OpenAIInstruction = p.cfg.OpenAIInstruction
+	if p.Flags.OpenAIInstruction == "" && p.Config.OpenAIInstructionSet {
+		providerConfig.OpenAIInstruction = p.Config.OpenAIInstruction
 	}
 }
 
@@ -330,7 +261,7 @@ func (p *Processor) applyOpenAIAudioConfig(providerConfig *audio.Config, voice s
 // When AllVoices is set and filenameBase is "audio", the voice name is embedded
 // in the filename to keep each voice's file distinct.
 func (p *Processor) buildAudioOutputPath(wordDir, filenameBase, voice, outputFormat string) string {
-	if p.flags.AllVoices && filenameBase == "audio" {
+	if p.Flags.AllVoices && filenameBase == "audio" {
 		return filepath.Join(wordDir, fmt.Sprintf("%s_%s.%s", filenameBase, voice, outputFormat))
 	}
 	return filepath.Join(wordDir, fmt.Sprintf("%s.%s", filenameBase, outputFormat))
