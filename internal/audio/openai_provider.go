@@ -41,7 +41,7 @@ func NewOpenAIProvider(config OpenAIAudioConfig, outputFormat string) (Provider,
 }
 
 // GenerateAudio generates audio using OpenAI TTS
-func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputFile string) error {
+func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputFile string) (err error) {
 	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.OpenAIHTTPTimeout)
 	defer cancel()
 
@@ -123,7 +123,9 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer func() {
-		_ = out.Close()
+		if closeErr := out.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close output file: %w", closeErr)
+		}
 	}()
 
 	// Copy the audio data
