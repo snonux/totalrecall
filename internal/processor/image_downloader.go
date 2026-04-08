@@ -16,6 +16,7 @@ import (
 
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/image"
+	"codeberg.org/snonux/totalrecall/internal/registry"
 )
 
 // downloadImagesWithTranslation downloads images for a word into its card
@@ -113,19 +114,26 @@ func (p *Processor) saveImagePrompt(wordDir string, searcher image.PromptAwareCl
 	return nil
 }
 
+// processorImageClientFactories maps run-mode image provider name to builder.
+// Register new backends here instead of extending a switch in newImageSearcher.
+var processorImageClientFactories = func() *registry.Registry[string, func(*Processor) (image.PromptAwareClient, error)] {
+	r := registry.New[string, func(*Processor) (image.PromptAwareClient, error)]()
+	r.Register(image.ImageProviderOpenAI, (*Processor).newOpenAIImageSearcher)
+	r.Register(image.ImageProviderNanoBanana, (*Processor).newNanoBananaImageSearcher)
+	return r
+}()
+
 // newImageSearcher creates the appropriate PromptAwareClient based on the
 // configured image provider (openai or nanobanana). Returning PromptAwareClient
 // instead of ImageClient means callers can call SetPromptCallback directly
 // without a type-assertion.
 func (p *Processor) newImageSearcher() (image.PromptAwareClient, error) {
-	switch p.imageProviderForRunMode() {
-	case "openai":
-		return p.newOpenAIImageSearcher()
-	case "nanobanana":
-		return p.newNanoBananaImageSearcher()
-	default:
+	key := strings.ToLower(strings.TrimSpace(p.imageProviderForRunMode()))
+	fn, ok := processorImageClientFactories.Get(key)
+	if !ok {
 		return nil, fmt.Errorf("unknown image provider: %s", p.imageProviderForRunMode())
 	}
+	return fn(p)
 }
 
 // imageProviderForRunMode resolves the image provider, giving precedence to

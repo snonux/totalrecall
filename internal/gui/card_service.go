@@ -9,6 +9,7 @@ import (
 
 	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/anki"
+	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/store"
 )
 
@@ -249,7 +250,7 @@ func (cs *CardService) loadImageFile(wordDir string, cf *CardFiles) {
 
 	// Try to load the image prompt from the attribution file as a fallback
 	// when the image provider is AI-based (OpenAI DALL-E or Nano Banana).
-	if cs.config.ImageProvider == imageProviderOpenAI || cs.config.ImageProvider == imageProviderNanoBanana {
+	if cs.config.ImageProvider == image.ImageProviderOpenAI || cs.config.ImageProvider == image.ImageProviderNanoBanana {
 		cs.loadPromptFromAttribution(cf)
 	}
 }

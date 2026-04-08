@@ -146,11 +146,6 @@ type Config struct {
 	Translator      *translation.Translator
 }
 
-const (
-	imageProviderOpenAI     = "openai"
-	imageProviderNanoBanana = "nanobanana"
-)
-
 // DefaultConfig returns default GUI configuration
 func DefaultConfig() *Config {
 	homeDir, err := appconfig.HomeDir()
@@ -168,7 +163,7 @@ func DefaultConfig() *Config {
 		NanoBananaModel:     image.DefaultNanoBananaModel,
 		NanoBananaTextModel: image.DefaultNanoBananaTextModel,
 		GeminiTTSModel:      audioDefaults.GeminiTTSModel,
-		ImageProvider:       imageProviderNanoBanana,
+		ImageProvider:       image.ImageProviderNanoBanana,
 		TranslationProvider: translation.ProviderGemini,
 		PhoneticProvider:    phonetic.ProviderGemini,
 		AutoPlay:            true, // Auto-play enabled by default

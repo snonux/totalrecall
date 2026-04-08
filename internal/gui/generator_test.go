@@ -34,7 +34,7 @@ func (f *fakePromptAwareImageClient) Search(_ context.Context, opts *image.Searc
 			Height:       1,
 			Description:  "fake result",
 			Attribution:  "fake attribution",
-			Source:       imageProviderNanoBanana,
+			Source:       image.ImageProviderNanoBanana,
 		},
 	}, nil
 }
@@ -48,7 +48,7 @@ func (f *fakePromptAwareImageClient) GetAttribution(*image.SearchResult) string 
 }
 
 func (f *fakePromptAwareImageClient) Name() string {
-	return imageProviderNanoBanana
+	return image.ImageProviderNanoBanana
 }
 
 func (f *fakePromptAwareImageClient) SetPromptCallback(callback func(prompt string)) {
@@ -99,7 +99,7 @@ func TestGenerateImagesWithPromptUsesNanoBananaProvider(t *testing.T) {
 	tempDir := t.TempDir()
 	app := &Application{
 		config: &Config{
-			ImageProvider:       imageProviderNanoBanana,
+			ImageProvider:       image.ImageProviderNanoBanana,
 			GoogleAPIKey:        "google-key",
 			NanoBananaModel:     "custom-image-model",
 			NanoBananaTextModel: "custom-text-model",

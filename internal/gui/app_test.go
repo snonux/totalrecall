@@ -19,8 +19,8 @@ func TestDefaultConfigUsesGeminiLanguageProviders(t *testing.T) {
 	if config.PhoneticProvider != phonetic.ProviderGemini {
 		t.Fatalf("DefaultConfig() phonetic provider = %q, want %q", config.PhoneticProvider, phonetic.ProviderGemini)
 	}
-	if config.ImageProvider != imageProviderNanoBanana {
-		t.Fatalf("DefaultConfig() image provider = %q, want %q", config.ImageProvider, imageProviderNanoBanana)
+	if config.ImageProvider != image.ImageProviderNanoBanana {
+		t.Fatalf("DefaultConfig() image provider = %q, want %q", config.ImageProvider, image.ImageProviderNanoBanana)
 	}
 	if config.AudioProvider != audioDefaults.Provider {
 		t.Fatalf("DefaultConfig() audio provider = %q, want %q", config.AudioProvider, audioDefaults.Provider)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"codeberg.org/snonux/totalrecall/internal/registry"
 )
 
 // Provider defines the interface for text-to-speech providers.
@@ -137,6 +139,29 @@ func DefaultProviderConfig() *Config {
 // (processor, gui). The production default is audio.NewProvider itself.
 type ProviderFactory func(*Config) (Provider, error)
 
+// defaultAudioProviders maps provider name to constructor. New providers are
+// registered here so NewProvider does not grow a new switch branch each time.
+var defaultAudioProviders = func() *registry.Registry[string, func(*Config) (Provider, error)] {
+	r := registry.New[string, func(*Config) (Provider, error)]()
+	r.Register("openai", newOpenAIProviderFromConfig)
+	r.Register("gemini", newGeminiProviderFromConfig)
+	return r
+}()
+
+func newOpenAIProviderFromConfig(config *Config) (Provider, error) {
+	if config.OpenAIKey == "" {
+		return nil, fmt.Errorf("OpenAI API key is required")
+	}
+	return NewOpenAIProvider(openAIAudioConfigFrom(config), config.OutputFormat)
+}
+
+func newGeminiProviderFromConfig(config *Config) (Provider, error) {
+	if config.GoogleAPIKey == "" {
+		return nil, fmt.Errorf("google API key is required")
+	}
+	return NewGeminiProvider(geminiAudioConfigFrom(config), config.OutputFormat)
+}
+
 // NewProvider creates the appropriate audio provider based on configuration.
 // It extracts provider-specific sub-configs so each implementation only
 // receives the fields it needs (ISP).
@@ -145,18 +170,10 @@ func NewProvider(config *Config) (Provider, error) {
 		config = DefaultProviderConfig()
 	}
 
-	switch config.Provider {
-	case "openai":
-		if config.OpenAIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key is required")
-		}
-		return NewOpenAIProvider(openAIAudioConfigFrom(config), config.OutputFormat)
-	case "gemini":
-		if config.GoogleAPIKey == "" {
-			return nil, fmt.Errorf("google API key is required")
-		}
-		return NewGeminiProvider(geminiAudioConfigFrom(config), config.OutputFormat)
-	default:
+	name := strings.ToLower(strings.TrimSpace(config.Provider))
+	fn, ok := defaultAudioProviders.Get(name)
+	if !ok {
 		return nil, fmt.Errorf("unknown audio provider: %s", config.Provider)
 	}
+	return fn(config)
 }

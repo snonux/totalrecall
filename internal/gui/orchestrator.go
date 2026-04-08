@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,6 +13,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
+	"codeberg.org/snonux/totalrecall/internal/registry"
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
@@ -410,48 +412,61 @@ func (o *GenerationOrchestrator) imagePromptCallback(cardDir, word string) func(
 	}
 }
 
+// guiImageClientFactories maps provider name to image client builder. Add new
+// providers by registering here instead of extending a switch in newImageSearcher.
+var guiImageClientFactories = func() *registry.Registry[string, func(*GenerationOrchestrator) (image.PromptAwareClient, error)] {
+	r := registry.New[string, func(*GenerationOrchestrator) (image.PromptAwareClient, error)]()
+	r.Register(image.ImageProviderOpenAI, (*GenerationOrchestrator).buildOpenAIImageClient)
+	r.Register(image.ImageProviderNanoBanana, (*GenerationOrchestrator).buildNanoBananaImageClient)
+	return r
+}()
+
+func (o *GenerationOrchestrator) buildOpenAIImageClient() (image.PromptAwareClient, error) {
+	if o.config.OpenAIKey == "" {
+		return nil, fmt.Errorf("OpenAI API key is required for image generation")
+	}
+
+	openaiConfig := &image.OpenAIConfig{
+		APIKey:  o.config.OpenAIKey,
+		Model:   "dall-e-2", // DALL-E 2 supports 512×512
+		Size:    "512x512",
+		Quality: "standard",
+		Style:   "natural",
+	}
+
+	return o.imageFactories.NewOpenAIClient(openaiConfig), nil
+}
+
+func (o *GenerationOrchestrator) buildNanoBananaImageClient() (image.PromptAwareClient, error) {
+	cfg := o.config
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+	if cfg.GoogleAPIKey == "" {
+		return nil, fmt.Errorf("google API key is required for image generation")
+	}
+
+	nanoBananaConfig := &image.NanoBananaConfig{
+		APIKey:    cfg.GoogleAPIKey,
+		Model:     cfg.NanoBananaModel,
+		TextModel: cfg.NanoBananaTextModel,
+	}
+
+	return o.imageFactories.NewNanoBananaClient(nanoBananaConfig), nil
+}
+
 // newImageSearcher constructs the appropriate image client based on the
 // configured image provider. Returns image.PromptAwareClient so callers can
 // call SetPromptCallback directly without a type-assertion. The factory
 // functions are sourced from imageFactories (the shared image.ClientFactories
 // value) to avoid duplicating the factory signatures in this package.
 func (o *GenerationOrchestrator) newImageSearcher() (image.PromptAwareClient, error) {
-	switch o.config.ImageProvider {
-	case imageProviderOpenAI:
-		if o.config.OpenAIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key is required for image generation")
-		}
-
-		openaiConfig := &image.OpenAIConfig{
-			APIKey:  o.config.OpenAIKey,
-			Model:   "dall-e-2", // DALL-E 2 supports 512×512
-			Size:    "512x512",
-			Quality: "standard",
-			Style:   "natural",
-		}
-
-		return o.imageFactories.NewOpenAIClient(openaiConfig), nil
-
-	case imageProviderNanoBanana:
-		cfg := o.config
-		if cfg == nil {
-			cfg = DefaultConfig()
-		}
-		if cfg.GoogleAPIKey == "" {
-			return nil, fmt.Errorf("google API key is required for image generation")
-		}
-
-		nanoBananaConfig := &image.NanoBananaConfig{
-			APIKey:    cfg.GoogleAPIKey,
-			Model:     cfg.NanoBananaModel,
-			TextModel: cfg.NanoBananaTextModel,
-		}
-
-		return o.imageFactories.NewNanoBananaClient(nanoBananaConfig), nil
-
-	default:
+	key := strings.ToLower(strings.TrimSpace(o.config.ImageProvider))
+	fn, ok := guiImageClientFactories.Get(key)
+	if !ok {
 		return nil, fmt.Errorf("unknown image provider: %s", o.config.ImageProvider)
 	}
+	return fn(o)
 }
 
 // --- Phonetics ---

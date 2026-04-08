@@ -77,6 +77,14 @@ type ImageClient interface {
 	AttributionProvider
 }
 
+// Image-generation provider names (AI backends). Use these keys when
+// registering GUI/processor image client factories so string literals are not
+// scattered across packages.
+const (
+	ImageProviderOpenAI     = "openai"
+	ImageProviderNanoBanana = "nanobanana"
+)
+
 // PromptAwareClient extends ImageClient with a callback for receiving the
 // generated image prompt before the actual image download begins. Both
 // OpenAIClient and NanoBananaClient implement this interface. It is the
