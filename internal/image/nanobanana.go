@@ -17,15 +17,16 @@ import (
 
 	"google.golang.org/genai"
 
+	"codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
 	// DefaultNanoBananaModel is the Gemini image model used for Nano Banana generation.
-	DefaultNanoBananaModel = "gemini-3.1-flash-image-preview"
+	DefaultNanoBananaModel = config.DefaultNanoBananaModel
 
 	// DefaultNanoBananaTextModel is the Gemini text model used for translation and scene generation.
-	DefaultNanoBananaTextModel = "gemini-2.5-flash"
+	DefaultNanoBananaTextModel = config.DefaultNanoBananaTextModel
 
 	nanoBananaAspectRatio = "4:3"
 	nanoBananaDataPrefix  = "data:image/png;base64,"

@@ -1,10 +1,8 @@
 package cli
 
-import "codeberg.org/snonux/totalrecall/internal/audio"
-
-const (
-	defaultNanoBananaModel     = "gemini-3.1-flash-image-preview"
-	defaultNanoBananaTextModel = "gemini-2.5-flash"
+import (
+	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/config"
 )
 
 // Flags holds all command-line flag values
@@ -84,7 +82,7 @@ func NewFlags() *Flags {
 		OpenAIImageQuality:  "standard",
 		OpenAIImageStyle:    "natural",
 		GeminiTTSModel:      defaults.GeminiTTSModel,
-		NanoBananaModel:     defaultNanoBananaModel,
-		NanoBananaTextModel: defaultNanoBananaTextModel,
+		NanoBananaModel:     config.DefaultNanoBananaModel,
+		NanoBananaTextModel: config.DefaultNanoBananaTextModel,
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/config"
 )
 
 func TestCreateRootCommand(t *testing.T) {
@@ -506,10 +507,10 @@ func TestMarkExplicitFlagValues(t *testing.T) {
 	if err := cmd.Flags().Set("format", "mp3"); err != nil {
 		t.Fatalf("Failed to set format flag: %v", err)
 	}
-	if err := cmd.Flags().Set("nanobanana-model", defaultNanoBananaModel); err != nil {
+	if err := cmd.Flags().Set("nanobanana-model", config.DefaultNanoBananaModel); err != nil {
 		t.Fatalf("Failed to set nanobanana-model flag: %v", err)
 	}
-	if err := cmd.Flags().Set("nanobanana-text-model", defaultNanoBananaTextModel); err != nil {
+	if err := cmd.Flags().Set("nanobanana-text-model", config.DefaultNanoBananaTextModel); err != nil {
 		t.Fatalf("Failed to set nanobanana-text-model flag: %v", err)
 	}
 

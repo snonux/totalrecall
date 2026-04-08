@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/registry"
 )
 
@@ -117,19 +118,19 @@ func geminiAudioConfigFrom(c *Config) GeminiAudioConfig {
 	}
 }
 
-// DefaultConfig returns default configuration
+// DefaultProviderConfig returns default configuration (shared literals live in
+// internal/config/defaults.go).
 func DefaultProviderConfig() *Config {
 	return &Config{
-		Provider:     "gemini",
-		OutputDir:    "./",
-		OutputFormat: "mp3",
-		OpenAIModel:  "gpt-4o-mini-tts", // New model with voice instructions support
-		OpenAIVoice:  "alloy",
-		OpenAISpeed:  1.0,
-		// OpenAISpeed:       0.98, // Default speed for clarity
-		OpenAIInstruction: "You are speaking Bulgarian language (български език). Pronounce the Bulgarian text with authentic Bulgarian phonetics, not Russian. Speak slowly and clearly for language learners.",
-		GeminiTTSModel:    "gemini-2.5-flash-preview-tts",
-		GeminiSpeed:       1.0,
+		Provider:          config.ProviderGemini,
+		OutputDir:         "./",
+		OutputFormat:      config.DefaultAudioOutputFormat,
+		OpenAIModel:       config.DefaultOpenAIAudioModel,
+		OpenAIVoice:       config.DefaultOpenAIVoice,
+		OpenAISpeed:       config.DefaultOpenAIAudioSpeed,
+		OpenAIInstruction: config.DefaultOpenAIAudioInstruction,
+		GeminiTTSModel:    config.DefaultGeminiTTSModel,
+		GeminiSpeed:       config.DefaultGeminiAudioSpeed,
 	}
 }
 

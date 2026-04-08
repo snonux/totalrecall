@@ -175,8 +175,8 @@ func DefaultConfig() *Config {
 		OutputDir:           outputDir,
 		AudioFormat:         audioDefaults.OutputFormat,
 		AudioProvider:       audioDefaults.Provider,
-		NanoBananaModel:     image.DefaultNanoBananaModel,
-		NanoBananaTextModel: image.DefaultNanoBananaTextModel,
+		NanoBananaModel:     appconfig.DefaultNanoBananaModel,
+		NanoBananaTextModel: appconfig.DefaultNanoBananaTextModel,
 		GeminiTTSModel:      audioDefaults.GeminiTTSModel,
 		ImageProvider:       image.ImageProviderNanoBanana,
 		TranslationProvider: translation.ProviderGemini,
@@ -249,7 +249,7 @@ func applyConfigDefaults(config *Config) *Config {
 		if strings.EqualFold(config.AudioProvider, "gemini") {
 			config.AudioFormat = defaults.AudioFormat
 		} else {
-			config.AudioFormat = "mp3"
+			config.AudioFormat = appconfig.DefaultAudioOutputFormat
 		}
 	}
 	if config.ImageProvider == "" {
@@ -344,7 +344,7 @@ func audioConfigForApp(config *Config) *audio.Config {
 		if provider == "gemini" {
 			outputFormat = defaults.OutputFormat
 		} else {
-			outputFormat = "mp3"
+			outputFormat = appconfig.DefaultAudioOutputFormat
 		}
 	}
 
