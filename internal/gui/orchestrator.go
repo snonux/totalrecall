@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -22,10 +21,15 @@ import (
 // image.ClientFactories groups the two image-factory functions so the field
 // definitions are not duplicated between this type and processor.Processor.
 type GenerationOrchestrator struct {
-	config      *Config
-	audioConfig *audio.Config
-	phonetics   *phonetic.Fetcher
-	translator  *translation.Translator
+	config *Config
+
+	// audioResolver derives effective TTS settings from GUI + audio.Config.
+	audioResolver *AudioConfigResolver
+	// voiceSelector picks voice and speed per generation run.
+	voiceSelector *VoiceSelector
+
+	phonetics  *phonetic.Fetcher
+	translator *translation.Translator
 
 	// imageFactories groups the two image-provider construction functions.
 	// Production code uses image.DefaultClientFactories(); tests replace fields.
@@ -34,6 +38,8 @@ type GenerationOrchestrator struct {
 	// newAudioProvider constructs an audio.Provider from a Config.
 	// Production code uses audio.NewProvider; tests replace it with a fake.
 	newAudioProvider audio.ProviderFactory
+
+	parallelRunner ParallelRunner
 }
 
 // NewGenerationOrchestrator constructs an orchestrator wired to the given app
@@ -48,9 +54,11 @@ func NewGenerationOrchestrator(
 	imageFactories image.ClientFactories,
 	newAudio audio.ProviderFactory,
 ) *GenerationOrchestrator {
+	resolver := NewAudioConfigResolver(config, audioCfg)
 	return &GenerationOrchestrator{
 		config:           config,
-		audioConfig:      audioCfg,
+		audioResolver:    resolver,
+		voiceSelector:    NewVoiceSelector(resolver),
 		phonetics:        phonetics,
 		translator:       translator,
 		imageFactories:   imageFactories,
@@ -79,98 +87,21 @@ func (o *GenerationOrchestrator) TranslateEnglishToBulgarian(word string) (strin
 // --- Audio provider helpers ---
 
 // audioProviderName returns the lowercase provider name from config, defaulting
-// to the shared audio default when none is set.
+// to the shared audio default when none is set. Delegates to AudioConfigResolver
+// so Application and tests keep a stable method on GenerationOrchestrator.
 func (o *GenerationOrchestrator) audioProviderName() string {
-	if o.audioConfig != nil {
-		if provider := strings.ToLower(strings.TrimSpace(o.audioConfig.Provider)); provider != "" {
-			return provider
-		}
-	}
-	return audio.DefaultProviderConfig().Provider
-}
-
-// audioVoices returns the configured provider's voice list.
-func (o *GenerationOrchestrator) audioVoices() []string {
-	return audio.VoicesFor(o.audioProviderName())
-}
-
-// audioVoiceAndSpeed selects the voice and speed for a generation run.
-// For Gemini with a pinned voice the configured voice is used; otherwise a
-// random voice is selected from the available list.
-func (o *GenerationOrchestrator) audioVoiceAndSpeed() (string, float64) {
-	switch o.audioProviderName() {
-	case "gemini":
-		if o.audioConfig != nil {
-			if voice := strings.TrimSpace(o.audioConfig.GeminiVoice); voice != "" {
-				return voice, o.geminiSpeed()
-			}
-		}
-		return randomVoice(o.audioVoices()), o.geminiSpeed()
-	default:
-		return randomVoice(o.audioVoices()), randomOpenAISpeed()
-	}
-}
-
-// geminiSpeed returns the configured Gemini TTS speed or the default.
-func (o *GenerationOrchestrator) geminiSpeed() float64 {
-	if o.audioConfig != nil && o.audioConfig.GeminiSpeed > 0 {
-		return o.audioConfig.GeminiSpeed
-	}
-	return audio.DefaultProviderConfig().GeminiSpeed
-}
-
-// geminiVoicePinned returns true when a specific Gemini voice is locked in
-// config, meaning fallback voice selection should be skipped.
-func (o *GenerationOrchestrator) geminiVoicePinned() bool {
-	return o.audioConfig != nil && strings.TrimSpace(o.audioConfig.GeminiVoice) != ""
+	return o.audioResolver.ProviderName()
 }
 
 // audioOutputFormat resolves the effective output format (e.g. "mp3" or "wav").
 func (o *GenerationOrchestrator) audioOutputFormat() string {
-	if o.config != nil && strings.TrimSpace(o.config.AudioFormat) != "" {
-		return o.config.AudioFormat
-	}
-
-	if o.audioConfig != nil && strings.TrimSpace(o.audioConfig.OutputFormat) != "" {
-		return o.audioConfig.OutputFormat
-	}
-
-	return audio.DefaultProviderConfig().OutputFormat
-}
-
-// audioConfigForGeneration builds an audio.Config for a single generation call,
-// overriding the voice and speed with the values selected for this run.
-func (o *GenerationOrchestrator) audioConfigForGeneration(voice string, speed float64) audio.Config {
-	audioConfig := audio.Config{}
-	if o.audioConfig != nil {
-		audioConfig = *o.audioConfig
-	}
-
-	audioConfig.Provider = o.audioProviderName()
-	if o.config != nil {
-		audioConfig.OutputDir = o.config.OutputDir
-	}
-	audioConfig.OutputFormat = o.audioOutputFormat()
-
-	switch audioConfig.Provider {
-	case "gemini":
-		audioConfig.GeminiVoice = voice
-		audioConfig.GeminiSpeed = speed
-		if strings.TrimSpace(audioConfig.GeminiTTSModel) == "" {
-			audioConfig.GeminiTTSModel = audio.DefaultProviderConfig().GeminiTTSModel
-		}
-	default:
-		audioConfig.OpenAIVoice = voice
-		audioConfig.OpenAISpeed = speed
-	}
-
-	return audioConfig
+	return o.audioResolver.OutputFormat()
 }
 
 // generateAudioFile generates a single audio file for text using the given
 // voice and speed. It is the lowest-level generation call.
 func (o *GenerationOrchestrator) generateAudioFile(ctx context.Context, text, outputFile, voice string, speed float64) error {
-	audioConfig := o.audioConfigForGeneration(voice, speed)
+	audioConfig := o.audioResolver.ConfigForGeneration(voice, speed)
 
 	provider, err := o.newAudioProvider(&audioConfig)
 	if err != nil {
@@ -196,7 +127,7 @@ func (o *GenerationOrchestrator) GenerateAudio(ctx context.Context, word, cardDi
 		isRegeneration = true
 	}
 
-	voice, speed := o.audioVoiceAndSpeed()
+	voice, speed := o.voiceSelector.VoiceAndSpeed()
 
 	if isRegeneration {
 		fmt.Printf("Regenerating audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
@@ -209,7 +140,7 @@ func (o *GenerationOrchestrator) GenerateAudio(ctx context.Context, word, cardDi
 		return "", err
 	}
 
-	audioCfg := o.audioConfigForGeneration(finalVoice, speed)
+	audioCfg := o.audioResolver.ConfigForGeneration(finalVoice, speed)
 
 	if err := o.saveAudioAttribution(word, audioFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
@@ -228,7 +159,7 @@ func (o *GenerationOrchestrator) GenerateAudioFront(ctx context.Context, word, c
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := o.audioVoiceAndSpeed()
+	voice, speed := o.voiceSelector.VoiceAndSpeed()
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", word, voice, speed)
 	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", o.audioOutputFormat()))
 
@@ -237,7 +168,7 @@ func (o *GenerationOrchestrator) GenerateAudioFront(ctx context.Context, word, c
 		return "", fmt.Errorf("failed to generate front audio: %w", err)
 	}
 
-	audioCfg := o.audioConfigForGeneration(finalVoice, speed)
+	audioCfg := o.audioResolver.ConfigForGeneration(finalVoice, speed)
 
 	if err := o.saveAudioAttribution(word, frontFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
@@ -258,7 +189,7 @@ func (o *GenerationOrchestrator) GenerateAudioBack(ctx context.Context, text, ca
 		return "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := o.audioVoiceAndSpeed()
+	voice, speed := o.voiceSelector.VoiceAndSpeed()
 	fmt.Printf("Generating back audio for '%s' with voice: %s, speed: %.2f\n", text, voice, speed)
 	backFile := filepath.Join(cardDir, fmt.Sprintf("audio_back.%s", o.audioOutputFormat()))
 
@@ -267,7 +198,7 @@ func (o *GenerationOrchestrator) GenerateAudioBack(ctx context.Context, text, ca
 		return "", fmt.Errorf("failed to generate back audio: %w", err)
 	}
 
-	audioCfg := o.audioConfigForGeneration(finalVoice, speed)
+	audioCfg := o.audioResolver.ConfigForGeneration(finalVoice, speed)
 
 	if err := o.saveAudioAttribution(text, backFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
@@ -289,7 +220,7 @@ func (o *GenerationOrchestrator) GenerateAudioBgBg(ctx context.Context, front, b
 		return "", "", fmt.Errorf("card directory not provided")
 	}
 
-	voice, speed := o.audioVoiceAndSpeed()
+	voice, speed := o.voiceSelector.VoiceAndSpeed()
 
 	fmt.Printf("Generating front audio for '%s' with voice: %s, speed: %.2f\n", front, voice, speed)
 	frontFile := filepath.Join(cardDir, fmt.Sprintf("audio_front.%s", o.audioOutputFormat()))
@@ -312,7 +243,7 @@ func (o *GenerationOrchestrator) GenerateAudioBgBg(ctx context.Context, front, b
 		return "", "", err
 	}
 
-	audioCfg := o.audioConfigForGeneration(finalVoice, speed)
+	audioCfg := o.audioResolver.ConfigForGeneration(finalVoice, speed)
 
 	if err := o.saveAudioAttribution(front, frontFile, finalVoice, speed); err != nil {
 		fmt.Printf("Warning: Failed to save audio attribution: %v\n", err)
@@ -331,7 +262,7 @@ func (o *GenerationOrchestrator) GenerateAudioBgBg(ctx context.Context, front, b
 // runAudioWithFallbacks runs a single-file audio generation with Gemini voice
 // fallback support. Returns the voice that was ultimately used.
 func (o *GenerationOrchestrator) runAudioWithFallbacks(ctx context.Context, text, outputFile, voice string, speed float64) (string, error) {
-	if o.audioProviderName() == "gemini" && !o.geminiVoicePinned() {
+	if o.audioResolver.ProviderName() == "gemini" && !o.voiceSelector.GeminiVoicePinned() {
 		return audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
 			if candidate != voice {
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
@@ -346,7 +277,7 @@ func (o *GenerationOrchestrator) runAudioWithFallbacks(ctx context.Context, text
 // runPairWithFallbacks runs a pair-generation function with Gemini voice
 // fallback support. Returns the voice that was ultimately used.
 func (o *GenerationOrchestrator) runPairWithFallbacks(voice string, runPair func(string) error) (string, error) {
-	if o.audioProviderName() == "gemini" && !o.geminiVoicePinned() {
+	if o.audioResolver.ProviderName() == "gemini" && !o.voiceSelector.GeminiVoicePinned() {
 		return audio.RunWithVoiceFallbacks(voice, func(candidate string) error {
 			if candidate != voice {
 				fmt.Printf("Retrying Gemini audio with voice: %s\n", candidate)
@@ -362,12 +293,9 @@ func (o *GenerationOrchestrator) runPairWithFallbacks(voice string, runPair func
 // Uses BuildAttributionFor so no switch on provider name is needed here.
 func (o *GenerationOrchestrator) saveAudioAttribution(word, audioFile, voice string, speed float64) error {
 	processedText := audio.ProcessedTextForWord(word)
-	providerName := o.audioProviderName()
+	providerName := o.audioResolver.ProviderName()
 
-	cfg := o.audioConfig
-	if cfg == nil {
-		cfg = audio.DefaultProviderConfig()
-	}
+	cfg := o.audioResolver.BaseConfigForAttribution()
 
 	// Override voice and speed with the values used for this specific generation.
 	cfgCopy := *cfg
@@ -544,33 +472,6 @@ func (o *GenerationOrchestrator) GetPhoneticInfo(word string) (string, error) {
 
 // --- Parallel generation (orchestration) ---
 
-// GenerateResult holds the outcome of a parallel generation run.
-type GenerateResult struct {
-	AudioFile     string
-	AudioFileBack string
-	ImageFile     string
-	PhoneticInfo  string
-}
-
-// audioGenResult is an internal channel payload for audio goroutines.
-type audioGenResult struct {
-	file     string
-	fileBack string
-	err      error
-}
-
-// imageGenResult is an internal channel payload for image goroutines.
-type imageGenResult struct {
-	file string
-	err  error
-}
-
-// phoneticGenResult is an internal channel payload for phonetic goroutines.
-type phoneticGenResult struct {
-	info string
-	err  error
-}
-
 // GenerateMaterials generates audio, image, and phonetics in parallel for a
 // word. translation is the existing translation (may be empty). isBgBg flags
 // bg-bg card type. imagePrompt is an optional custom prompt; imageTranslation
@@ -585,67 +486,7 @@ func (o *GenerationOrchestrator) GenerateMaterials(
 	imagePrompt string,
 	promptUI func(prompt string),
 ) (GenerateResult, error) {
-	audioChan := make(chan audioGenResult, 1)
-	imageChan := make(chan imageGenResult, 1)
-	phoneticChan := make(chan phoneticGenResult, 1)
-
-	// 1. Audio generation
-	go func() {
-		var audioFile, audioFileBack string
-		var err error
-
-		if isBgBg && translation != "" {
-			audioFile, audioFileBack, err = o.GenerateAudioBgBg(ctx, word, translation, cardDir)
-		} else {
-			audioFile, err = o.GenerateAudio(ctx, word, cardDir)
-		}
-
-		audioChan <- audioGenResult{file: audioFile, fileBack: audioFileBack, err: err}
-	}()
-
-	// 2. Image generation (includes scene description from the AI)
-	go func() {
-		imageFile, err := o.generateImagesWithPromptAndNotify(ctx, word, imagePrompt, translation, cardDir, promptUI)
-		imageChan <- imageGenResult{file: imageFile, err: err}
-	}()
-
-	// 3. Phonetic information fetching
-	go func() {
-		phoneticInfo, err := o.GetPhoneticInfo(word)
-		if err != nil {
-			fmt.Printf("Warning: Failed to get phonetic info: %v\n", err)
-			phoneticInfo = "Failed to fetch phonetic information"
-		} else {
-			fmt.Printf("Successfully fetched phonetic info for '%s': %s\n", word, phoneticInfo)
-		}
-
-		savePhoneticIfValid(phoneticInfo, cardDir, word)
-		phoneticChan <- phoneticGenResult{info: phoneticInfo}
-	}()
-
-	// Collect results.
-	audioRes := <-audioChan
-	if audioRes.err != nil {
-		// Drain remaining channels to avoid goroutine leaks.
-		<-imageChan
-		<-phoneticChan
-		return GenerateResult{}, fmt.Errorf("audio generation failed: %w", audioRes.err)
-	}
-
-	imageRes := <-imageChan
-	if imageRes.err != nil {
-		<-phoneticChan
-		return GenerateResult{}, fmt.Errorf("image download failed: %w", imageRes.err)
-	}
-
-	phoneticRes := <-phoneticChan
-
-	return GenerateResult{
-		AudioFile:     audioRes.file,
-		AudioFileBack: audioRes.fileBack,
-		ImageFile:     imageRes.file,
-		PhoneticInfo:  phoneticRes.info,
-	}, nil
+	return o.parallelRunner.GenerateMaterials(o, ctx, word, translation, cardDir, isBgBg, imagePrompt, promptUI)
 }
 
 // generateImagesWithPromptAndNotify is a thin wrapper around
@@ -698,16 +539,4 @@ func (o *GenerationOrchestrator) generateImagesWithPromptAndNotify(
 
 	_, path, err := downloader.DownloadBestMatchWithOptions(ctx, searchOpts)
 	return path, err
-}
-
-// savePhoneticIfValid saves phonetic info to disk when the info is valid.
-func savePhoneticIfValid(phoneticInfo, cardDir, word string) {
-	if phoneticInfo == "" || phoneticInfo == "Failed to fetch phonetic information" {
-		return
-	}
-
-	phoneticFile := filepath.Join(cardDir, "phonetic.txt")
-	if err := os.WriteFile(phoneticFile, []byte(phoneticInfo), 0644); err != nil {
-		fmt.Printf("Warning: Failed to save phonetic info for '%s': %v\n", word, err)
-	}
 }
