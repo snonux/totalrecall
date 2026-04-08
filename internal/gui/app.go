@@ -422,15 +422,27 @@ func (a *Application) setupUI() {
 	// Secondary toolbar button tooltips need a short delay to initialise.
 	// Tracked via WaitGroup and respects ctx.Done() so the callback never
 	// writes to freed widgets after the window is closed (Go Mistake #62).
+	// NewTimer (not time.After) avoids leaking a pending timer when ctx wins
+	// the select. After the delay, ctx is checked again before and inside
+	// fyne.Do: the timer can fire just before onWindowClosed cancels ctx, so
+	// the UI-thread callback must no-op if shutdown already started.
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
+		t := time.NewTimer(500 * time.Millisecond)
+		defer t.Stop()
 		select {
 		case <-a.ctx.Done():
 			return
-		case <-time.After(500 * time.Millisecond):
+		case <-t.C:
+		}
+		if a.ctx.Err() != nil {
+			return
 		}
 		fyne.Do(func() {
+			if a.ctx.Err() != nil {
+				return
+			}
 			if exportButton != nil {
 				exportButton.SetToolTip("Export to Anki (x)")
 			}
