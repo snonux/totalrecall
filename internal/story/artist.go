@@ -65,13 +65,27 @@ const (
 	// response — typically caused by free-tier RPM exhaustion between rapid calls.
 	helperRetryPause = 15 * time.Second
 
-	// renderingRequirement is appended to every image prompt (cover, story pages,
-	// back cover, gallery) to push the model toward photorealistic output even
-	// within a comic grid layout. Centralised here so it is easy to tune.
+	// renderingRequirement is injected into every image prompt when --ultra-realistic
+	// is active. Kept strong and explicit because image models often drift toward
+	// comic/illustration when prompts also say "comic book", "masthead", or "panels".
 	// Omitted when Artist.ultraRealistic is false (--no-ultra-realistic flag).
-	renderingRequirement = "RENDERING REQUIREMENT: every panel and illustration must look " +
-		"like a real photograph — photorealistic skin texture, fabric detail, lighting, " +
-		"and environment. NOT a drawing, painting, or illustration. Real-world photo quality.\n"
+	renderingRequirement = "ULTRA-REALISTIC RENDERING (mandatory for this entire image):\n" +
+		"  • The output must look like a REAL PHOTOGRAPH or a high-budget live-action film still — " +
+		"shot on a real set or location with real actors, costumes, and props.\n" +
+		"  • Skin, hair, fabric, metal, and environments must show real-world texture, lens blur, " +
+		"and natural light — NOT ink, NOT cel shading, NOT painterly brushwork.\n" +
+		"  • FORBIDDEN overall styles: cartoon, anime, manga, comic-book line art, halftone dots, " +
+		"Ben-Day, visible outlines, storybook illustration, watercolor/oil-paint look, or any " +
+		"obviously drawn or stylized artwork.\n" +
+		"  • Speech bubbles, masthead lettering, and UI-like overlays (where the layout requires them) " +
+		"may look like graphic design ON TOP of the photo — the underlying scene must stay photographic.\n" +
+		"  • Gallery pages (no bubbles): the whole frame must be 100%% photographic — no exception.\n"
+
+	// renderingRequirementEnd is appended at the very end of each prompt so the
+	// model's last tokens reinforce photorealism (helps when earlier text is long).
+	renderingRequirementEnd = "\nFINAL LOCK — PHOTOREALISM: Entire image = camera-captured realism. " +
+		"If anything looks illustrated rather than photographed, the output is wrong. " +
+		"Do not drift toward comic art between panels or on gallery pages.\n"
 )
 
 // realisticStyles is the style pool used when ultra-realistic mode is active.
@@ -476,6 +490,15 @@ func (a *Artist) renderReq() string {
 	return ""
 }
 
+// appendUltraRealisticEnd adds a final photorealism reminder when renderReq is
+// non-empty (ultra-realistic mode), so long prompts still end on a strong constraint.
+func appendUltraRealisticEnd(renderReq string) string {
+	if renderReq == "" {
+		return ""
+	}
+	return renderingRequirementEnd
+}
+
 // buildCoverPrompt constructs the front-cover image prompt.
 func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 	// Use a short excerpt as a teaser on the cover prompt.
@@ -489,6 +512,14 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 	}
 
 	bibleBlock := bibleSection(bible, "cover")
+	mainArtVerb := "illustration"
+	if renderReq != "" {
+		mainArtVerb = "photographed cinematic scene"
+	}
+	coverBleed := "single full-bleed illustration"
+	if renderReq != "" {
+		coverBleed = "single full-bleed image (photoreal — like a physical comic book cover photo shoot)"
+	}
 	return fmt.Sprintf(
 		// Bulgarian language rule placed first so the model processes it before any other instruction.
 		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
@@ -496,7 +527,7 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 			"Cyrillic script. The masthead title must also be rendered in a striking comic-book font.\n\n"+
 			"Art style: %s.%s\n"+
 			renderReq+
-			"TRADITIONAL COMIC BOOK FRONT COVER — single full-bleed illustration, landscape 16:9 format.\n"+
+			"TRADITIONAL COMIC BOOK FRONT COVER — %s, landscape 16:9 format.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"MANDATORY MASTHEAD — the most important visual element on this cover:\n"+
 			"  • Invent a DRAMATIC, STORY-SPECIFIC comic book title that fits the characters and "+
@@ -511,7 +542,7 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 			"in the top-left corner — e.g. a planet, rocket, magnifying glass, sword — "+
 			"matching the story theme. The logo should feel like a real publisher imprint.\n"+
 			"Remaining layout rules:\n"+
-			"  • MAIN ART: below the masthead, a dramatic illustration of EXACTLY the named characters "+
+			"  • MAIN ART: below the masthead, a dramatic %s of EXACTLY the named characters "+
 			"from the story (as described in the reference above) — same faces, same ages, same "+
 			"clothing, same animals. Do NOT invent new characters or use generic stand-ins.\n"+
 			"  • COVER LINES: 2–3 short Bulgarian teaser phrases in bold display type "+
@@ -521,8 +552,9 @@ func buildCoverPrompt(storyText, style, bible, renderReq string) string {
 			"IMPORTANT: only the characters named in the reference may appear on this cover. "+
 			"Same age, same face, same clothing as in the interior pages. "+
 			"LANGUAGE REMINDER: all cover text in Bulgarian Cyrillic — see rule at top. "+
-			"Story teaser:\n\n%s",
-		style, bibleBlock, teaser,
+			"Story teaser:\n\n%s"+
+			"%s",
+		style, bibleBlock, coverBleed, mainArtVerb, teaser, appendUltraRealisticEnd(renderReq),
 	)
 }
 
@@ -540,6 +572,13 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 	bibleBlock := bibleSection(bible, fmt.Sprintf("story page %d of %d", pageNum, totalPages))
 	vocabBlock := buildVocabBlock(entries)
 	panelLayout := buildPanelLayout(section, pagePanels)
+
+	storyPanelRealism := ""
+	if renderReq != "" {
+		storyPanelRealism = "PANEL REALISM: Each of the 4 panels must depict a PHOTOGRAPHED scene (real actors, real lighting). " +
+			"Speech bubbles, thought bubbles, and vocabulary labels are flat graphic overlays only — " +
+			"the world behind them must not look drawn or cartoon-like.\n"
+	}
 
 	return fmt.Sprintf(
 		// Lead with the hard language constraint so it is processed first.
@@ -566,14 +605,16 @@ func buildStoryPagePrompt(section string, pageNum, totalPages int, style, bible 
 			"character pose or action, location or background detail, lighting or time-of-day, "+
 			"and foreground objects. Repeating the same angle or composition across panels is FORBIDDEN.\n"+
 			renderReq+
+			storyPanelRealism+
 			"STRICT CONSISTENCY RULES — apply to every single panel:\n"+
 			"  • Human characters: identical face, AGE APPEARANCE, hair colour/style, and clothing "+
 			"to the reference — a child must never look older or younger as defined.\n"+
 			"  • Animal characters: identical breed, fur colour/pattern, markings, and eye colour — "+
 			"NEVER substitute a different animal or a generic version of the species.\n"+
 			"  • Clothing changes only if this page's description explicitly describes a change.\n"+
-			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n",
-		vocabBlock, style, bibleBlock, pageNum, totalPages, panelLayout,
+			"  • LANGUAGE: all speech, thought, and caption text — Bulgarian Cyrillic ONLY.\n"+
+			"%s",
+		vocabBlock, style, bibleBlock, pageNum, totalPages, panelLayout, appendUltraRealisticEnd(renderReq),
 	)
 }
 
@@ -659,6 +700,10 @@ func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) stri
 	}
 
 	bibleBlock := bibleSection(bible, "back cover")
+	backBleed := "single full-bleed illustration"
+	if renderReq != "" {
+		backBleed = "single full-bleed image (photoreal — like a physical back-cover photo shoot)"
+	}
 	return fmt.Sprintf(
 		// Bulgarian language rule placed first for maximum model compliance.
 		"ЗАДЪЛЖИТЕЛНО / MANDATORY LANGUAGE RULE: This is a BULGARIAN comic book. "+
@@ -666,12 +711,13 @@ func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) stri
 			"English text anywhere on the back cover is STRICTLY FORBIDDEN.\n\n"+
 			"Art style: %s.%s\n"+
 			renderReq+
-			"TRADITIONAL COMIC BOOK BACK COVER — single full-bleed illustration, landscape 16:9 format.\n"+
+			"TRADITIONAL COMIC BOOK BACK COVER — %s, landscape 16:9 format.\n"+
 			"NO panel grid. NO speech bubbles.\n"+
 			"Layout rules (must follow exactly):\n"+
 			"  • MAIN ART: a calm, warm, resolved scene filling the upper 60%% of the cover — "+
 			"EXACTLY the named characters from the story (as described in the reference above) "+
 			"in a peaceful or triumphant ending moment, with the full story setting behind them. "+
+			"The scene must look PHOTOGRAPHED (live-action), not drawn. "+
 			"Do NOT invent new characters or use generic stand-ins.\n"+
 			"  • BLURB BOX: %s\n"+
 			"  • BOTTOM STRIP: barcode box bottom-left (black-and-white barcode graphic), "+
@@ -680,8 +726,9 @@ func buildBackCoverPrompt(storyText, style, bible, blurb, renderReq string) stri
 			"IMPORTANT: only the characters named in the reference may appear on this back cover. "+
 			"Same age, same face, same clothing, same animals as in the interior pages. "+
 			"LANGUAGE REMINDER: all text in Bulgarian Cyrillic — see rule at top. "+
-			"Story ending hint:\n\n%s",
-		style, bibleBlock, blurbBoxInstruction, ending,
+			"Story ending hint:\n\n%s"+
+			"%s",
+		style, bibleBlock, backBleed, blurbBoxInstruction, ending, appendUltraRealisticEnd(renderReq),
 	)
 }
 
@@ -701,19 +748,25 @@ var galleryPoses = []string{
 func buildGalleryPagePrompt(style, bible string, galleryNum int, renderReq string) string {
 	pose := galleryPoses[(galleryNum-1)%len(galleryPoses)]
 	bibleBlock := bibleSection(bible, fmt.Sprintf("gallery page %d", galleryNum))
+	galleryArt := "FULL-BLEED SINGLE ILLUSTRATION"
+	if renderReq != "" {
+		galleryArt = "FULL-BLEED SINGLE PHOTOGRAPH — must look 100%% like a real camera shot (no illustration style)"
+	}
 	return fmt.Sprintf(
 		"Art style: %s.%s\n"+
 			renderReq+
-			"FULL-BLEED SINGLE ILLUSTRATION — landscape 16:9 format, ONE image only, NO grid, NO panels.\n"+
+			"%s — landscape 16:9 format, ONE image only, NO grid, NO panels.\n"+
 			"DO NOT split the image into multiple panels or sections. The ENTIRE canvas is ONE single scene.\n"+
 			"NO text of any kind. NO title. NO labels. NO speech bubbles. NO panel borders. NO UI elements.\n"+
-			"This is a text-free character gallery page. Pure art only.\n\n"+
+			"This is a text-free character gallery page. "+
+			"If ultra-realistic mode: pure cinematic photography only — not painted or comic art.\n\n"+
 			"Composition: %s\n\n"+
 			"The subject MUST be EXACTLY the main character(s) described in the reference above — "+
 			"same faces, same genders, same ages, same clothing. Include the companion animal if naturally present. "+
 			"Do NOT invent new characters or change any character's gender. Do NOT add any text overlays.\n"+
-			"Background: the story's setting rendered with full cinematic atmosphere and colour mood.",
-		style, bibleBlock, pose,
+			"Background: the story's setting rendered with full cinematic atmosphere and colour mood."+
+			"%s",
+		style, bibleBlock, galleryArt, pose, appendUltraRealisticEnd(renderReq),
 	)
 }
 

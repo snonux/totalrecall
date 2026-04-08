@@ -2,6 +2,7 @@ package story
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,6 +210,13 @@ func (r *Runner) drawComicPages(storyText, bible, titleSlug string, entries []ba
 		fmt.Printf("Comic page saved: %s\n", p)
 	}
 
+	// Aggregate all gallery close-ups into comics/gallery/ at the output root so
+	// multiple runs collect in one folder (filenames are slug-prefixed).
+	rootDir := filepath.Dir(filepath.Dir(r.artist.outputDir))
+	if err := copyGalleryPNGsToComicsGallery(rootDir, r.artist.outputDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not copy gallery images to comics/gallery: %v\n", err)
+	}
+
 	if len(paths) == 0 {
 		return
 	}
@@ -303,4 +311,43 @@ func (r *Runner) saveTTSPlaceholder(titleSlug, dir string) error {
 	}
 	fmt.Printf("TTS placeholder saved: %s\n", path)
 	return nil
+}
+
+// copyGalleryPNGsToComicsGallery copies *_gallery_*.png from a per-comic folder
+// (comics/<slug>/) into <outputRoot>/comics/gallery/. Slug-prefixed filenames
+// keep multiple runs from overwriting each other.
+func copyGalleryPNGsToComicsGallery(outputRoot, comicDir string) error {
+	destDir := filepath.Join(outputRoot, "comics", "gallery")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("mkdir gallery: %w", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(comicDir, "*_gallery_*.png"))
+	if err != nil {
+		return err
+	}
+	for _, src := range matches {
+		dst := filepath.Join(destDir, filepath.Base(src))
+		if err := copyFile(src, dst); err != nil {
+			return fmt.Errorf("%s -> %s: %w", src, dst, err)
+		}
+	}
+	if len(matches) > 0 {
+		fmt.Printf("Gallery images copied to %s (%d files)\n", destDir, len(matches))
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }

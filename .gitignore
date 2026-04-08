@@ -1,5 +1,6 @@
 # Binaries for programs and plugins
-/comics
+# Story/comic output from `totalrecall --story` (see README)
+/comics/
 *.exe
 *.exe~
 *.dll
