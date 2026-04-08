@@ -8,6 +8,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,17 +45,24 @@ func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, tra
 
 	// Register a prompt callback so the AI-generated prompt is persisted
 	// to disk before the download completes (used by the GUI and for debugging).
-	p.registerPromptCallback(searcher, wordDir)
+	var promptSaveErr error
+	p.registerPromptCallback(searcher, wordDir, &promptSaveErr)
 
 	_, path, err := downloader.DownloadBestMatchWithOptions(ctx, searchOpts)
 	if err != nil {
-		return err
+		return errors.Join(err, promptSaveErr)
 	}
 	fmt.Printf("    Downloaded: %s\n", path)
 
+	if promptSaveErr != nil {
+		return promptSaveErr
+	}
+
 	// Persist the final prompt used by the searcher (some providers set it
 	// only after the search call; this handles that case as a fallback).
-	p.saveImagePrompt(wordDir, searcher)
+	if err := p.saveImagePrompt(wordDir, searcher); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -63,14 +71,18 @@ func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, tra
 // callback fires during the Search call so the prompt is captured even if the
 // subsequent download fails. All searchers returned by newImageSearcher
 // implement image.PromptAwareClient, so no type-assertion is needed.
-func (p *Processor) registerPromptCallback(searcher image.PromptAwareClient, wordDir string) {
+// promptErr accumulates write failures so downloadImagesWithTranslation can
+// return them to the caller instead of only logging.
+func (p *Processor) registerPromptCallback(searcher image.PromptAwareClient, wordDir string, promptErr *error) {
 	promptFile := filepath.Join(wordDir, "image_prompt.txt")
 	searcher.SetPromptCallback(func(prompt string) {
 		if prompt == "" {
 			return
 		}
 		if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
-			fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
+			if promptErr != nil {
+				*promptErr = errors.Join(*promptErr, fmt.Errorf("failed to save image prompt: %w", err))
+			}
 		}
 	})
 }
@@ -79,25 +91,26 @@ func (p *Processor) registerPromptCallback(searcher image.PromptAwareClient, wor
 // GetLastPrompt. This acts as a fallback when the prompt is not available via
 // the callback during the search call itself. The local promptGetter interface
 // is intentionally narrow: not all PromptAwareClients expose GetLastPrompt.
-func (p *Processor) saveImagePrompt(wordDir string, searcher image.PromptAwareClient) {
+func (p *Processor) saveImagePrompt(wordDir string, searcher image.PromptAwareClient) error {
 	type promptGetter interface {
 		GetLastPrompt() string
 	}
 
 	promptSource, ok := searcher.(promptGetter)
 	if !ok {
-		return
+		return nil
 	}
 
 	usedPrompt := promptSource.GetLastPrompt()
 	if usedPrompt == "" {
-		return
+		return nil
 	}
 
 	promptFile := filepath.Join(wordDir, "image_prompt.txt")
 	if err := os.WriteFile(promptFile, []byte(usedPrompt), 0644); err != nil {
-		fmt.Printf("  Warning: Failed to save image prompt: %v\n", err)
+		return fmt.Errorf("failed to save image prompt: %w", err)
 	}
+	return nil
 }
 
 // newImageSearcher creates the appropriate PromptAwareClient based on the

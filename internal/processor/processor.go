@@ -253,19 +253,18 @@ func (p *Processor) ProcessWordWithTranslationAndType(ctx context.Context, word,
 	wordDir := p.findOrCreateWordDirectory(word)
 
 	if err := internal.SaveCardType(wordDir, cardType); err != nil {
-		fmt.Printf("  Warning: Failed to save card type: %v\n", err)
+		return fmt.Errorf("failed to save card type: %w", err)
 	}
 
 	if err := p.saveTranslationIfNeeded(word, translationText, wordDir); err != nil {
-		fmt.Printf("  Warning: Failed to save translation: %v\n", err)
+		return fmt.Errorf("failed to save translation: %w", err)
 	}
 
 	fmt.Printf("  Fetching phonetic information...\n")
 	if err := p.phoneticFetcher.FetchAndSave(word, wordDir); err != nil {
-		fmt.Printf("  Warning: Failed to fetch phonetic info: %v\n", err)
-	} else {
-		fmt.Printf("  Saved phonetic information\n")
+		return fmt.Errorf("failed to fetch phonetic info: %w", err)
 	}
+	fmt.Printf("  Saved phonetic information\n")
 
 	if !p.flags.SkipAudio {
 		fmt.Printf("  Generating audio...\n")

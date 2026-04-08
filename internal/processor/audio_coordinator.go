@@ -264,7 +264,7 @@ func (p *Processor) generateAudioWithVoiceAndFilenameInDir(ctx context.Context, 
 
 	// Write attribution and metadata sidecars next to the audio file.
 	if err := p.saveAudioAttribution(word, outputFile, providerConfig); err != nil {
-		fmt.Printf("  Warning: Failed to save audio attribution: %v\n", err)
+		return fmt.Errorf("failed to save audio attribution: %w", err)
 	}
 
 	return nil
@@ -351,12 +351,12 @@ func (p *Processor) saveAudioAttribution(word, audioFile string, config *audio.C
 		return fmt.Errorf("failed to write audio attribution file: %w", err)
 	}
 
-	// Also save metadata for GUI display (non-fatal on failure).
+	// Also save metadata for GUI display.
 	wordDir := filepath.Dir(audioFile)
 	metadataFile := filepath.Join(wordDir, "audio_metadata.txt")
 	metadata := p.buildAudioMetadata(config, audioFile)
 	if err := os.WriteFile(metadataFile, []byte(metadata), 0644); err != nil {
-		fmt.Printf("Warning: Failed to save audio metadata: %v\n", err)
+		return fmt.Errorf("failed to save audio metadata: %w", err)
 	}
 
 	return nil
