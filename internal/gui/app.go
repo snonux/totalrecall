@@ -14,7 +14,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
@@ -124,6 +123,12 @@ type Application struct {
 	// Service layer — decoupled from the UI event-wiring in Application.
 	cardSvc *CardService            // file discovery, directory management, persistence
 	gen     *GenerationOrchestrator // audio, image, and phonetics generation
+
+	// Focused sub-handlers (SRP); initialized lazily via ensureHandlers.
+	nav      *NavigationHandler
+	export   *ExportHandler
+	queueMgr *QueueManager
+	keys     *KeyboardShortcuts
 }
 
 // Config holds GUI application configuration
@@ -268,8 +273,9 @@ func applyConfigDefaults(config *Config) *Config {
 // CardService, and GenerationOrchestrator onto the Application. This is called
 // once from New() after the struct is created.
 func (a *Application) initAppServices(config *Config) {
+	a.ensureHandlers()
 	a.queue = NewWordQueue(a.ctx)
-	a.queue.SetCallbacks(a.onQueueStatusUpdate, a.onJobComplete)
+	a.queue.SetCallbacks(a.queueMgr.onQueueStatusUpdate, a.queueMgr.onJobComplete)
 
 	a.audioConfig = audioConfigForApp(config)
 
@@ -1283,203 +1289,10 @@ func (a *Application) onRegenerateAll() {
 	}()
 }
 
-// onExportToAnki exports all cards from the output directory to Anki.
-// Shows a format-selection dialog and performs the actual export on confirm.
-// onExportToAnki opens the Export to Anki dialog where the user selects a format,
-// deck name, and output directory. No-op when no exportable cards exist.
+// onExportToAnki delegates to ExportHandler.
 func (a *Application) onExportToAnki() {
-	if !a.hasExportableCards() {
-		dialog.ShowInformation("No Cards", "No cards found in anki_cards folder. Generate some cards first!", a.window)
-		return
-	}
-
-	formatOptions := []string{"APKG (Recommended)", "CSV (Legacy)"}
-	formatSelect := widget.NewSelect(formatOptions, nil)
-	formatSelect.SetSelected(formatOptions[0])
-	deckNameEntry := widget.NewEntry()
-	deckNameEntry.SetPlaceHolder("Bulgarian Vocabulary")
-
-	selectedDir := a.defaultExportDir()
-	dirLabel := widget.NewLabel(selectedDir)
-	dirButton := widget.NewButton("Browse...", func() {
-		a.browseExportDir(&selectedDir, dirLabel)
-	})
-
-	content := a.buildExportDialogContent(formatSelect, deckNameEntry, dirLabel, dirButton)
-	a.showExportDialog(content, formatOptions, formatSelect, deckNameEntry, &selectedDir)
-}
-
-// buildExportDialogContent assembles the VBox shown inside the Export to Anki dialog.
-func (a *Application) buildExportDialogContent(formatSelect *widget.Select, deckNameEntry *widget.Entry, dirLabel *widget.Label, dirButton *widget.Button) fyne.CanvasObject {
-	return container.NewVBox(
-		widget.NewLabel("Export Format:"),
-		formatSelect,
-		widget.NewSeparator(),
-		widget.NewLabel("Deck Name:"),
-		deckNameEntry,
-		widget.NewSeparator(),
-		widget.NewLabel("Export Directory:"),
-		container.NewBorder(nil, nil, nil, dirButton, dirLabel),
-		widget.NewLabel(""),
-		widget.NewRichTextFromMarkdown("**APKG**: Complete package with media files included\n**CSV**: Text only, requires manual media copy"),
-	)
-}
-
-// showExportDialog creates the custom confirm dialog, wires keyboard shortcuts
-// (e/е = export, c/ц/Esc = cancel), and shows it.
-// showExportDialog creates and shows the Export to Anki custom confirm dialog.
-// The confirm callback runs performExport; keyboard shortcuts e/е confirm and
-// c/ц/Esc cancel.
-func (a *Application) showExportDialog(content fyne.CanvasObject, formatOptions []string, formatSelect *widget.Select, deckNameEntry *widget.Entry, selectedDir *string) {
-	exportDialogOpen := true
-
-	customDialog := dialog.NewCustomConfirm("Export to Anki", "Export (e)", "Cancel (c/Esc)", content, func(export bool) {
-		exportDialogOpen = false
-		if !export {
-			return
-		}
-		deckName := deckNameEntry.Text
-		if deckName == "" {
-			deckName = "Bulgarian Vocabulary"
-		}
-		a.performExport(formatSelect.Selected == formatOptions[0], deckName, *selectedDir)
-	}, a.window)
-
-	a.wireExportDialogKeys(customDialog, &exportDialogOpen)
-	customDialog.Resize(fyne.NewSize(400, 300))
-	customDialog.Show()
-}
-
-// wireExportDialogKeys attaches keyboard shortcuts to the export dialog.
-// e/е triggers confirm; c/ц/Esc cancels. Original handlers are restored on close.
-func (a *Application) wireExportDialogKeys(customDialog *dialog.ConfirmDialog, exportDialogOpen *bool) {
-	origRune := a.window.Canvas().OnTypedRune()
-	origKey := a.window.Canvas().OnTypedKey()
-
-	a.window.Canvas().SetOnTypedRune(func(r rune) {
-		if *exportDialogOpen {
-			switch r {
-			case 'e', 'E', 'е', 'Е':
-				customDialog.Hide()
-				*exportDialogOpen = false
-				customDialog.Confirm()
-			case 'c', 'C', 'ц', 'Ц':
-				customDialog.Hide()
-				*exportDialogOpen = false
-			}
-			return
-		}
-		if origRune != nil {
-			origRune(r)
-		}
-	})
-	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		if *exportDialogOpen && ev.Name == fyne.KeyEscape {
-			customDialog.Hide()
-			*exportDialogOpen = false
-			return
-		}
-		if origKey != nil {
-			origKey(ev)
-		}
-	})
-	customDialog.SetOnClosed(func() {
-		*exportDialogOpen = false
-		a.window.Canvas().SetOnTypedRune(origRune)
-		a.window.Canvas().SetOnTypedKey(origKey)
-	})
-}
-
-// hasExportableCards returns true when the output directory has at least one
-// non-hidden subdirectory (which represents a card).
-func (a *Application) hasExportableCards() bool {
-	entries, err := os.ReadDir(a.config.OutputDir)
-	if err != nil || len(entries) == 0 {
-		return false
-	}
-	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-			return true
-		}
-	}
-	return false
-}
-
-// defaultExportDir returns the home directory as the default export location.
-func (a *Application) defaultExportDir() string {
-	homeDir, err := appconfig.HomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-	}
-	return homeDir
-}
-
-// browseExportDir opens a folder-picker dialog and updates *dir and the label
-// when the user selects a directory.
-func (a *Application) browseExportDir(dir *string, label *widget.Label) {
-	folderDialog := dialog.NewFolderOpen(func(selected fyne.ListableURI, err error) {
-		if err != nil || selected == nil {
-			return
-		}
-		*dir = selected.Path()
-		label.SetText(*dir)
-	}, a.window)
-
-	if uri, err := storage.ParseURI("file://" + *dir); err == nil {
-		if listableURI, ok := uri.(fyne.ListableURI); ok {
-			folderDialog.SetLocation(listableURI)
-		}
-	}
-	folderDialog.Show()
-}
-
-// performExport runs the actual APKG or CSV export and updates the status bar.
-func (a *Application) performExport(isAPKG bool, deckName, outputDir string) {
-	if isAPKG {
-		a.exportAPKG(deckName, outputDir)
-	} else {
-		a.exportCSV(outputDir)
-	}
-}
-
-// exportAPKG generates an APKG file from all cards and updates the status bar.
-func (a *Application) exportAPKG(deckName, outputDir string) {
-	filename := fmt.Sprintf("%s.apkg", internal.SanitizeFilename(deckName))
-	outputPath := filepath.Join(outputDir, filename)
-
-	gen := anki.NewGenerator(nil)
-	if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
-		dialog.ShowError(fmt.Errorf("failed to load cards: %w", err), a.window)
-		return
-	}
-	if err := gen.GenerateAPKG(outputPath, deckName); err != nil {
-		dialog.ShowError(fmt.Errorf("failed to generate APKG: %w", err), a.window)
-		return
-	}
-	total, withAudio, withImages := gen.Stats()
-	a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)", total, outputDir, withAudio, withImages))
-}
-
-// exportCSV generates a CSV file from all cards and updates the status bar.
-func (a *Application) exportCSV(outputDir string) {
-	outputPath := filepath.Join(outputDir, "anki_import.csv")
-
-	gen := anki.NewGenerator(&anki.GeneratorOptions{
-		OutputPath:     outputPath,
-		MediaFolder:    a.config.OutputDir,
-		IncludeHeaders: true,
-		AudioFormat:    a.config.AudioFormat,
-	})
-	if err := gen.GenerateFromDirectory(a.config.OutputDir); err != nil {
-		dialog.ShowError(fmt.Errorf("failed to load cards: %w", err), a.window)
-		return
-	}
-	if err := gen.GenerateCSV(); err != nil {
-		dialog.ShowError(fmt.Errorf("failed to generate CSV: %w", err), a.window)
-		return
-	}
-	total, withAudio, withImages := gen.Stats()
-	a.updateStatus(fmt.Sprintf("Exported %d cards to %s (%d with audio, %d with images)", total, outputDir, withAudio, withImages))
+	a.ensureHandlers()
+	a.export.onExportToAnki()
 }
 
 // onArchive shows a confirmation dialog and archives the current cards directory
@@ -1577,107 +1390,10 @@ func (a *Application) showArchiveConfirmDialog(confirmDialog *dialog.ConfirmDial
 	confirmDialog.Show()
 }
 
-// onShowHotkeys displays a dialog with all available keyboard shortcuts
-// hotkeysMarkdown is the markdown reference text shown in the hotkeys dialog.
-const hotkeysMarkdown = `[Project Page: https://codeberg.org/snonux/totalrecall](https://codeberg.org/snonux/totalrecall)
-
----
-
-## Navigation
-**← / h/х** Previous word (vim-style)
-**→ / l/л** Next word (vim-style)
-**Tab** Navigate fields
-**Esc** Unfocus field
-
-## Focus Fields
-**b/б** Focus Bulgarian input
-**e/е** Focus English input
-**o/о** Focus image prompt
-
-## Word Processing
-**g/г** Generate word
-**n/н** New word
-**d/д** Delete word
-
-## Regeneration
-**i/и** Regenerate image
-**m/м** Random image
-**a/а** Regenerate audio (front for bg-bg)
-**A/А** Regenerate back audio (bg-bg only)
-**r/р** Regenerate all
-
-## Playback
-**p/п** Play front audio (or audio for en-bg)
-**P/П** Play back audio (bg-bg only)
-**u/у** Toggle auto-play
-
-## Export & Archive
-**x/ж** Export to Anki
-**v/в** Archive all cards
-
-## Help
-**?** Show hotkeys
-**c/ц** Close dialog
-**q/ч** Quit application
-
-## Dialogs
-**y/ъ** Confirm action
-**n/н** Cancel action
-**c/ц** Cancel action
-**Esc** Cancel action
-
----
-*All hotkeys work with both Latin and Cyrillic keyboards*
-
-Press **c/ц** or **Esc** to close this dialog`
-
-// onShowHotkeys builds the keyboard-shortcut reference dialog and wires temporary
-// c/ц and Esc handlers to close it. Original handlers are restored via setupKeyboardShortcuts
-// when the dialog is dismissed.
+// onShowHotkeys delegates to KeyboardShortcuts.
 func (a *Application) onShowHotkeys() {
-	content := widget.NewRichTextFromMarkdown(hotkeysMarkdown)
-	content.Wrapping = fyne.TextWrapWord
-
-	scroll := container.NewScroll(container.NewPadded(content))
-	scroll.SetMinSize(fyne.NewSize(700, 480))
-
-	d := dialog.NewCustom("Keyboard Shortcuts", "Close", scroll, a.window)
-	a.wireHotkeysDialog(d)
-}
-
-// wireHotkeysDialog attaches temporary c/ц and Esc key handlers that close the
-// dialog, then restores normal shortcuts via setupKeyboardShortcuts on close.
-func (a *Application) wireHotkeysDialog(d *dialog.CustomDialog) {
-	dialogOpen := true
-	originalRuneHandler := a.window.Canvas().OnTypedRune()
-	originalKeyHandler := a.window.Canvas().OnTypedKey()
-
-	a.window.Canvas().SetOnTypedRune(func(r rune) {
-		if dialogOpen && (r == 'c' || r == 'C' || r == 'ц' || r == 'Ц') {
-			d.Hide()
-			return
-		}
-		if originalRuneHandler != nil {
-			originalRuneHandler(r)
-		}
-	})
-
-	a.window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		if dialogOpen && ev.Name == fyne.KeyEscape {
-			d.Hide()
-			return
-		}
-		if originalKeyHandler != nil {
-			originalKeyHandler(ev)
-		}
-	})
-
-	d.SetOnClosed(func() {
-		dialogOpen = false
-		a.setupKeyboardShortcuts()
-	})
-
-	d.Show()
+	a.ensureHandlers()
+	a.keys.onShowHotkeys()
 }
 
 // toggleAutoPlay toggles the auto-play feature on/off
@@ -1934,685 +1650,90 @@ func (a *Application) setupTooltips() {
 	}()
 }
 
-// processNextInQueue processes the next word in the queue
+// ensureHandlers lazily wires NavigationHandler, ExportHandler, QueueManager, and KeyboardShortcuts.
+func (a *Application) ensureHandlers() {
+	if a.nav == nil {
+		a.nav = &NavigationHandler{app: a}
+	}
+	if a.export == nil {
+		a.export = &ExportHandler{app: a}
+	}
+	if a.queueMgr == nil {
+		a.queueMgr = &QueueManager{app: a}
+	}
+	if a.keys == nil {
+		a.keys = &KeyboardShortcuts{app: a}
+	}
+}
+
+func (a *Application) scanExistingWords() {
+	a.ensureHandlers()
+	a.nav.scanExistingWords()
+}
+
+func (a *Application) loadWordByIndex(index int) {
+	a.ensureHandlers()
+	a.nav.loadWordByIndex(index)
+}
+
+func (a *Application) loadExistingFiles(word string) {
+	a.ensureHandlers()
+	a.nav.loadExistingFiles(word)
+}
+
+func (a *Application) onPrevWord() {
+	a.ensureHandlers()
+	a.nav.onPrevWord()
+}
+
+func (a *Application) onNextWord() {
+	a.ensureHandlers()
+	a.nav.onNextWord()
+}
+
+func (a *Application) onDelete() {
+	a.ensureHandlers()
+	a.nav.onDelete()
+}
+
 func (a *Application) processNextInQueue() {
-	// Check if we're already processing
-	if a.currentJobID != 0 {
-		return
-	}
-
-	// Get next job from queue
-	job := a.queue.ProcessNextJob()
-	if job == nil {
-		return
-	}
-
-	// Set current job and clear any previous state
-	a.mu.Lock()
-	a.currentJobID = job.ID
-	a.currentWord = job.Word
-	// Clear previous file associations to prevent mix-ups
-	a.currentTranslation = ""
-	a.currentAudioFile = ""
-	a.currentImage = ""
-	a.mu.Unlock()
-
-	// Clear UI for new word
-	fyne.Do(func() {
-		a.clearUI()
-		a.showProgress("Processing: " + job.Word)
-		a.updateQueueStatus() // Update to show item moved from queued to processing
-	})
-
-	// Process in background
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		a.processWordJob(job)
-	}()
+	a.ensureHandlers()
+	a.queueMgr.processNextInQueue()
 }
 
-// getOrCreateCardContext returns a context for the given word, creating one if needed
-func (a *Application) getOrCreateCardContext(word string) (context.Context, context.CancelFunc) {
-	a.cardMu.Lock()
-	defer a.cardMu.Unlock()
-
-	// Check if we already have a cancel function for this word
-	if cancel, exists := a.cardContexts[word]; exists {
-		// Cancel the old context first
-		cancel()
-	}
-
-	// Create new context for this word
-	ctx, cancel := context.WithCancel(a.ctx)
-	a.cardContexts[word] = cancel
-
-	return ctx, cancel
-}
-
-// cancelCardOperations cancels all ongoing operations for a specific word
-func (a *Application) cancelCardOperations(word string) {
-	a.cardMu.Lock()
-	defer a.cardMu.Unlock()
-
-	if cancel, exists := a.cardContexts[word]; exists {
-		cancel()
-		delete(a.cardContexts, word)
-	}
-}
-
-// startOperation marks the start of an operation for a word
-func (a *Application) startOperation(word string) {
-	a.activeOpMu.Lock()
-	defer a.activeOpMu.Unlock()
-	a.activeOperations[word]++
-}
-
-// endOperation marks the end of an operation for a word
-func (a *Application) endOperation(word string) {
-	a.activeOpMu.Lock()
-	defer a.activeOpMu.Unlock()
-
-	if count, exists := a.activeOperations[word]; exists {
-		if count > 1 {
-			a.activeOperations[word]--
-		} else {
-			delete(a.activeOperations, word)
-		}
-	}
-}
-
-// hasActiveOperations checks if a word has any active operations
-func (a *Application) hasActiveOperations(word string) bool {
-	a.activeOpMu.Lock()
-	defer a.activeOpMu.Unlock()
-
-	count, exists := a.activeOperations[word]
-	return exists && count > 0
-}
-
-// processWordJob processes a single word job using the GenerationOrchestrator
-// for audio/image/phonetics work and updates UI state upon completion.
-// processWordJob runs a single word job: creates the card directory, resolves the
-// translation, triggers parallel audio/image/phonetics generation via the orchestrator,
-// and updates the UI with the results. The job is marked complete (or failed) before
-// returning.
-func (a *Application) processWordJob(job *WordJob) {
-	cardCtx, _ := a.getOrCreateCardContext(job.Word)
-
-	// Bail early if the context was already cancelled before we started.
-	select {
-	case <-cardCtx.Done():
-		a.queue.FailJob(job.ID, fmt.Errorf("job cancelled"))
-		a.finishCurrentJob()
-		return
-	default:
-	}
-
-	cardDir, isBgBg, ok := a.prepareJobDirectory(job)
-	if !ok {
-		return
-	}
-
-	translation, ok := a.resolveJobTranslation(job, isBgBg, cardDir)
-	if !ok {
-		a.finishCurrentJob()
-		return
-	}
-
-	// Show translation in the UI before generation starts.
-	a.mu.Lock()
-	if a.currentJobID == job.ID && translation != "" {
-		a.currentTranslation = translation
-		fyne.Do(func() { a.translationEntry.SetText(translation) })
-	}
-	a.mu.Unlock()
-
-	result, genErr := a.runJobGeneration(job, cardCtx, translation, cardDir, isBgBg)
-	if genErr != nil {
-		a.queue.FailJob(job.ID, genErr)
-		a.finishCurrentJob()
-		return
-	}
-
-	a.applyJobResult(job, result, translation, isBgBg)
-
-	a.finishCurrentJob()
-	fyne.Do(func() { a.updateQueueStatus() })
-}
-
-// prepareJobDirectory ensures a card directory exists and saves the card type.
-// Returns the directory path, isBgBg flag, and true on success.
-func (a *Application) prepareJobDirectory(job *WordJob) (string, bool, bool) {
-	cardDir, dirErr := a.ensureCardDirectory(job.Word)
-	if dirErr != nil {
-		a.queue.FailJob(job.ID, fmt.Errorf("failed to create card directory: %w", dirErr))
-		a.finishCurrentJob()
-		return "", false, false
-	}
-
-	isBgBg := job.CardType == "bg-bg"
-	if err := a.saveJobCardType(job.ID, cardDir, isBgBg); err != nil {
-		a.finishCurrentJob()
-		return "", false, false
-	}
-
-	return cardDir, isBgBg, true
-}
-
-// runJobGeneration fires the parallel audio/image/phonetics generation for a job
-// and manages the processing counter. Returns the generation result or an error.
-func (a *Application) runJobGeneration(job *WordJob, cardCtx context.Context, translation, cardDir string, isBgBg bool) (GenerateResult, error) {
-	fyne.Do(func() {
-		a.updateStatus(fmt.Sprintf("Processing '%s' - generating audio, images, and phonetics in parallel...", job.Word))
-		a.mu.Lock()
-		if a.currentJobID == job.ID {
-			a.imageDisplay.SetGenerating()
-		}
-		a.mu.Unlock()
-	})
-
-	// promptUI notifies the imagePromptEntry widget when the prompt is determined.
-	promptUI := func(prompt string) {
-		a.mu.Lock()
-		isCurrentJob := a.currentJobID == job.ID
-		a.mu.Unlock()
-		if isCurrentJob && a.imagePromptEntry != nil {
-			a.imagePromptEntry.SetText(prompt)
-		}
-	}
-
-	// Three parallel operations: audio, image, phonetics.
-	a.startOperation(job.Word)
-	a.startOperation(job.Word)
-	a.startOperation(job.Word)
-	fyne.Do(func() {
-		a.incrementProcessing()
-		a.incrementProcessing()
-		a.incrementProcessing()
-	})
-
-	result, genErr := a.getOrchestrator().GenerateMaterials(
-		cardCtx, job.Word, translation, cardDir, isBgBg, job.CustomPrompt, promptUI,
-	)
-
-	a.decrementProcessing()
-	a.decrementProcessing()
-	a.decrementProcessing()
-	a.endOperation(job.Word)
-	a.endOperation(job.Word)
-	a.endOperation(job.Word)
-
-	return result, genErr
-}
-
-// applyJobResult writes the generation result to in-memory state and performs
-// intermediate and final UI updates including audio player, image display, and
-// phonetics label.
-func (a *Application) applyJobResult(job *WordJob, result GenerateResult, translation string, isBgBg bool) {
-	// Update audio state immediately so the play button becomes available.
-	a.mu.Lock()
-	isCurrentJob := a.currentJobID == job.ID
-	if isCurrentJob {
-		a.currentAudioFile = result.AudioFile
-		a.currentAudioFileBack = result.AudioFileBack
-	}
-	a.mu.Unlock()
-
-	if isCurrentJob {
-		fyne.Do(func() {
-			a.mu.Lock()
-			if a.currentJobID != job.ID {
-				a.mu.Unlock()
-				return
-			}
-			a.mu.Unlock()
-			a.audioPlayer.SetAudioFile(result.AudioFile)
-			if isBgBg && result.AudioFileBack != "" {
-				a.audioPlayer.SetBackAudioFile(result.AudioFileBack)
-			}
-			a.regenerateAudioBtn.Enable()
-		})
-	}
-
-	// Update phonetics immediately if available.
-	if result.PhoneticInfo != "" && result.PhoneticInfo != "Failed to fetch phonetic information" {
-		a.mu.Lock()
-		shouldUpdate := a.currentJobID == job.ID
-		if shouldUpdate {
-			a.currentPhonetic = result.PhoneticInfo
-		}
-		a.mu.Unlock()
-		if shouldUpdate {
-			fmt.Printf("Updating phonetic display immediately for job %d: %s\n", job.ID, result.PhoneticInfo)
-			fyne.Do(func() { a.audioPlayer.SetPhonetic(result.PhoneticInfo) })
-		}
-	}
-
-	// Mark the job complete in the queue before the final UI paint.
-	fyne.Do(func() { a.updateStatus(fmt.Sprintf("Finalizing '%s'...", job.Word)) })
-	a.queue.CompleteJob(job.ID, translation, result.AudioFile, result.AudioFileBack, result.ImageFile)
-
-	a.applyFinalJobUI(job, result, translation)
-}
-
-// applyFinalJobUI updates the full UI with the completed job result (translation,
-// image, audio, phonetics). No-op when the job is no longer the current one.
-func (a *Application) applyFinalJobUI(job *WordJob, result GenerateResult, translation string) {
-	a.mu.Lock()
-	isCurrentJob := a.currentJobID == job.ID
-	if isCurrentJob {
-		a.currentTranslation = translation
-		a.currentAudioFile = result.AudioFile
-		if result.ImageFile != "" {
-			a.currentImage = result.ImageFile
-		}
-		if result.PhoneticInfo != "" && result.PhoneticInfo != "Failed to fetch phonetic information" {
-			a.currentPhonetic = result.PhoneticInfo
-		}
-	}
-	a.mu.Unlock()
-
-	if !isCurrentJob {
-		return
-	}
-
-	fyne.Do(func() {
-		a.mu.Lock()
-		if a.currentJobID != job.ID {
-			a.mu.Unlock()
-			return
-		}
-		a.mu.Unlock()
-
-		a.translationEntry.SetText(translation)
-		if result.ImageFile != "" {
-			a.imageDisplay.SetImages([]string{result.ImageFile})
-		}
-		a.audioPlayer.SetAudioFile(result.AudioFile)
-		if a.currentPhonetic != "" {
-			fmt.Printf("Setting phonetic in final UI update: %s\n", a.currentPhonetic)
-			a.audioPlayer.SetPhonetic(a.currentPhonetic)
-		} else {
-			fmt.Printf("No phonetic info available in final UI update\n")
-		}
-		a.hideProgress()
-		a.setActionButtonsEnabled(true)
-		a.updateStatus(fmt.Sprintf("Completed: %s", job.Word))
-	})
-}
-
-// saveJobCardType persists the card type for job to disk, failing the job on
-// error. Returns nil on success.
-func (a *Application) saveJobCardType(jobID int, cardDir string, isBgBg bool) error {
-	cardType := internal.CardTypeEnBg
-	if isBgBg {
-		cardType = internal.CardTypeBgBg
-	}
-	if err := internal.SaveCardType(cardDir, cardType); err != nil {
-		a.queue.FailJob(jobID, fmt.Errorf("failed to save card type: %w", err))
-		return err
-	}
-	return nil
-}
-
-// resolveJobTranslation returns the translation for a job, translating via the
-// orchestrator when needed. Returns the translation and true on success; false
-// and fails the job on error.
-func (a *Application) resolveJobTranslation(job *WordJob, isBgBg bool, cardDir string) (string, bool) {
-	var translation string
-
-	if job.NeedsTranslation && !isBgBg {
-		fyne.Do(func() {
-			a.updateStatus(fmt.Sprintf("Translating '%s'...", job.Word))
-		})
-
-		var err error
-		translation, err = a.translateWord(job.Word)
-		if err != nil {
-			a.queue.FailJob(job.ID, fmt.Errorf("translation failed: %w", err))
-			return "", false
-		}
-	} else if job.Translation != "" {
-		translation = job.Translation
-	}
-
-	if translation != "" {
-		if err := a.getCardService().SaveTranslation(job.Word, translation); err != nil {
-			a.queue.FailJob(job.ID, fmt.Errorf("failed to save translation: %w", err))
-			return "", false
-		}
-	}
-
-	_ = cardDir // kept for documentation; SaveTranslation handles the dir internally
-	return translation, true
-}
-
-// finishCurrentJob clears the current job and processes next in queue
-func (a *Application) finishCurrentJob() {
-	a.mu.Lock()
-	a.currentJobID = 0
-	a.mu.Unlock()
-
-	// Process next in queue
-	fyne.Do(func() {
-		a.processNextInQueue()
-	})
-}
-
-// onQueueStatusUpdate handles queue status updates
-func (a *Application) onQueueStatusUpdate(job *WordJob) {
-	fyne.Do(func() {
-		a.updateQueueStatus()
-	})
-}
-
-// onJobComplete handles job completion
-func (a *Application) onJobComplete(job *WordJob) {
-	fyne.Do(func() {
-		a.updateQueueStatus()
-
-		// If this was the current job and it failed, show error
-		if job.ID == a.currentJobID && job.Status == StatusFailed {
-			a.showError(job.Error)
-			a.hideProgress()
-			a.finishCurrentJob()
-		}
-
-		// Update navigation to include the newly completed word
-		if job.Status == StatusCompleted {
-			a.updateNavigation()
-
-			// Only show status updates, don't update UI for background jobs
-			// This prevents mix-ups when user has moved on to a new word
-			a.mu.Lock()
-			isCurrentJob := job.ID == a.currentJobID
-			a.mu.Unlock()
-
-			if isCurrentJob {
-				// This is still the current job, UI update is already handled in processWordJob
-				a.updateStatus(fmt.Sprintf("Processing completed: %s", job.Word))
-			} else {
-				// This is a background job that completed
-				a.updateStatus(fmt.Sprintf("Background processing completed: %s", job.Word))
-
-				// Check if user has navigated back to this word
-				a.mu.Lock()
-				currentWord := a.currentWord
-				a.mu.Unlock()
-
-				if currentWord == job.Word {
-					// User is currently viewing this word, reload the files
-					a.loadExistingFiles(job.Word)
-				}
-			}
-		}
-	})
-}
-
-// updateQueueStatus updates the queue status label
 func (a *Application) updateQueueStatus() {
-	a.mu.Lock()
-	processing := a.processingCount
-	a.mu.Unlock()
-
-	// Count total cards from various sources
-	// 1. Saved cards from the session
-	savedCount := len(a.savedCards)
-
-	// 2. Existing words from disk
-	existingCount := len(a.existingWords)
-
-	// 3. Completed jobs from queue
-	completedJobs := a.queue.GetCompletedJobs()
-	queueCompleted := len(completedJobs)
-
-	totalCards := savedCount + existingCount + queueCompleted
-
-	status := fmt.Sprintf("Processing: %d | Total cards: %d", processing, totalCards)
-
-	a.queueStatusLabel.SetText(status)
+	a.ensureHandlers()
+	a.queueMgr.updateQueueStatus()
 }
 
-// incrementProcessing increments the processing count and updates the status
+func (a *Application) getOrCreateCardContext(word string) (context.Context, context.CancelFunc) {
+	a.ensureHandlers()
+	return a.queueMgr.getOrCreateCardContext(word)
+}
+
+func (a *Application) startOperation(word string) {
+	a.ensureHandlers()
+	a.queueMgr.startOperation(word)
+}
+
+func (a *Application) endOperation(word string) {
+	a.ensureHandlers()
+	a.queueMgr.endOperation(word)
+}
+
 func (a *Application) incrementProcessing() {
-	a.mu.Lock()
-	a.processingCount++
-	a.mu.Unlock()
-
-	// Update UI on main thread
-	fyne.Do(func() {
-		a.updateQueueStatus()
-	})
+	a.ensureHandlers()
+	a.queueMgr.incrementProcessing()
 }
 
-// decrementProcessing decrements the processing count and updates the status
 func (a *Application) decrementProcessing() {
-	a.mu.Lock()
-	if a.processingCount > 0 {
-		a.processingCount--
-	}
-	a.mu.Unlock()
-
-	// Update UI on main thread
-	fyne.Do(func() {
-		a.updateQueueStatus()
-	})
+	a.ensureHandlers()
+	a.queueMgr.decrementProcessing()
 }
 
-// setupKeyboardShortcuts registers rune and key handlers on the window canvas.
-// Rune events handle focus shortcuts and Cyrillic action keys; key events handle
-// Latin/function keys, Escape, and Tab navigation.
 func (a *Application) setupKeyboardShortcuts() {
-	a.window.Canvas().SetOnTypedRune(a.handleTypedRune)
-	a.window.Canvas().SetOnTypedKey(a.handleTypedKey)
-}
-
-// handleTypedRune processes character-based shortcuts, supporting both Latin and
-// Cyrillic keyboard layouts. No-op when an input field is focused or a confirmation
-// dialog is active.
-func (a *Application) handleTypedRune(r rune) {
-	focused := a.window.Canvas().Focused()
-	isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
-	if isInputFocused || a.deleteConfirming || a.quitConfirming {
-		return
-	}
-
-	switch r {
-	// Focus shortcuts — move keyboard focus without typing the character.
-	case 'b', 'B', 'б', 'Б':
-		a.window.Canvas().Focus(a.wordInput)
-	case 'e', 'E', 'е', 'Е':
-		a.window.Canvas().Focus(a.translationEntry)
-	case 'o', 'O', 'о', 'О':
-		a.window.Canvas().Focus(a.imagePromptEntry)
-	// Action shortcuts (Cyrillic equivalents; Latin equivalents handled in handleTypedKey).
-	case 'г', 'Г': // г = g — generate
-		if !a.submitButton.Disabled() {
-			a.onSubmit()
-		}
-	case 'н', 'Н': // н = n — new word
-		if !a.keepButton.Disabled() {
-			a.onKeepAndContinue()
-		}
-	case 'и', 'И': // и = i — regenerate image
-		if !a.regenerateImageBtn.Disabled() {
-			a.onRegenerateImage()
-		}
-	case 'м', 'М': // м = m — random image
-		if !a.regenerateRandomImageBtn.Disabled() {
-			a.onRegenerateRandomImage()
-		}
-	case 'a', 'а': // a — regenerate front audio
-		if !a.regenerateAudioBtn.Disabled() {
-			a.onRegenerateAudio()
-		}
-	case 'A', 'А': // A — regenerate back audio (bg-bg only)
-		if a.currentCardType == "bg-bg" {
-			a.onRegenerateBackAudio()
-		}
-	case 'р', 'Р': // р = r — regenerate all
-		if !a.regenerateAllBtn.Disabled() {
-			a.onRegenerateAll()
-		}
-	case 'д', 'Д': // д = d — delete
-		if !a.deleteButton.Disabled() {
-			a.onDelete()
-		}
-	case 'p', 'п': // p — play front audio
-		if a.currentAudioFile != "" {
-			a.audioPlayer.Play()
-		}
-	case 'P', 'П': // P — play back audio (bg-bg only)
-		if a.currentAudioFileBack != "" {
-			a.audioPlayer.PlayBack()
-		}
-	case 'ж', 'Ж': // ж = x — export to Anki
-		a.onExportToAnki()
-	case 'в', 'В': // в = v — archive cards
-		a.onArchive()
-	case '?': // show hotkey reference
-		a.onShowHotkeys()
-	case 'h', 'H', 'х', 'Х': // h/х — previous word (vim-style)
-		if !a.prevWordBtn.Disabled() {
-			a.onPrevWord()
-		}
-	case 'l', 'L', 'л', 'Л': // l/л — next word (vim-style)
-		if !a.nextWordBtn.Disabled() {
-			a.onNextWord()
-		}
-	case 'ч', 'Ч': // ч = q — quit
-		a.onQuitConfirm()
-	case 'u', 'U', 'у', 'У': // u/у — toggle auto-play
-		a.toggleAutoPlay()
-	}
-}
-
-// handleTypedKey processes key-event shortcuts (Latin letters, arrows, Escape, Tab).
-// Escape always unfocuses; Tab cycles focus. All others are ignored when an input
-// field is focused or a confirmation dialog is active.
-func (a *Application) handleTypedKey(ev *fyne.KeyEvent) {
-	focused := a.window.Canvas().Focused()
-	isInputFocused := focused == a.wordInput || focused == a.imagePromptEntry || focused == a.translationEntry
-
-	// Escape unfocuses and clears confirmation state regardless of focus.
-	if ev.Name == fyne.KeyEscape {
-		a.window.Canvas().Unfocus()
-		a.deleteConfirming = false
-		a.quitConfirming = false
-		return
-	}
-
-	// Tab cycles through input fields regardless of current focus.
-	if ev.Name == fyne.KeyTab {
-		a.handleTabNavigation()
-		return
-	}
-
-	// Remaining shortcuts only fire when no input or dialog is active.
-	if isInputFocused || a.deleteConfirming || a.quitConfirming {
-		return
-	}
-
-	// Skip b/e/o here — they are handled in handleTypedRune to avoid typing the character.
-	if ev.Name == fyne.KeyB || ev.Name == fyne.KeyE || ev.Name == fyne.KeyO {
-		return
-	}
-
-	a.handleShortcutKey(ev.Name)
-}
-
-// handleTabNavigation manages custom Tab navigation order
-func (a *Application) handleTabNavigation() {
-	focused := a.window.Canvas().Focused()
-
-	switch focused {
-	case a.wordInput:
-		// From Bulgarian -> English
-		a.window.Canvas().Focus(a.translationEntry)
-	case a.translationEntry:
-		// From English -> Image prompt
-		a.window.Canvas().Focus(a.imagePromptEntry)
-	case a.imagePromptEntry:
-		// From Image prompt -> Bulgarian (cycle back)
-		a.window.Canvas().Focus(a.wordInput)
-	default:
-		// If nothing focused, start with Bulgarian
-		a.window.Canvas().Focus(a.wordInput)
-	}
-}
-
-// handleShortcutKey handles the actual shortcut action
-func (a *Application) handleShortcutKey(key fyne.KeyName) {
-	// Don't process if we're in delete or quit confirmation mode
-	if a.deleteConfirming || a.quitConfirming {
-		return
-	}
-
-	switch key {
-	case fyne.KeyG: // Generate
-		if a.submitButton.Disabled() {
-			return
-		}
-		a.onSubmit()
-
-	case fyne.KeyN: // New Word
-		if a.keepButton.Disabled() {
-			return
-		}
-		a.onKeepAndContinue()
-
-	case fyne.KeyI: // Regenerate Image
-		if a.regenerateImageBtn.Disabled() {
-			return
-		}
-		a.onRegenerateImage()
-
-	case fyne.KeyM: // Random Image (M for "magic" or "mixed")
-		if a.regenerateRandomImageBtn.Disabled() {
-			return
-		}
-		a.onRegenerateRandomImage()
-
-	case fyne.KeyA: // Regenerate Audio (handled by custom OnTypedRune for proper case sensitivity)
-		// NOTE: This handler is disabled to use character-based handler instead
-		// For bg-bg cards: shift+A = back audio, a = front audio
-		// For en-bg cards: a/A = regenerate audio
-		// See handleTypedRune for actual implementation
-
-	case fyne.KeyR: // Regenerate All
-		if a.regenerateAllBtn.Disabled() {
-			return
-		}
-		a.onRegenerateAll()
-
-	case fyne.KeyD: // Delete
-		if a.deleteButton.Disabled() {
-			return
-		}
-		a.onDelete()
-
-	case fyne.KeyLeft: // Previous word
-		if a.prevWordBtn.Disabled() {
-			return
-		}
-		a.onPrevWord()
-
-	case fyne.KeyRight: // Next word
-		if a.nextWordBtn.Disabled() {
-			return
-		}
-		a.onNextWord()
-
-	case fyne.KeyX: // Export to APKG
-		a.onExportToAnki()
-
-	case fyne.KeyV: // Archive all cards
-		a.onArchive()
-
-	case fyne.KeyQ: // Quit application
-		a.onQuitConfirm()
-	}
+	a.ensureHandlers()
+	a.keys.setupKeyboardShortcuts()
 }
 
 // handleWordChange is called when the Bulgarian word is changed
