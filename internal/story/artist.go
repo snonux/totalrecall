@@ -12,6 +12,7 @@ import (
 	"google.golang.org/genai"
 
 	"codeberg.org/snonux/totalrecall/internal/batch"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 	"codeberg.org/snonux/totalrecall/internal/image"
 )
 
@@ -384,7 +385,7 @@ func (a *Artist) resolveHelperTexts(storyText, prebuiltBible string) (bible, blu
 		return bible, ""
 	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: a.apiKey})
+	client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{APIKey: a.apiKey})
 	if err != nil {
 		fmt.Printf("  Warning: Gemini client failed for blurb (%v)\n", err)
 		return bible, ""
@@ -447,7 +448,10 @@ func (a *Artist) generateSinglePage(prompt, fileNamePattern string, refs [][]byt
 		MaxSizeBytes:      20 * 1024 * 1024,
 	})
 
-	_, savedPath, err := downloader.DownloadBestMatchWithOptions(context.Background(), opts)
+	pageCtx, pageCancel := context.WithTimeout(context.Background(), httpctx.StoryPageImageTimeout)
+	defer pageCancel()
+
+	_, savedPath, err := downloader.DownloadBestMatchWithOptions(pageCtx, opts)
 	if err != nil {
 		return "", nil, err
 	}

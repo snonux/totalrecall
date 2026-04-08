@@ -12,6 +12,7 @@ import (
 	"google.golang.org/genai"
 
 	appconfig "codeberg.org/snonux/totalrecall/internal/config"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -59,7 +60,7 @@ type Translator struct {
 	geminiModel   string
 }
 
-var newGeminiClient = genai.NewClient
+var newGeminiClient = httpctx.NewGenAIClient
 
 // NewTranslator creates a new translator instance from the provided config.
 func NewTranslator(config *Config) *Translator {
@@ -77,7 +78,7 @@ func NewTranslator(config *Config) *Translator {
 	}
 
 	if normalized.OpenAIKey != "" {
-		translator.openAIClient = openai.NewClient(normalized.OpenAIKey)
+		translator.openAIClient = httpctx.NewOpenAIClient(normalized.OpenAIKey)
 	}
 
 	if normalized.GoogleAPIKey != "" {

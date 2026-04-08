@@ -14,6 +14,7 @@ import (
 	"google.golang.org/genai"
 
 	appconfig "codeberg.org/snonux/totalrecall/internal/config"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -58,7 +59,7 @@ type Fetcher struct {
 	geminiInitErr error
 }
 
-var newGeminiClient = genai.NewClient
+var newGeminiClient = httpctx.NewGenAIClient
 
 var fetchOpenAIPhonetic = func(ctx context.Context, client *openai.Client, word string) (string, error) {
 	req := openai.ChatCompletionRequest{
@@ -122,7 +123,7 @@ func NewFetcher(config *Config) *Fetcher {
 	switch fetcher.provider {
 	case ProviderOpenAI:
 		if fetcher.openAIKey != "" {
-			fetcher.openAIClient = openai.NewClient(fetcher.openAIKey)
+			fetcher.openAIClient = httpctx.NewOpenAIClient(fetcher.openAIKey)
 		}
 	case ProviderGemini:
 		if fetcher.googleAPIKey != "" {

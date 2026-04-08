@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 // Compile-time check that OpenAIProvider implements the Provider interface.
@@ -31,7 +33,7 @@ func NewOpenAIProvider(config OpenAIAudioConfig, outputFormat string) (Provider,
 	}
 
 	return &OpenAIProvider{
-		client:       openai.NewClient(config.Key),
+		client:       httpctx.NewOpenAIClient(config.Key),
 		config:       config,
 		outputFormat: outputFormat,
 	}, nil
@@ -39,6 +41,9 @@ func NewOpenAIProvider(config OpenAIAudioConfig, outputFormat string) (Provider,
 
 // GenerateAudio generates audio using OpenAI TTS
 func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputFile string) error {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.OpenAIHTTPTimeout)
+	defer cancel()
+
 	// Validate Bulgarian text
 	if err := ValidateBulgarianText(text); err != nil {
 		return err

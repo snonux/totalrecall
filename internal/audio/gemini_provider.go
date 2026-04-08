@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"google.golang.org/genai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -44,7 +46,7 @@ func NewGeminiProvider(config GeminiAudioConfig, outputFormat string) (Provider,
 		return nil, errors.New("google API key is required")
 	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+	client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{
 		APIKey:  normalized.APIKey,
 		Backend: genai.BackendGeminiAPI,
 	})
@@ -60,6 +62,9 @@ func NewGeminiProvider(config GeminiAudioConfig, outputFormat string) (Provider,
 
 // GenerateAudio generates audio using Gemini TTS and writes it to the output file.
 func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputFile string) error {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.GenAIHTTPTimeout)
+	defer cancel()
+
 	if err := ValidateBulgarianText(text); err != nil {
 		return err
 	}

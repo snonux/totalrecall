@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -52,7 +54,7 @@ type NanoBananaClient struct {
 // (ImageSearcher + AttributionProvider).
 var _ ImageClient = (*NanoBananaClient)(nil)
 
-var newNanoBananaClient = genai.NewClient
+var newNanoBananaClient = httpctx.NewGenAIClient
 var nanoBananaGenerateText = func(ctx context.Context, c *NanoBananaClient, model, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
 	return c.generateText(ctx, model, systemPrompt, userPrompt, temperature, maxOutputTokens)
 }
@@ -84,6 +86,9 @@ func NewNanoBananaClient(config *NanoBananaConfig) *NanoBananaClient {
 
 // Search generates an educational image for the Bulgarian word using Nano Banana.
 func (c *NanoBananaClient) Search(ctx context.Context, opts *SearchOptions) ([]SearchResult, error) {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.OperationTimeoutDefault)
+	defer cancel()
+
 	if err := c.ensureReady(); err != nil {
 		return nil, err
 	}

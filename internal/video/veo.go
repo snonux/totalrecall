@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -48,7 +50,7 @@ type VeoGenerator struct {
 
 // newGenaiClient is the constructor used in production and can be replaced in
 // unit tests to inject a mock transport.
-var newGenaiClient = genai.NewClient
+var newGenaiClient = httpctx.NewGenAIClient
 
 // NewVeoGenerator creates a new VeoGenerator backed by the Gemini API.
 // It returns an error if the API key is empty or the SDK client cannot be
@@ -82,6 +84,9 @@ func NewVeoGenerator(apiKey string) (*VeoGenerator, error) {
 // outputDir is where the output MP4 will be written.
 // pageNum selects which gallery page to animate (1-based).
 func (g *VeoGenerator) GenerateVideoFromGallery(ctx context.Context, galleryPath string, outputDir string, pageNum int) (string, error) {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.VeoCLIPerVideoTimeout)
+	defer cancel()
+
 	imgPath, imgBytes, err := loadGalleryImage(galleryPath, pageNum)
 	if err != nil {
 		return "", err
@@ -109,6 +114,9 @@ func (g *VeoGenerator) GenerateVideoFromGallery(ctx context.Context, galleryPath
 // because it avoids a second glob search and always writes the video next to
 // its source image.
 func (g *VeoGenerator) GenerateVideoFromPath(ctx context.Context, imgPath string) (string, error) {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.VeoCLIPerVideoTimeout)
+	defer cancel()
+
 	imgBytes, err := os.ReadFile(imgPath)
 	if err != nil {
 		return "", fmt.Errorf("veo: reading gallery image %s: %w", imgPath, err)

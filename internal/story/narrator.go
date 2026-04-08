@@ -13,6 +13,7 @@ import (
 	"google.golang.org/genai"
 
 	"codeberg.org/snonux/totalrecall/internal/audio"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -235,7 +236,7 @@ func (n *Narrator) buildIntro(storyText string) string {
 	if n.apiKey == "" {
 		return ""
 	}
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: n.apiKey})
+	client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{APIKey: n.apiKey})
 	if err != nil {
 		fmt.Printf("    Warning: intro text generation failed: %v\n", err)
 		return ""
@@ -310,7 +311,7 @@ func (n *Narrator) buildConclusion(storyText string) string {
 		return ""
 	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: n.apiKey})
+	client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{APIKey: n.apiKey})
 	if err != nil {
 		fmt.Printf("    Warning: conclusion text generation failed: %v\n", err)
 		return ""

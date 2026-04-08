@@ -10,6 +10,8 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 type openAIModelLister interface {
@@ -43,11 +45,11 @@ func NewLister(openAIKey, geminiKey string, out io.Writer) *Lister {
 	}
 
 	if lister.openAIKey != "" {
-		lister.openAIClient = openai.NewClient(lister.openAIKey)
+		lister.openAIClient = httpctx.NewOpenAIClient(lister.openAIKey)
 	}
 
 	if lister.geminiKey != "" {
-		client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+		client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{
 			APIKey: lister.geminiKey,
 		})
 		if err != nil {
@@ -97,7 +99,10 @@ func (l *Lister) printOpenAIModels() error {
 		return fmt.Errorf("OpenAI client not initialized")
 	}
 
-	models, err := l.openAIClient.ListModels(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), httpctx.ListModelsTimeout)
+	defer cancel()
+
+	models, err := l.openAIClient.ListModels(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list OpenAI models: %w", err)
 	}
@@ -193,7 +198,9 @@ func (l *Lister) printGeminiModels() error {
 		return fmt.Errorf("gemini client not initialized")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), httpctx.ListModelsTimeout)
+	defer cancel()
+
 	config := &genai.ListModelsConfig{
 		QueryBase: genai.Ptr(true),
 	}

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/genai"
 
 	"codeberg.org/snonux/totalrecall/internal/batch"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 const (
@@ -150,7 +151,7 @@ func NewGenerator(config *Config) *Generator {
 		g.textModel = config.TextModel
 	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+	client, err := httpctx.NewGenAIClient(context.Background(), &genai.ClientConfig{
 		APIKey: config.APIKey,
 	})
 	if err != nil {

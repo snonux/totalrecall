@@ -34,6 +34,7 @@ func GenerateSelectedVideos(apiKey string, selectedPaths []string) error {
 	for _, imgPath := range selectedPaths {
 		fmt.Printf("Generating video for: %s\n", imgPath)
 
+		// GenerateVideoFromPath applies an operation-level deadline when ctx has none.
 		mp4Path, err := gen.GenerateVideoFromPath(ctx, imgPath)
 		if err != nil {
 			return fmt.Errorf("cli: generating video for %s: %w", imgPath, err)

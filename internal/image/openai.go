@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"github.com/sashabaranov/go-openai"
+
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
 // Compile-time check that OpenAIClient implements the full ImageClient interface
 // (ImageSearcher + AttributionProvider).
 var _ ImageClient = (*OpenAIClient)(nil)
 
-// imageHTTPClient is a shared HTTP client with a generous timeout for image
-// downloads. http.DefaultClient has no timeout, which can block goroutines
-// indefinitely on slow or unresponsive servers.
-var imageHTTPClient = &http.Client{Timeout: 60 * time.Second}
+// imageHTTPClient is a shared HTTP client with a timeout for image downloads.
+var imageHTTPClient = httpctx.ImageDownloadHTTPClient()
 
 // OpenAIClient implements ImageSearcher for OpenAI DALL-E image generation
 type OpenAIClient struct {
@@ -52,7 +52,7 @@ func NewOpenAIClient(config *OpenAIConfig) *OpenAIClient {
 		return &OpenAIClient{}
 	}
 
-	client := openai.NewClient(config.APIKey)
+	client := httpctx.NewOpenAIClient(config.APIKey)
 
 	// Set defaults
 	if config.Model == "" {
@@ -82,6 +82,9 @@ func NewOpenAIClient(config *OpenAIConfig) *OpenAIClient {
 
 // Search generates an image for the Bulgarian word using DALL-E
 func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]SearchResult, error) {
+	ctx, cancel := httpctx.WithTimeoutUnlessSet(ctx, httpctx.OperationTimeoutDefault)
+	defer cancel()
+
 	if c.client == nil {
 		return nil, &SearchError{
 			Provider: "openai",

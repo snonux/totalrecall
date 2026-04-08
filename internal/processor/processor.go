@@ -15,6 +15,7 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/batch"
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/gui"
+	"codeberg.org/snonux/totalrecall/internal/httpctx"
 	"codeberg.org/snonux/totalrecall/internal/image"
 	"codeberg.org/snonux/totalrecall/internal/phonetic"
 	"codeberg.org/snonux/totalrecall/internal/store"
@@ -239,7 +240,9 @@ func (p *Processor) ProcessSingleWord(word string) error {
 // ProcessWordWithTranslation processes a word with an optional provided English
 // translation, using the default en-bg card type.
 func (p *Processor) ProcessWordWithTranslation(word, providedTranslation string) error {
-	return p.ProcessWordWithTranslationAndType(context.Background(), word, providedTranslation, internal.CardTypeEnBg)
+	ctx, cancel := context.WithTimeout(context.Background(), httpctx.SingleWordProcessTimeout)
+	defer cancel()
+	return p.ProcessWordWithTranslationAndType(ctx, word, providedTranslation, internal.CardTypeEnBg)
 }
 
 // ProcessWordWithTranslationAndType processes a word with optional provided
