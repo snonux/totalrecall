@@ -17,6 +17,7 @@ import (
 
 	"google.golang.org/genai"
 
+	"codeberg.org/snonux/totalrecall/internal/apicircuit"
 	"codeberg.org/snonux/totalrecall/internal/config"
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
@@ -382,12 +383,14 @@ func (c *NanoBananaClient) generateSceneDescription(ctx context.Context, bulgari
 
 func (c *NanoBananaClient) generateText(ctx context.Context, model, systemPrompt, userPrompt string, temperature float32, maxOutputTokens int32) (string, error) {
 	temp := temperature
-	resp, err := c.client.Models.GenerateContent(ctx, model, []*genai.Content{
-		genai.NewContentFromText(userPrompt, genai.RoleUser),
-	}, &genai.GenerateContentConfig{
-		SystemInstruction: genai.NewContentFromText(systemPrompt, genai.RoleUser),
-		Temperature:       &temp,
-		MaxOutputTokens:   maxOutputTokens,
+	resp, err := apicircuit.GeminiNanoBanana(func() (*genai.GenerateContentResponse, error) {
+		return c.client.Models.GenerateContent(ctx, model, []*genai.Content{
+			genai.NewContentFromText(userPrompt, genai.RoleUser),
+		}, &genai.GenerateContentConfig{
+			SystemInstruction: genai.NewContentFromText(systemPrompt, genai.RoleUser),
+			Temperature:       &temp,
+			MaxOutputTokens:   maxOutputTokens,
+		})
 	})
 	if err != nil {
 		return "", fmt.Errorf("gemini API error: %w", err)
@@ -412,9 +415,11 @@ func (c *NanoBananaClient) generateImage(ctx context.Context, prompt, aspectRati
 		},
 	}
 
-	resp, err := c.client.Models.GenerateContent(ctx, c.modelName(), []*genai.Content{
-		genai.NewContentFromText(prompt, genai.RoleUser),
-	}, cfg)
+	resp, err := apicircuit.GeminiNanoBanana(func() (*genai.GenerateContentResponse, error) {
+		return c.client.Models.GenerateContent(ctx, c.modelName(), []*genai.Content{
+			genai.NewContentFromText(prompt, genai.RoleUser),
+		}, cfg)
+	})
 	if err != nil {
 		return nil, "", &SearchError{
 			Provider: nanoBananaSource,
@@ -466,10 +471,12 @@ func (c *NanoBananaClient) generateImageWithRefs(ctx context.Context, prompt, as
 	)
 	parts = append(parts, &genai.Part{Text: refNote + prompt})
 
-	resp, err := c.client.Models.GenerateContent(ctx, c.modelName(),
-		[]*genai.Content{{Role: string(genai.RoleUser), Parts: parts}},
-		cfg,
-	)
+	resp, err := apicircuit.GeminiNanoBanana(func() (*genai.GenerateContentResponse, error) {
+		return c.client.Models.GenerateContent(ctx, c.modelName(),
+			[]*genai.Content{{Role: string(genai.RoleUser), Parts: parts}},
+			cfg,
+		)
+	})
 	if err != nil {
 		return nil, "", &SearchError{
 			Provider: nanoBananaSource,

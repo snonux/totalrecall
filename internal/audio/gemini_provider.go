@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/genai"
 
+	"codeberg.org/snonux/totalrecall/internal/apicircuit"
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
@@ -78,9 +79,11 @@ func (p *GeminiProvider) GenerateAudio(ctx context.Context, text string, outputF
 		SpeechConfig:       p.speechConfig(),
 	}
 
-	response, err := p.client.Models.GenerateContent(ctx, p.config.TTSModel, []*genai.Content{
-		genai.NewContentFromText(prompt, genai.RoleUser),
-	}, req)
+	response, err := apicircuit.GeminiTTS(func() (*genai.GenerateContentResponse, error) {
+		return p.client.Models.GenerateContent(ctx, p.config.TTSModel, []*genai.Content{
+			genai.NewContentFromText(prompt, genai.RoleUser),
+		}, req)
+	})
 	if err != nil {
 		return fmt.Errorf("gemini API error: %w", err)
 	}

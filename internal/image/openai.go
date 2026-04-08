@@ -12,6 +12,7 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	"codeberg.org/snonux/totalrecall/internal/apicircuit"
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
@@ -154,8 +155,10 @@ func (c *OpenAIClient) Search(ctx context.Context, opts *SearchOptions) ([]Searc
 		req.Style = c.style
 	}
 
-	// Generate the image
-	resp, err := c.client.CreateImage(ctx, req)
+	// Generate the image (circuit breaker limits load when OpenAI is unhealthy).
+	resp, err := apicircuit.OpenAIImage(func() (openai.ImageResponse, error) {
+		return c.client.CreateImage(ctx, req)
+	})
 	if err != nil {
 		return nil, &SearchError{
 			Provider: "openai",
@@ -295,7 +298,9 @@ func (c *OpenAIClient) generateSceneDescription(ctx context.Context, bulgarianWo
 		MaxTokens:   100,
 	}
 
-	resp, err := c.client.CreateChatCompletion(ctx, req)
+	resp, err := apicircuit.OpenAIImage(func() (openai.ChatCompletionResponse, error) {
+		return c.client.CreateChatCompletion(ctx, req)
+	})
 	if err != nil {
 		return "", fmt.Errorf("scene generation failed: %w", err)
 	}

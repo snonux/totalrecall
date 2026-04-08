@@ -11,6 +11,7 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	"codeberg.org/snonux/totalrecall/internal/apicircuit"
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
@@ -92,8 +93,10 @@ func (p *OpenAIProvider) GenerateAudio(ctx context.Context, text string, outputF
 		}
 	}
 
-	// Make the API call
-	response, err := p.client.CreateSpeech(ctx, req)
+	// Make the API call (circuit breaker limits load when OpenAI is unhealthy).
+	response, err := apicircuit.OpenAITTS(func() (openai.RawResponse, error) {
+		return p.client.CreateSpeech(ctx, req)
+	})
 	if err != nil {
 		// Check if it's a model access error
 		errStr := err.Error()
