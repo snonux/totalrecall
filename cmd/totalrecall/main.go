@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -13,8 +14,28 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
+	"codeberg.org/snonux/totalrecall/internal/story"
 	"codeberg.org/snonux/totalrecall/internal/video"
 )
+
+// runDeps holds injectable implementations for composition-root wiring (DIP).
+type runDeps struct {
+	Archiver       archive.Archiver
+	NewLister      func(openAIKey, geminiKey string, out io.Writer) models.ModelLister
+	NewStoryRunner func(flags *cli.Flags) story.StoryRunner
+	NewGUI         func(*gui.Config) gui.App
+}
+
+func defaultRunDeps() runDeps {
+	return runDeps{
+		Archiver: archive.DefaultArchiver{},
+		NewLister: func(oa, g string, w io.Writer) models.ModelLister {
+			return models.NewLister(oa, g, w)
+		},
+		NewStoryRunner: newStoryRunner,
+		NewGUI:         gui.New,
+	}
+}
 
 func main() {
 	// Create flags instance
@@ -31,7 +52,7 @@ func main() {
 	// Set the run function
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		cli.MarkExplicitFlagValues(cmd, flags)
-		return runCommand(cmd, args, flags)
+		return runCommand(cmd, args, flags, defaultRunDeps())
 	}
 
 	// Execute command
@@ -40,12 +61,12 @@ func main() {
 	}
 }
 
-func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
+func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags, deps runDeps) error {
 	// Handle --archive flag
 	if flags.Archive {
 		home, _ := os.UserHomeDir()
 		cardsDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
-		if err := archive.ArchiveCards(cardsDir); err != nil {
+		if err := deps.Archiver.ArchiveCards(cardsDir); err != nil {
 			return fmt.Errorf("failed to archive cards: %w", err)
 		}
 		return nil
@@ -53,7 +74,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 
 	// Handle --list-models flag
 	if flags.ListModels {
-		lister := models.NewLister(cli.GetOpenAIKey(), cli.GetGoogleAPIKey(), os.Stdout)
+		lister := deps.NewLister(cli.GetOpenAIKey(), cli.GetGoogleAPIKey(), os.Stdout)
 		return lister.ListAvailableModels()
 	}
 
@@ -61,7 +82,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	// This is deliberately placed before processor creation because it does not
 	// need the full processor pipeline (no Anki cards, no per-word audio).
 	if flags.StoryFile != "" {
-		runner := newStoryRunner(flags)
+		runner := deps.NewStoryRunner(flags)
 		if err := runner.Run(flags.StoryFile); err != nil {
 			return err
 		}
@@ -92,7 +113,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 		}
 	} else {
 		// No input provided - launch GUI mode by default
-		return runGUIMode(proc, flags)
+		return runGUIMode(proc, flags, deps)
 	}
 
 	// Generate Anki file if requested
@@ -111,9 +132,9 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 }
 
 // runGUIMode launches the GUI application from the cmd/totalrecall package so
-// that gui.New() is called from the composition root rather than from the
-// processor package, reducing the processor→gui import coupling.
-func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
+// that the GUI factory is invoked from the composition root rather than from
+// the processor package, reducing the processor→gui import coupling.
+func runGUIMode(proc *processor.Processor, flags *cli.Flags, deps runDeps) error {
 	guiConfig := proc.GUIConfig()
 
 	// Only override OutputDir when the user explicitly set a non-default path.
@@ -129,7 +150,7 @@ func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 		guiConfig.GoogleAPIKey = cli.GetGoogleAPIKey()
 	}
 
-	app := gui.New(guiConfig)
+	app := deps.NewGUI(guiConfig)
 	app.Run()
 
 	return nil

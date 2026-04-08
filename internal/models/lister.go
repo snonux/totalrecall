@@ -14,6 +14,12 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/httpctx"
 )
 
+// ModelLister lists available OpenAI and Gemini models to the configured
+// writer. *Lister satisfies this interface.
+type ModelLister interface {
+	ListAvailableModels() error
+}
+
 type openAIModelLister interface {
 	ListModels(context.Context) (openai.ModelsList, error)
 }
@@ -31,6 +37,8 @@ type Lister struct {
 	geminiInitErr error
 	out           io.Writer
 }
+
+var _ ModelLister = (*Lister)(nil)
 
 // NewLister creates a new model lister.
 func NewLister(openAIKey, geminiKey string, out io.Writer) *Lister {

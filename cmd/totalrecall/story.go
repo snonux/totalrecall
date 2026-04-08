@@ -6,7 +6,7 @@ import (
 )
 
 // newStoryRunner wires a story.Runner from CLI flags and API keys.
-func newStoryRunner(flags *cli.Flags) *story.Runner {
+func newStoryRunner(flags *cli.Flags) story.StoryRunner {
 	return story.NewRunner(&story.RunnerConfig{
 		APIKey:         cli.GetGoogleAPIKey(),
 		TextModel:      flags.NanoBananaTextModel,

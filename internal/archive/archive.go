@@ -7,8 +7,24 @@ import (
 	"time"
 )
 
-// ArchiveCards moves the cards directory to an archive with timestamp
-func ArchiveCards(cardsDir string) error {
+// Archiver moves the cards directory into a timestamped archive folder under
+// the parent state directory. Implementations are typically injected at
+// composition roots (cmd, GUI) so callers depend on this abstraction rather
+// than package-level functions alone.
+type Archiver interface {
+	ArchiveCards(cardsDir string) error
+}
+
+// DefaultArchiver implements Archiver using the local filesystem.
+type DefaultArchiver struct{}
+
+// ArchiveCards implements Archiver.
+func (DefaultArchiver) ArchiveCards(cardsDir string) error {
+	return archiveCards(cardsDir)
+}
+
+// archiveCards moves the cards directory to an archive with timestamp.
+func archiveCards(cardsDir string) error {
 	// Check if cards directory exists
 	if _, err := os.Stat(cardsDir); os.IsNotExist(err) {
 		return fmt.Errorf("cards directory does not exist: %s", cardsDir)
@@ -43,4 +59,10 @@ func ArchiveCards(cardsDir string) error {
 
 	fmt.Printf("Cards directory archived to: %s\n", archivePath)
 	return nil
+}
+
+// ArchiveCards archives cards using DefaultArchiver. It exists for call sites
+// that do not use dependency injection (e.g. tests and legacy scripts).
+func ArchiveCards(cardsDir string) error {
+	return (DefaultArchiver{}).ArchiveCards(cardsDir)
 }

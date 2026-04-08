@@ -30,6 +30,12 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/translation"
 )
 
+// App is the runnable GUI application constructed at the composition root
+// (cmd/totalrecall). Callers invoke Run() to start the Fyne event loop.
+type App interface {
+	Run()
+}
+
 // Application represents the main GUI application
 type Application struct {
 	// Fyne components
@@ -88,6 +94,7 @@ type Application struct {
 
 	// Configuration
 	config          *Config
+	archiver        archive.Archiver
 	audioConfig     *audio.Config
 	phoneticFetcher *phonetic.Fetcher
 	translator      *translation.Translator
@@ -144,6 +151,9 @@ type Config struct {
 	// constructing new instances from the provider/key fields above.
 	PhoneticFetcher *phonetic.Fetcher
 	Translator      *translation.Translator
+	// Archiver moves the cards directory to a timestamped archive; nil uses
+	// archive.DefaultArchiver.
+	Archiver archive.Archiver
 }
 
 // DefaultConfig returns default GUI configuration
@@ -170,12 +180,16 @@ func DefaultConfig() *Config {
 	}
 }
 
-// New creates a new GUI application
-// New constructs and returns a fully initialised Application for the given config.
+// New constructs and returns a fully initialised App for the given config.
 // A nil config receives all defaults. The Fyne application and UI are created here;
 // callers should call Run() to start the event loop.
-func New(config *Config) *Application {
+func New(config *Config) App {
 	config = applyConfigDefaults(config)
+
+	arch := config.Archiver
+	if arch == nil {
+		arch = archive.DefaultArchiver{}
+	}
 
 	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create output directory %q: %v\n", config.OutputDir, err)
@@ -188,6 +202,7 @@ func New(config *Config) *Application {
 	a := &Application{
 		app:              myApp,
 		config:           config,
+		archiver:         arch,
 		ctx:              ctx,
 		cancel:           cancel,
 		savedCards:       make([]anki.Card, 0),
@@ -1479,7 +1494,7 @@ func (a *Application) performArchive() {
 	}
 	cardsDir := filepath.Join(home, ".local", "state", "totalrecall", "cards")
 
-	if err := archive.ArchiveCards(cardsDir); err != nil {
+	if err := a.archiver.ArchiveCards(cardsDir); err != nil {
 		dialog.ShowError(err, a.window)
 		return
 	}

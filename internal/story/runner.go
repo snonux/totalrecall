@@ -9,6 +9,12 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/batch"
 )
 
+// StoryRunner runs the vocabulary story generation pipeline from a batch file
+// path. *Runner satisfies this interface.
+type StoryRunner interface {
+	Run(batchFile string) error
+}
+
 // ttsTodoContent is written to story_tts_todo.txt as a fallback when Gemini TTS
 // narration fails or no API key is available.  It documents the original
 // ElevenLabs integration placeholder for reference.
@@ -183,6 +189,8 @@ func (r *Runner) Run(batchFile string) error {
 	}
 	return r.handleNarration(result.StoryText, slug, comicsDir)
 }
+
+var _ StoryRunner = (*Runner)(nil)
 
 // drawComicPages generates all 12 comic pages and assembles them into a PDF.
 // panelScript carries the explicit per-panel visual descriptions from Gemini so
