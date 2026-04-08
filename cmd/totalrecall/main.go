@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"codeberg.org/snonux/totalrecall/internal/archive"
 	"codeberg.org/snonux/totalrecall/internal/cli"
@@ -15,50 +13,8 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
-	"codeberg.org/snonux/totalrecall/internal/story"
+	"codeberg.org/snonux/totalrecall/internal/video"
 )
-
-// newProcessorConfig reads all Viper-sourced settings in a single pass and
-// returns a fully-resolved processor.Config. Centralising all Viper access
-// here means the processor package is free of any Viper dependency, which
-// improves testability and removes tight coupling to the global config singleton.
-func newProcessorConfig() *processor.Config {
-	return &processor.Config{
-		// Translation & phonetic
-		TranslationProvider:    strings.TrimSpace(viper.GetString("translation.provider")),
-		PhoneticProvider:       strings.TrimSpace(viper.GetString("phonetic.provider")),
-		TranslationGeminiModel: viper.GetString("translation.gemini_model"),
-
-		// Audio
-		AudioProvider:        strings.ToLower(strings.TrimSpace(viper.GetString("audio.provider"))),
-		AudioFormat:          strings.ToLower(strings.TrimSpace(viper.GetString("audio.format"))),
-		AudioFormatSet:       viper.IsSet("audio.format"),
-		GeminiTTSModel:       strings.TrimSpace(viper.GetString("audio.gemini_tts_model")),
-		GeminiVoice:          strings.TrimSpace(viper.GetString("audio.gemini_voice")),
-		OpenAIVoice:          strings.TrimSpace(viper.GetString("audio.openai_voice")),
-		OpenAIModel:          viper.GetString("audio.openai_model"),
-		OpenAIModelSet:       viper.IsSet("audio.openai_model"),
-		OpenAISpeed:          viper.GetFloat64("audio.openai_speed"),
-		OpenAISpeedSet:       viper.IsSet("audio.openai_speed"),
-		OpenAIInstruction:    viper.GetString("audio.openai_instruction"),
-		OpenAIInstructionSet: viper.IsSet("audio.openai_instruction"),
-
-		// Image
-		ImageProvider:               strings.ToLower(strings.TrimSpace(viper.GetString("image.provider"))),
-		ImageOpenAIModel:            viper.GetString("image.openai_model"),
-		ImageOpenAIModelSet:         viper.IsSet("image.openai_model"),
-		ImageOpenAISize:             viper.GetString("image.openai_size"),
-		ImageOpenAISizeSet:          viper.IsSet("image.openai_size"),
-		ImageOpenAIQuality:          viper.GetString("image.openai_quality"),
-		ImageOpenAIQualitySet:       viper.IsSet("image.openai_quality"),
-		ImageOpenAIStyle:            viper.GetString("image.openai_style"),
-		ImageOpenAIStyleSet:         viper.IsSet("image.openai_style"),
-		ImageNanoBananaModel:        strings.TrimSpace(viper.GetString("image.nanobanana_model")),
-		ImageNanoBananaModelSet:     viper.IsSet("image.nanobanana_model"),
-		ImageNanoBananaTextModel:    strings.TrimSpace(viper.GetString("image.nanobanana_text_model")),
-		ImageNanoBananaTextModelSet: viper.IsSet("image.nanobanana_text_model"),
-	}
-}
 
 func main() {
 	// Create flags instance
@@ -105,23 +61,11 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	// This is deliberately placed before processor creation because it does not
 	// need the full processor pipeline (no Anki cards, no per-word audio).
 	if flags.StoryFile != "" {
-		runner := story.NewRunner(&story.RunnerConfig{
-			APIKey:         cli.GetGoogleAPIKey(),
-			TextModel:      flags.NanoBananaTextModel,
-			ImageModel:     flags.NanoBananaModel,
-			ImageTextModel: flags.NanoBananaTextModel,
-			OutputDir:      ".",
-			Style:          flags.StoryStyle,
-			Theme:          flags.StoryTheme,
-			UltraRealistic: storyUltraRealistic(flags.StoryNoUltraRealistic, flags.StoryUltraRealistic),
-			NarratorVoice:  flags.NarratorVoice,
-			NarrateEnabled: flags.NarrateEnabled,
-			Slug:           flags.StorySlug,
-		})
+		runner := newStoryRunner(flags)
 		if err := runner.Run(flags.StoryFile); err != nil {
 			return err
 		}
-		return runStoryVideos(flags)
+		return video.RunStoryVideos(flags.VideoEnabled, ".", cli.GetGoogleAPIKey())
 	}
 
 	// Auto-adjust image size for DALL-E 3
@@ -133,7 +77,7 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 
 	// Resolve all Viper config values once here so the processor never touches
 	// the global Viper singleton directly (Dependency Inversion Principle).
-	proc := processor.NewProcessor(flags, newProcessorConfig())
+	proc := newProcessor(flags)
 
 	// Handle batch processing
 	if flags.BatchFile != "" {
@@ -166,8 +110,8 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags) error {
 	return nil
 }
 
-// runGUIMode launches the GUI application. It lives in cmd/main.go so that
-// gui.New() is called from the composition root rather than from the
+// runGUIMode launches the GUI application from the cmd/totalrecall package so
+// that gui.New() is called from the composition root rather than from the
 // processor package, reducing the processor→gui import coupling.
 func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 	guiConfig := proc.GUIConfig()
@@ -189,51 +133,4 @@ func runGUIMode(proc *processor.Processor, flags *cli.Flags) error {
 	app.Run()
 
 	return nil
-}
-
-// runStoryVideos is called after the story runner completes. When the
-// --video flag is true (default), it prompts the user to select gallery pages
-// for Veo video generation and then generates the selected videos.
-// Passing --video=false skips the prompt entirely.
-//
-// Video generation failures are intentionally non-fatal: the comic, PDF, and
-// narration are already on disk, so a Veo API error should not invalidate
-// those outputs. Errors are printed as warnings and the function returns nil.
-func runStoryVideos(flags *cli.Flags) error {
-	if !flags.VideoEnabled {
-		return nil
-	}
-
-	// The story runner writes gallery PNGs into ./comics/<slug>/, so we search
-	// from "." recursively to find them regardless of the exact slug.
-	// PromptForGalleryVideos returns the actual file paths (not just page numbers)
-	// so GenerateSelectedVideos can locate them without a second directory search.
-	selectedPaths, err := cli.PromptForGalleryVideos(".")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: video prompt failed: %v\n", err)
-		return nil
-	}
-
-	if err := cli.GenerateSelectedVideos(cli.GetGoogleAPIKey(), selectedPaths); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: video generation failed: %v\n", err)
-	}
-
-	return nil
-}
-
-// storyUltraRealistic converts the --ultra-realistic / --no-ultra-realistic
-// bool flags into a *bool for RunnerConfig.
-//   - --ultra-realistic → pointer to true (force photorealistic panels)
-//   - --no-ultra-realistic → pointer to false (force standard comic style)
-//   - neither flag set → nil (runner picks randomly 50/50 each run)
-func storyUltraRealistic(noUltraRealistic, ultraRealistic bool) *bool {
-	if ultraRealistic {
-		v := true
-		return &v
-	}
-	if noUltraRealistic {
-		v := false
-		return &v
-	}
-	return nil // nil → random pick in NewRunner
 }

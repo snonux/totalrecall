@@ -1,4 +1,4 @@
-package cli
+package video
 
 import (
 	"bufio"
@@ -95,7 +95,7 @@ func findGalleryPages(outputDir string) ([]int, []string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("cli: walking gallery files in %s: %w", outputDir, err)
+		return nil, nil, fmt.Errorf("video: walking gallery files in %s: %w", outputDir, err)
 	}
 
 	sort.Strings(matches)
@@ -153,7 +153,7 @@ func askYesNo(prompt string) (bool, error) {
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		return false, fmt.Errorf("cli: reading user input: %w", err)
+		return false, fmt.Errorf("video: reading user input: %w", err)
 	}
 	answer := strings.TrimSpace(strings.ToLower(line))
 	return answer == "y", nil
@@ -172,7 +172,7 @@ func askPageSelection(availablePages []int) ([]int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		return nil, fmt.Errorf("cli: reading page selection: %w", err)
+		return nil, fmt.Errorf("video: reading page selection: %w", err)
 	}
 
 	input := strings.TrimSpace(line)
@@ -229,10 +229,10 @@ func parseSelection(input string, max int) ([]int, error) {
 		}
 		n, err := strconv.Atoi(tok)
 		if err != nil {
-			return nil, fmt.Errorf("cli: invalid page number %q: %w", tok, err)
+			return nil, fmt.Errorf("video: invalid page number %q: %w", tok, err)
 		}
 		if n <= 0 {
-			return nil, fmt.Errorf("cli: page numbers must be positive, got %d", n)
+			return nil, fmt.Errorf("video: page numbers must be positive, got %d", n)
 		}
 		seen[n] = struct{}{}
 	}

@@ -1,6 +1,6 @@
-// Package video provides video generation capabilities using Google's Veo model.
-// It reads existing gallery images (comic-style flashcard panels) and animates
-// them into short MP4 clips via the Veo API's long-running operation pattern.
+// Package video provides Veo-based MP4 generation from comic gallery PNGs,
+// interactive gallery page selection after --story runs, and the combined
+// post-story flow (RunStoryVideos).
 package video
 
 import (

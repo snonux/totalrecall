@@ -37,7 +37,7 @@ func TestNewVeoGenerator_WhitespaceKey(t *testing.T) {
 // TestNewVeoGenerator_ClientInitFailure verifies that a genai client
 // initialisation error propagates as a wrapped error.
 func TestNewVeoGenerator_ClientInitFailure(t *testing.T) {
-	t.Parallel()
+	// Do not use t.Parallel: this test replaces the package-global newGenaiClient hook.
 
 	// Temporarily replace the genai client constructor with one that always fails.
 	orig := newGenaiClient
@@ -251,7 +251,7 @@ func TestLoadGalleryImage_MultipleMatchesUsesFirst(t *testing.T) {
 // TestNewVeoGenerator_WithMockClient verifies that NewVeoGenerator succeeds
 // when the genai client factory does not return an error.
 func TestNewVeoGenerator_WithMockClient(t *testing.T) {
-	t.Parallel()
+	// Do not use t.Parallel: this test replaces the package-global newGenaiClient hook.
 
 	orig := newGenaiClient
 	newGenaiClient = func(_ context.Context, _ *genai.ClientConfig) (*genai.Client, error) {
