@@ -30,11 +30,12 @@ func ReadBatchFile(filename string) ([]WordEntry, error) {
 		return nil, fmt.Errorf("failed to read batch file: %w", err)
 	}
 
-	var entries []WordEntry
 	// Normalize \r\n to \n before splitting so both Windows and Unix line
 	// endings are handled uniformly by strings.Split.
 	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
-	for _, line := range strings.Split(normalized, "\n") {
+	lines := strings.Split(normalized, "\n")
+	entries := make([]WordEntry, 0, len(lines))
+	for _, line := range lines {
 		if line = strings.TrimSpace(line); line != "" {
 			entry := parseBatchLine(line)
 			if entry != nil {
@@ -43,6 +44,9 @@ func ReadBatchFile(filename string) ([]WordEntry, error) {
 		}
 	}
 
+	if len(entries) == 0 {
+		return nil, nil
+	}
 	return entries, nil
 }
 
