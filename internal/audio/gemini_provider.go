@@ -20,7 +20,8 @@ import (
 const (
 	defaultGeminiTTSModel  = "gemini-2.5-flash-preview-tts"
 	geminiTTSLanguageCode  = "bg"
-	geminiTTSChannels      = 1
+	// Gemini returns mono PCM; we upsample to stereo so both channels carry audio.
+	geminiTTSChannels      = 2
 	geminiTTSSampleRate    = 24000
 	geminiTTSBitsPerSample = 16
 )
@@ -230,7 +231,25 @@ func ensureOutputDirectory(outputFile string) error {
 	return nil
 }
 
+// monoToStereo duplicates each 16-bit mono sample into both left and right
+// channels, producing interleaved stereo PCM. The output is twice as large.
+func monoToStereo(mono []byte) []byte {
+	bytesPerSample := geminiTTSBitsPerSample / 8
+	stereo := make([]byte, len(mono)*2)
+	for i := 0; i+bytesPerSample <= len(mono); i += bytesPerSample {
+		sample := mono[i : i+bytesPerSample]
+		// Write sample for left channel, then right channel.
+		dst := i * 2
+		copy(stereo[dst:], sample)
+		copy(stereo[dst+bytesPerSample:], sample)
+	}
+	return stereo
+}
+
 func encodePCMAsWAV(pcmData []byte) ([]byte, error) {
+	// Gemini returns mono audio; convert to stereo so both speakers carry audio.
+	pcmData = monoToStereo(pcmData)
+
 	var buffer bytes.Buffer
 
 	if _, err := buffer.WriteString("RIFF"); err != nil {

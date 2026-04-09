@@ -212,7 +212,8 @@ func TestWriteGeminiAudioFileWritesWAV(t *testing.T) {
 		t.Fatalf("output file does not look like WAV data: %q", fileData[:4])
 	}
 
-	if got, want := len(fileData), 44+len(pcmData); got != want {
+	// Mono PCM is duplicated to stereo (both channels), so the data section doubles.
+	if got, want := len(fileData), 44+len(pcmData)*2; got != want {
 		t.Fatalf("len(output) = %d, want %d", got, want)
 	}
 }
