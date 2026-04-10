@@ -25,6 +25,13 @@ type CardStore struct {
 	outputDir string
 }
 
+// CardDirectory describes one discovered on-disk card directory and the word
+// stored inside it.
+type CardDirectory struct {
+	Path string
+	Word string
+}
+
 // New constructs a CardStore rooted at outputDir.
 func New(outputDir string) *CardStore {
 	return &CardStore{outputDir: outputDir}
@@ -56,13 +63,26 @@ func (cs *CardStore) FindOrCreateCardDirectory(word string) string {
 // candidate directory; pass nil to accept all directories that have a word
 // file.
 func (cs *CardStore) ScanWords(hasContent func(wordDir string) bool) []string {
+	cards := cs.ListCardDirectories(hasContent)
+	words := make([]string, 0, len(cards))
+	for _, card := range cards {
+		words = append(words, card.Word)
+	}
+	sort.Strings(words)
+	return words
+}
+
+// ListCardDirectories scans the output directory for non-hidden card
+// subdirectories that contain word metadata. The result is sorted by directory
+// path so callers can process cards in deterministic creation order.
+func (cs *CardStore) ListCardDirectories(hasContent func(wordDir string) bool) []CardDirectory {
 	entries, err := os.ReadDir(cs.outputDir)
 	if err != nil {
 		// Output directory does not exist yet; return empty list silently.
-		return []string{}
+		return []CardDirectory{}
 	}
 
-	words := make([]string, 0, len(entries))
+	cards := make([]CardDirectory, 0, len(entries))
 
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
@@ -77,12 +97,14 @@ func (cs *CardStore) ScanWords(hasContent func(wordDir string) bool) []string {
 		}
 
 		if hasContent == nil || hasContent(wordDir) {
-			words = append(words, word)
+			cards = append(cards, CardDirectory{Path: wordDir, Word: word})
 		}
 	}
 
-	sort.Strings(words)
-	return words
+	sort.Slice(cards, func(i, j int) bool {
+		return cards[i].Path < cards[j].Path
+	})
+	return cards
 }
 
 // GenerateCardID creates a unique ID for a card based on the current timestamp

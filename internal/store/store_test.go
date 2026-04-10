@@ -138,3 +138,33 @@ func TestCardStoreScanWords(t *testing.T) {
 		t.Errorf("ScanWords(nil) = %v; want 2 words", allWords)
 	}
 }
+
+func TestCardStoreListCardDirectories(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	makeCard := func(id, word string) string {
+		cardDir := filepath.Join(tmpDir, id)
+		_ = os.MkdirAll(cardDir, 0755)
+		_ = os.WriteFile(filepath.Join(cardDir, "word.txt"), []byte(word), 0644)
+		return cardDir
+	}
+
+	card2 := makeCard("card2", "куче")
+	makeCard("card1", "котка")
+	makeCard(".hidden", "hidden")
+
+	cs := store.New(tmpDir)
+	cards := cs.ListCardDirectories(func(wordDir string) bool {
+		return wordDir != card2
+	})
+
+	if len(cards) != 1 {
+		t.Fatalf("ListCardDirectories() returned %d cards, want 1", len(cards))
+	}
+	if cards[0].Word != "котка" {
+		t.Fatalf("ListCardDirectories()[0].Word = %q, want %q", cards[0].Word, "котка")
+	}
+	if filepath.Base(cards[0].Path) != "card1" {
+		t.Fatalf("ListCardDirectories()[0].Path = %q, want base %q", cards[0].Path, "card1")
+	}
+}

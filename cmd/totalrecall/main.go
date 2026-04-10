@@ -100,8 +100,12 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags, deps runDep
 	// the global Viper singleton directly (Dependency Inversion Principle).
 	proc := newProcessor(flags)
 
-	// Handle batch processing
-	if flags.BatchFile != "" {
+	// Handle failed-asset retry mode before normal input processing.
+	if flags.RetryFailedAssets {
+		if err := proc.RetryFailedAssets(); err != nil {
+			return err
+		}
+	} else if flags.BatchFile != "" {
 		// Process batch file
 		if err := proc.ProcessBatch(); err != nil {
 			return err

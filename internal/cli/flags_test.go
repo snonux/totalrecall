@@ -51,6 +51,7 @@ func TestNewFlags(t *testing.T) {
 	}{
 		{"SkipAudio", flags.SkipAudio},
 		{"SkipImages", flags.SkipImages},
+		{"RetryFailedAssets", flags.RetryFailedAssets},
 		{"GenerateAnki", flags.GenerateAnki},
 		{"AnkiCSV", flags.AnkiCSV},
 		{"ListModels", flags.ListModels},
@@ -94,7 +95,7 @@ func TestFlagsStructure(t *testing.T) {
 
 	expectedFields := []string{
 		"CfgFile", "OutputDir", "AudioFormat", "AudioFormatSpecified", "AudioProvider", "ImageAPI", "ImageAPISpecified", "BatchFile",
-		"SkipAudio", "SkipImages", "GenerateAnki", "AnkiCSV", "DeckName",
+		"SkipAudio", "SkipImages", "RetryFailedAssets", "GenerateAnki", "AnkiCSV", "DeckName",
 		"ListModels", "AllVoices", "NoAutoPlay",
 		"OpenAIModel", "OpenAIVoice", "OpenAISpeed", "OpenAIInstruction",
 		"OpenAIImageModel", "OpenAIImageSize", "OpenAIImageQuality", "OpenAIImageStyle",

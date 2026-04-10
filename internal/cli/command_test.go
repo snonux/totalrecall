@@ -32,6 +32,9 @@ func TestCreateRootCommand(t *testing.T) {
 	if !strings.Contains(cmd.Long, "Explicit CLI and batch runs also use Nano Banana by default") {
 		t.Errorf("Expected Long description to describe the CLI and batch Nano Banana default")
 	}
+	if !strings.Contains(cmd.Long, "--retry-failed-assets") {
+		t.Errorf("Expected Long description to mention retry-failed-assets mode")
+	}
 
 	// Test that flags are set up
 	flagTests := []struct {
@@ -45,6 +48,7 @@ func TestCreateRootCommand(t *testing.T) {
 		{"batch", true},
 		{"skip-audio", true},
 		{"skip-images", true},
+		{"retry-failed-assets", true},
 		{"anki", true},
 		{"anki-csv", true},
 		{"deck-name", true},
@@ -117,6 +121,14 @@ func TestSetupFlags(t *testing.T) {
 	}
 	if imageAPIFlag.Usage != "Image source for explicit CLI runs (default: Nano Banana; use openai to switch, config file image.provider also applies when unset)" {
 		t.Errorf("Expected image-api help to describe the CLI Nano Banana default and config fallback, got %q", imageAPIFlag.Usage)
+	}
+
+	retryFailedAssetsFlag := cmd.Flags().Lookup("retry-failed-assets")
+	if retryFailedAssetsFlag == nil {
+		t.Fatal("retry-failed-assets flag not found")
+	}
+	if !strings.Contains(retryFailedAssetsFlag.Usage, "stopping on the first error") {
+		t.Errorf("Expected retry-failed-assets help to describe stop-on-first-error behavior, got %q", retryFailedAssetsFlag.Usage)
 	}
 
 	openAIVoiceFlag := cmd.Flags().Lookup("openai-voice")

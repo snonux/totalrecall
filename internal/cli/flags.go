@@ -38,6 +38,7 @@ type Flags struct {
 	VideoEnabled          bool   // --video: whether to prompt for Veo video generation after --story completes
 	SkipAudio             bool
 	SkipImages            bool
+	RetryFailedAssets     bool
 	GenerateAnki          bool
 	AnkiCSV               bool
 	DeckName              string
@@ -131,6 +132,7 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 		"Prompt to generate Veo videos after comic generation (default true; use --video=false to skip)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
+	cmd.Flags().BoolVar(&flags.RetryFailedAssets, "retry-failed-assets", false, "Scan existing cards and regenerate missing or failed audio/image assets, stopping on the first error")
 	cmd.Flags().BoolVar(&flags.GenerateAnki, "anki", false, "Generate Anki import file (APKG format by default, use --anki-csv for legacy CSV)")
 	cmd.Flags().BoolVar(&flags.AnkiCSV, "anki-csv", false, "Generate legacy CSV format instead of APKG when using --anki")
 	cmd.Flags().StringVar(&flags.DeckName, "deck-name", flags.DeckName, "Deck name for APKG export")

@@ -22,6 +22,7 @@ Examples:
   totalrecall                     # Launch interactive GUI (default)
   totalrecall ябълка              # Generate materials for "apple" via CLI
   totalrecall --batch words.txt   # Process multiple words from file
+  totalrecall --retry-failed-assets # Resume incomplete cards in the output directory
   totalrecall --archive           # Archive existing cards directory
 
 Batch file formats:

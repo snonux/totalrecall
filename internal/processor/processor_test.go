@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeberg.org/snonux/totalrecall/internal"
 	"codeberg.org/snonux/totalrecall/internal/audio"
 	"codeberg.org/snonux/totalrecall/internal/cli"
 	"codeberg.org/snonux/totalrecall/internal/gui"
@@ -1330,6 +1331,153 @@ func TestProcessBatch_ValidFile(t *testing.T) {
 	err = p.ProcessBatch()
 	if err != nil {
 		t.Errorf("ProcessBatch failed: %v", err)
+	}
+}
+
+func TestRetryFailedAssets_RegeneratesMissingEnBgAssetsInOrder(t *testing.T) {
+	t.Setenv("GOOGLE_API_KEY", "test-google-key")
+
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.ImageAPI = image.ImageProviderNanoBanana
+	flags.ImageAPISpecified = true
+	p := NewProcessor(flags, &Config{})
+
+	cardDir := p.findOrCreateWordDirectory("ябълка")
+	if err := os.WriteFile(filepath.Join(cardDir, "translation.txt"), []byte("ябълка = apple\n"), 0644); err != nil {
+		t.Fatalf("setup translation.txt: %v", err)
+	}
+
+	fakeProvider := &fakeAudioProvider{
+		generateFunc: func(_ string, outputFile string) error {
+			return os.WriteFile(outputFile, []byte("audio data"), 0644)
+		},
+	}
+	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return fakeProvider, nil
+	}
+	p.imageFactories.NewNanoBananaClient = func(*image.NanoBananaConfig) image.PromptAwareClient {
+		return &stubImageSearcher{}
+	}
+
+	output := captureStdout(t, func() {
+		if err := p.RetryFailedAssets(); err != nil {
+			t.Fatalf("RetryFailedAssets() unexpected error: %v", err)
+		}
+	})
+
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("audio generate calls = %d, want 1", fakeProvider.generateCalls)
+	}
+	if !strings.Contains(output, "Regenerating audio") || !strings.Contains(output, "Regenerating image") {
+		t.Fatalf("stdout missing retry steps: %q", output)
+	}
+	if strings.Index(output, "Regenerating audio") > strings.Index(output, "Regenerating image") {
+		t.Fatalf("retry order is wrong, output = %q", output)
+	}
+	if _, err := os.Stat(filepath.Join(cardDir, "audio.mp3")); err != nil {
+		t.Fatalf("expected audio.mp3 to be created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cardDir, "image.png")); err != nil {
+		t.Fatalf("expected image.png to be created: %v", err)
+	}
+	promptData, err := os.ReadFile(filepath.Join(cardDir, "image_prompt.txt"))
+	if err != nil {
+		t.Fatalf("expected image_prompt.txt to be created: %v", err)
+	}
+	if strings.TrimSpace(string(promptData)) != "stub nanobanana prompt" {
+		t.Fatalf("image prompt = %q, want %q", strings.TrimSpace(string(promptData)), "stub nanobanana prompt")
+	}
+}
+
+func TestRetryFailedAssets_StopsOnFirstError(t *testing.T) {
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.SkipImages = true
+	p := NewProcessor(flags, &Config{})
+
+	firstDir := p.findOrCreateWordDirectory("ябълка")
+	secondDir := p.findOrCreateWordDirectory("круша")
+	if err := os.WriteFile(filepath.Join(firstDir, "translation.txt"), []byte("ябълка = apple\n"), 0644); err != nil {
+		t.Fatalf("setup first translation.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secondDir, "translation.txt"), []byte("круша = pear\n"), 0644); err != nil {
+		t.Fatalf("setup second translation.txt: %v", err)
+	}
+
+	fakeProvider := &fakeAudioProvider{
+		generateFunc: func(_ string, _ string) error {
+			return errors.New("rate limit exceeded")
+		},
+	}
+	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return fakeProvider, nil
+	}
+
+	err := p.RetryFailedAssets()
+	if err == nil {
+		t.Fatal("expected RetryFailedAssets() to stop on first error")
+	}
+	if !strings.Contains(err.Error(), "rate limit exceeded") {
+		t.Fatalf("RetryFailedAssets() error = %v, want rate limit message", err)
+	}
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("audio generate calls = %d, want 1", fakeProvider.generateCalls)
+	}
+	if _, statErr := os.Stat(filepath.Join(secondDir, "audio.mp3")); !os.IsNotExist(statErr) {
+		t.Fatalf("second card audio should not have been generated, stat err = %v", statErr)
+	}
+}
+
+func TestRetryFailedAssets_RegeneratesOnlyMissingBgBgBackAudio(t *testing.T) {
+	flags := cli.NewFlags()
+	flags.OutputDir = t.TempDir()
+	flags.SkipImages = true
+	p := NewProcessor(flags, &Config{})
+
+	cardDir := p.findOrCreateWordDirectory("ябълка")
+	if err := internal.SaveCardType(cardDir, internal.CardTypeBgBg); err != nil {
+		t.Fatalf("setup cardtype.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cardDir, "translation.txt"), []byte("ябълка = плод\n"), 0644); err != nil {
+		t.Fatalf("setup translation.txt: %v", err)
+	}
+
+	frontAudio := filepath.Join(cardDir, "audio_front.mp3")
+	if err := os.WriteFile(frontAudio, []byte("front audio"), 0644); err != nil {
+		t.Fatalf("setup audio_front.mp3: %v", err)
+	}
+	if err := os.WriteFile(audio.AttributionPath(frontAudio), []byte("front attribution"), 0644); err != nil {
+		t.Fatalf("setup front attribution: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cardDir, "audio_metadata.txt"), []byte("format=mp3\naudio_file=audio_front.mp3\n"), 0644); err != nil {
+		t.Fatalf("setup audio_metadata.txt: %v", err)
+	}
+
+	fakeProvider := &fakeAudioProvider{
+		generateFunc: func(_ string, outputFile string) error {
+			return os.WriteFile(outputFile, []byte("back audio"), 0644)
+		},
+	}
+	p.newAudioProvider = func(*audio.Config) (audio.Provider, error) {
+		return fakeProvider, nil
+	}
+
+	if err := p.RetryFailedAssets(); err != nil {
+		t.Fatalf("RetryFailedAssets() unexpected error: %v", err)
+	}
+
+	if fakeProvider.generateCalls != 1 {
+		t.Fatalf("audio generate calls = %d, want 1", fakeProvider.generateCalls)
+	}
+	if !strings.HasSuffix(fakeProvider.lastOutputFile, "audio_back.mp3") {
+		t.Fatalf("last output file = %q, want audio_back.mp3", fakeProvider.lastOutputFile)
+	}
+	if _, err := os.Stat(filepath.Join(cardDir, "audio_back.mp3")); err != nil {
+		t.Fatalf("expected audio_back.mp3 to be created: %v", err)
+	}
+	if _, err := os.Stat(frontAudio); err != nil {
+		t.Fatalf("front audio should remain present: %v", err)
 	}
 }
 

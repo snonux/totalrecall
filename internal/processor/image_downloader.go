@@ -24,6 +24,13 @@ import (
 // AI image providers can generate more contextually accurate images.
 // ctx is passed to the image downloader so the caller's deadline applies.
 func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, translationText string) error {
+	return p.downloadImagesWithPrompt(ctx, word, translationText, "")
+}
+
+// downloadImagesWithPrompt downloads images for a word and optionally reuses a
+// previously-saved prompt. When customPrompt is empty the provider generates a
+// fresh prompt as usual.
+func (p *Processor) downloadImagesWithPrompt(ctx context.Context, word, translationText, customPrompt string) error {
 	searcher, err := p.newImageSearcher()
 	if err != nil {
 		return err
@@ -42,6 +49,9 @@ func (p *Processor) downloadImagesWithTranslation(ctx context.Context, word, tra
 	searchOpts := image.DefaultSearchOptions(word)
 	if translationText != "" {
 		searchOpts.Translation = translationText
+	}
+	if strings.TrimSpace(customPrompt) != "" {
+		searchOpts.CustomPrompt = strings.TrimSpace(customPrompt)
 	}
 
 	// Register a prompt callback so the AI-generated prompt is persisted
