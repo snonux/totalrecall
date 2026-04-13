@@ -39,7 +39,9 @@ func (n *NavigationHandler) scanExistingWords() {
 }
 
 // updateNavigation updates the navigation button states based on the current
-// combined word list (existing words on disk + completed queue jobs).
+// combined word list (existing words on disk + completed queue jobs). It also
+// refreshes the card counter label ("Card X / N") so it stays in sync with the
+// current position.
 func (n *NavigationHandler) updateNavigation() {
 	allWords := n.getAllAvailableWords()
 
@@ -61,6 +63,9 @@ func (n *NavigationHandler) updateNavigation() {
 		n.app.prevWordBtn.Disable()
 		n.app.nextWordBtn.Disable()
 	}
+
+	// Keep the counter label in sync with the updated index and total.
+	n.app.updateCardCounter(n.app.currentWordIndex, len(allWords))
 }
 
 // getAllAvailableWords returns all words from disk and completed queue jobs,

@@ -54,8 +54,9 @@ type Application struct {
 	logViewer        *LogViewer
 
 	// Navigation buttons
-	prevWordBtn *ttwidget.Button
-	nextWordBtn *ttwidget.Button
+	prevWordBtn      *ttwidget.Button
+	nextWordBtn      *ttwidget.Button
+	cardCounterLabel *widget.Label // displays "Card X / N"
 
 	// Action buttons
 	keepButton               *ttwidget.Button
@@ -616,20 +617,44 @@ func (a *Application) buildToolbar() (exportButton, archiveButton, helpButton *t
 }
 
 // buildStatusSection constructs and returns the status bar at the bottom of
-// the window.
+// the window. It contains the status label, queue status, a card counter
+// ("Card X / N") and the version string.
 func (a *Application) buildStatusSection() fyne.CanvasObject {
 	a.statusLabel = widget.NewLabel("Ready")
 	a.queueStatusLabel = widget.NewLabel("Queue: Empty")
 	a.queueStatusLabel.TextStyle = fyne.TextStyle{Italic: true}
 
+	// Card counter — updated by updateCardCounter whenever navigation changes.
+	a.cardCounterLabel = widget.NewLabel("")
+	a.cardCounterLabel.TextStyle = fyne.TextStyle{Italic: true}
+	a.cardCounterLabel.Alignment = fyne.TextAlignTrailing
+
 	versionLabel := widget.NewLabel(fmt.Sprintf("v%s", internal.Version))
 	versionLabel.TextStyle = fyne.TextStyle{Italic: true}
 	versionLabel.Alignment = fyne.TextAlignTrailing
 
+	// Right-side column: card counter above version string.
+	rightCol := container.NewVBox(a.cardCounterLabel, versionLabel)
+
 	return container.NewBorder(
-		nil, nil, nil, versionLabel,
+		nil, nil, nil, rightCol,
 		container.NewVBox(a.statusLabel, widget.NewSeparator(), a.queueStatusLabel),
 	)
+}
+
+// updateCardCounter refreshes the card-counter label to "Card X / N" where X
+// is the 1-based position of the current word in the combined word list and N
+// is the total number of available words. When no words are present the label
+// is cleared.
+func (a *Application) updateCardCounter(currentIndex, total int) {
+	if a.cardCounterLabel == nil {
+		return
+	}
+	if total == 0 {
+		a.cardCounterLabel.SetText("")
+		return
+	}
+	a.cardCounterLabel.SetText(fmt.Sprintf("Card %d / %d", currentIndex+1, total))
 }
 
 // onWindowClosed is called when the window is closed. It stops background
