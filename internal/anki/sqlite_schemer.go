@@ -1,9 +1,12 @@
 package anki
 
 import (
+	"crypto/sha1"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -283,35 +286,15 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 
 		isBgBg := card.CardType == "bg-bg"
 
-		imageField := ""
-		if card.ImageFile != "" && fileExists(card.ImageFile) {
-			cardDirID := filepath.Base(filepath.Dir(card.ImageFile))
-			originalFilename := filepath.Base(card.ImageFile)
-			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
-			if _, ok := g.mediaFiles[uniqueFilename]; ok {
-				imageField = fmt.Sprintf(`<img src="%s">`, uniqueFilename)
-			}
-		}
-
-		audioField := ""
-		if card.AudioFile != "" && fileExists(card.AudioFile) {
-			cardDirID := filepath.Base(filepath.Dir(card.AudioFile))
-			originalFilename := filepath.Base(card.AudioFile)
-			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
-			if _, ok := g.mediaFiles[uniqueFilename]; ok {
-				audioField = fmt.Sprintf("[sound:%s]", uniqueFilename)
-			}
-		}
-
-		audioFieldBack := ""
-		if card.AudioFileBack != "" && fileExists(card.AudioFileBack) {
-			cardDirID := filepath.Base(filepath.Dir(card.AudioFileBack))
-			originalFilename := filepath.Base(card.AudioFileBack)
-			uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
-			if _, ok := g.mediaFiles[uniqueFilename]; ok {
-				audioFieldBack = fmt.Sprintf("[sound:%s]", uniqueFilename)
-			}
-		}
+		imageField := buildMediaField(card.ImageFile, g.mediaFiles, func(name string) string {
+			return fmt.Sprintf(`<img src="%s">`, name)
+		})
+		audioField := buildMediaField(card.AudioFile, g.mediaFiles, func(name string) string {
+			return fmt.Sprintf("[sound:%s]", name)
+		})
+		audioFieldBack := buildMediaField(card.AudioFileBack, g.mediaFiles, func(name string) string {
+			return fmt.Sprintf("[sound:%s]", name)
+		})
 
 		var fields string
 		var modelID int64
@@ -327,7 +310,7 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 				card.Notes,
 			}, "\x1f")
 			modelID = g.modelIDBgBg
-			guid = fmt.Sprintf("tr_bgbg_%d_%s", now.Unix(), card.Bulgarian)
+			guid = ankiGUID(fmt.Sprintf("tr_bgbg_%s", card.Bulgarian))
 		} else {
 			english := card.Translation
 			if english == "" {
@@ -341,8 +324,10 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 				card.Notes,
 			}, "\x1f")
 			modelID = g.modelID
-			guid = fmt.Sprintf("tr_%d_%s", now.Unix(), card.Bulgarian)
+			guid = ankiGUID(fmt.Sprintf("tr_%s", card.Bulgarian))
 		}
+
+		csum := fieldChecksum(card.Bulgarian)
 
 		noteQuery := `INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err := db.Exec(noteQuery,
@@ -354,7 +339,7 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 			"",
 			fields,
 			card.Bulgarian,
-			0,
+			csum,
 			0,
 			"",
 		)
@@ -362,50 +347,34 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
 
+		// For new cards (type=0), due is the position in the new-card queue
+		dueForward := i * 2
+		dueReverse := i*2 + 1
+
 		cardQuery := `INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err = db.Exec(cardQuery,
-			cardID1,
-			noteID,
-			g.deckID,
-			0,
-			now.Unix(),
-			-1,
-			0,
-			0,
-			noteID,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			"",
+			cardID1, noteID, g.deckID,
+			0,            // ord
+			now.Unix(),   // mod
+			-1,           // usn
+			0,            // type (new)
+			0,            // queue (new)
+			dueForward,   // due (position in new queue)
+			0, 0, 0, 0, 0, 0, 0, 0, "",
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert forward card: %w", err)
 		}
 
 		_, err = db.Exec(cardQuery,
-			cardID2,
-			noteID,
-			g.deckID,
-			1,
-			now.Unix(),
-			-1,
-			0,
-			0,
-			noteID+1,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			"",
+			cardID2, noteID, g.deckID,
+			1,            // ord
+			now.Unix(),   // mod
+			-1,           // usn
+			0,            // type (new)
+			0,            // queue (new)
+			dueReverse,   // due (position in new queue)
+			0, 0, 0, 0, 0, 0, 0, 0, "",
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert reverse card: %w", err)
@@ -413,4 +382,58 @@ func (s *SQLiteSchemer) insertNotesAndCards(db *sql.DB, g *APKGGenerator) error 
 	}
 
 	return nil
+}
+
+// buildMediaField resolves a media file path to an Anki field string using the formatter.
+func buildMediaField(filePath string, mediaFiles map[string]int, formatter func(string) string) string {
+	if filePath == "" || !fileExists(filePath) {
+		return ""
+	}
+	cardDirID := filepath.Base(filepath.Dir(filePath))
+	originalFilename := filepath.Base(filePath)
+	uniqueFilename := fmt.Sprintf("%s_%s", cardDirID, originalFilename)
+	if _, ok := mediaFiles[uniqueFilename]; ok {
+		return formatter(uniqueFilename)
+	}
+	return ""
+}
+
+// fieldChecksum computes Anki's csum: first 4 bytes of SHA-1 of the sort field, as uint32.
+func fieldChecksum(sortField string) uint32 {
+	h := sha1.Sum([]byte(sortField))
+	return binary.BigEndian.Uint32(h[:4])
+}
+
+// ankiGUID generates a short, stable, base91-style GUID from a seed string.
+// Anki expects GUIDs to be ~10 characters. We hash the seed for stability
+// (same word always produces the same GUID) and encode as base91.
+func ankiGUID(seed string) string {
+	h := sha1.Sum([]byte(seed))
+	return base91Encode(h[:8])
+}
+
+// base91Encode encodes bytes into Anki's base91 character set (same as Anki's Python implementation).
+func base91Encode(data []byte) string {
+	const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
+		"!#$%&()*+,-./:;<=>?@[]^_`{|}~"
+	// Use a simple encoding: convert to a big random-ish number via the hash bytes
+	// and repeatedly divide by 91
+	var result []byte
+	// Treat data as a big-endian unsigned integer
+	val := uint64(0)
+	for _, b := range data {
+		val = val*256 + uint64(b)
+	}
+	for val > 0 {
+		result = append(result, table[val%91])
+		val /= 91
+	}
+	if len(result) == 0 {
+		// Fallback: generate a random GUID
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		for i := 0; i < 10; i++ {
+			result = append(result, table[r.Intn(91)])
+		}
+	}
+	return string(result)
 }

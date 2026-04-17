@@ -1,6 +1,8 @@
 package anki
 
 import (
+	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -24,15 +26,17 @@ type APKGGenerator struct {
 	templates *CardTemplate
 }
 
-// NewAPKGGenerator creates a new APKG generator
+// NewAPKGGenerator creates a new APKG generator.
+// Deck and model IDs are derived deterministically from deckName so that
+// re-exporting produces the same IDs and Anki merges cards instead of
+// creating duplicate notetypes/decks.
 func NewAPKGGenerator(deckName string) *APKGGenerator {
-	// Generate IDs based on timestamp to ensure uniqueness
-	now := time.Now().UnixMilli()
+	deckID := stableID(deckName)
 	return &APKGGenerator{
 		deckName:     deckName,
-		deckID:       now,
-		modelID:      now + 1,
-		modelIDBgBg:  now + 2,
+		deckID:       deckID,
+		modelID:      stableID(deckName + "/model/en-bg"),
+		modelIDBgBg:  stableID(deckName + "/model/bg-bg"),
 		cards:        make([]Card, 0),
 		mediaFiles:   make(map[string]int),
 		mediaCounter: 0,
@@ -40,6 +44,20 @@ func NewAPKGGenerator(deckName string) *APKGGenerator {
 		packager:     NewZipPackager(),
 		templates:    MustCardTemplate(),
 	}
+}
+
+// stableID produces a stable positive int64 from a seed string.
+// The value looks like a millisecond timestamp (13 digits) so Anki treats it
+// the same way it treats its own generated IDs.
+func stableID(seed string) int64 {
+	h := sha1.Sum([]byte(seed))
+	v := int64(binary.BigEndian.Uint64(h[:8]))
+	if v < 0 {
+		v = -v
+	}
+	// Clamp to 13 digits (1e12..9.999e12) so it resembles a millis timestamp
+	const lo, hi = 1_000_000_000_000, 9_999_999_999_999
+	return lo + v%(hi-lo+1)
 }
 
 // AddCard adds a card to the generator
