@@ -23,29 +23,20 @@ type Flags struct {
 	// AudioFormatSpecified records whether the audio format was explicitly set on the CLI.
 	AudioFormatSpecified bool
 	// AudioProvider selects the text-to-speech backend ("gemini" or "openai").
-	AudioProvider         string
-	ImageAPI              string
-	ImageAPISpecified     bool
-	BatchFile             string
-	StoryFile             string // --story <file>: generate vocabulary story + comic image
-	StoryStyle            string // --story-style: override the random art style (empty = random)
-	StoryTheme            string // --story-theme: override the random genre pick (empty = random)
-	StoryNoUltraRealistic bool   // --no-ultra-realistic: disable photorealistic rendering requirement
-	StoryUltraRealistic   bool   // --ultra-realistic: force photorealistic rendering (overrides random 50/50)
-	StorySlug             string // --story-slug: force a specific output slug/directory (empty = auto from title)
-	NarratorVoice         string // --narrator-voice: Gemini voice for cinematic narration (empty = random)
-	NarrateEnabled        bool   // --narrate: generate cinematic MP3 narration after --story (default false)
-	VideoEnabled          bool   // --video: whether to prompt for Veo video generation after --story completes
-	SkipAudio             bool
-	SkipImages            bool
-	RetryFailedAssets     bool
-	GenerateAnki          bool
-	AnkiCSV               bool
-	DeckName              string
-	ListModels            bool
-	AllVoices             bool
-	NoAutoPlay            bool
-	Archive               bool
+	AudioProvider     string
+	ImageAPI          string
+	ImageAPISpecified bool
+	BatchFile         string
+	SkipAudio         bool
+	SkipImages        bool
+	RetryFailedAssets bool
+	GenerateAnki      bool
+	AnkiCSV           bool
+	DeckName          string
+	ListModels        bool
+	AllVoices         bool
+	NoAutoPlay        bool
+	Archive           bool
 
 	// OpenAI flags
 	OpenAIModel       string
@@ -83,7 +74,6 @@ func NewFlags() *Flags {
 		AudioFormat:         defaults.OutputFormat,
 		AudioProvider:       defaults.Provider,
 		ImageAPI:            "nanobanana",
-		VideoEnabled:        true,
 		DeckName:            "Bulgarian Vocabulary",
 		OpenAIModel:         "gpt-4o-mini-tts",
 		OpenAISpeed:         0.9,
@@ -114,22 +104,6 @@ func setupFlags(cmd *cobra.Command, flags *Flags) {
 	cmd.Flags().StringVarP(&flags.AudioFormat, "format", "f", flags.AudioFormat, "Audio format (wav or mp3; Gemini TTS writes wav natively and auto-converts to mp3 with ffmpeg, which is now the default)")
 	cmd.Flags().StringVar(&flags.ImageAPI, "image-api", flags.ImageAPI, "Image source for explicit CLI runs (default: Nano Banana; use openai to switch, config file image.provider also applies when unset)")
 	cmd.Flags().StringVar(&flags.BatchFile, "batch", "", "Process words from file (one per line)")
-	cmd.Flags().StringVar(&flags.StoryFile, "story", "", "Generate a vocabulary story + comic image from a batch-format file (outputs to current directory)")
-	cmd.Flags().StringVar(&flags.StoryStyle, "story-style", "", "Art style for comic pages (default: random). E.g. \"ultra realistic comic strip with photographic detail and dramatic lighting\"")
-	cmd.Flags().StringVar(&flags.StoryTheme, "story-theme", "", "Genre/theme for the story (default: random). E.g. \"a thrilling space adventure with aliens and spaceships\"")
-	cmd.Flags().BoolVar(&flags.StoryNoUltraRealistic, "no-ultra-realistic", false, "Disable photorealistic rendering requirement; produces standard comic-book style output")
-	cmd.Flags().BoolVar(&flags.StoryUltraRealistic, "ultra-realistic", false, "Force photorealistic rendering for all pages (overrides the default random 50/50 pick)")
-	cmd.Flags().StringVar(&flags.StorySlug, "story-slug", "",
-		"Force the output directory slug for --story (e.g. \"ai-jungle-quest\"). "+
-			"Use this to repair a partial run: existing pages are skipped, missing ones are generated.")
-	cmd.Flags().StringVar(&flags.NarratorVoice, "narrator-voice", "",
-		"Gemini voice for cinematic story narration (default: random from cinematic pool). "+
-			"Valid values: Charon, Fenrir, Enceladus, Algieba, Aoede, Schedar")
-	cmd.Flags().BoolVar(&flags.NarrateEnabled, "narrate", false,
-		"Generate a cinematic MP3 narration of the story after --story completes (default false). "+
-			"Requires GOOGLE_API_KEY. Use --narrator-voice to pick a specific voice.")
-	cmd.Flags().BoolVar(&flags.VideoEnabled, "video", flags.VideoEnabled,
-		"Prompt to generate Veo videos after comic generation (default true; use --video=false to skip)")
 	cmd.Flags().BoolVar(&flags.SkipAudio, "skip-audio", false, "Skip audio generation")
 	cmd.Flags().BoolVar(&flags.SkipImages, "skip-images", false, "Skip image download")
 	cmd.Flags().BoolVar(&flags.RetryFailedAssets, "retry-failed-assets", false, "Scan existing cards and regenerate missing or failed audio/image assets, stopping on the first error")

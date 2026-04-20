@@ -14,16 +14,13 @@ import (
 	"codeberg.org/snonux/totalrecall/internal/gui"
 	"codeberg.org/snonux/totalrecall/internal/models"
 	"codeberg.org/snonux/totalrecall/internal/processor"
-	"codeberg.org/snonux/totalrecall/internal/story"
-	"codeberg.org/snonux/totalrecall/internal/video"
 )
 
 // runDeps holds injectable implementations for composition-root wiring (DIP).
 type runDeps struct {
-	Archiver       archive.Archiver
-	NewLister      func(openAIKey, geminiKey string, out io.Writer) models.ModelLister
-	NewStoryRunner func(flags *cli.Flags) story.StoryRunner
-	NewGUI         func(*gui.Config) gui.App
+	Archiver  archive.Archiver
+	NewLister func(openAIKey, geminiKey string, out io.Writer) models.ModelLister
+	NewGUI    func(*gui.Config) gui.App
 }
 
 func defaultRunDeps() runDeps {
@@ -32,8 +29,7 @@ func defaultRunDeps() runDeps {
 		NewLister: func(oa, g string, w io.Writer) models.ModelLister {
 			return models.NewLister(oa, g, w)
 		},
-		NewStoryRunner: newStoryRunner,
-		NewGUI:         gui.New,
+		NewGUI: gui.New,
 	}
 }
 
@@ -76,17 +72,6 @@ func runCommand(cmd *cobra.Command, args []string, flags *cli.Flags, deps runDep
 	if flags.ListModels {
 		lister := deps.NewLister(cli.GetOpenAIKey(), cli.GetGoogleAPIKey(), os.Stdout)
 		return lister.ListAvailableModels()
-	}
-
-	// Handle --story flag: generate a vocabulary story + comic image into CWD.
-	// This is deliberately placed before processor creation because it does not
-	// need the full processor pipeline (no Anki cards, no per-word audio).
-	if flags.StoryFile != "" {
-		runner := deps.NewStoryRunner(flags)
-		if err := runner.Run(flags.StoryFile); err != nil {
-			return err
-		}
-		return video.RunStoryVideos(flags.VideoEnabled, ".", cli.GetGoogleAPIKey())
 	}
 
 	// Auto-adjust image size for DALL-E 3

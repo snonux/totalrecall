@@ -10,8 +10,7 @@ import (
 // and API quotas make parallelism impractical).
 //
 // apiKey is the Google/Gemini API key passed by the caller.
-// selectedPaths contains the absolute (or relative) paths of the gallery PNGs
-// to animate — typically returned by PromptForGalleryVideos.
+// selectedPaths contains the absolute (or relative) paths of the PNGs to animate.
 //
 // Each page prints a "Generating…" line before the API call and a "Video saved:"
 // line with the output path on success. The MP4 is written next to its source

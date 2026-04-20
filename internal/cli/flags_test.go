@@ -21,8 +21,6 @@ func TestNewFlags(t *testing.T) {
 		{"AudioProvider", flags.AudioProvider, audio.DefaultProviderConfig().Provider},
 		{"ImageAPI", flags.ImageAPI, "nanobanana"},
 		{"ImageAPISpecified", flags.ImageAPISpecified, false},
-		{"NanoBananaModelSpecified", flags.NanoBananaModelSpecified, false},
-		{"NanoBananaTextModelSpecified", flags.NanoBananaTextModelSpecified, false},
 		{"DeckName", flags.DeckName, "Bulgarian Vocabulary"},
 		{"OpenAIModel", flags.OpenAIModel, "gpt-4o-mini-tts"},
 		{"OpenAISpeed", flags.OpenAISpeed, 0.9},
@@ -33,7 +31,9 @@ func TestNewFlags(t *testing.T) {
 		{"GeminiTTSModel", flags.GeminiTTSModel, audio.DefaultProviderConfig().GeminiTTSModel},
 		{"GeminiVoice", flags.GeminiVoice, ""},
 		{"NanoBananaModel", flags.NanoBananaModel, "gemini-3.1-flash-image-preview"},
+		{"NanoBananaModelSpecified", flags.NanoBananaModelSpecified, false},
 		{"NanoBananaTextModel", flags.NanoBananaTextModel, "gemini-2.5-flash"},
+		{"NanoBananaTextModelSpecified", flags.NanoBananaTextModelSpecified, false},
 	}
 
 	for _, tt := range tests {

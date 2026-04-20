@@ -34,10 +34,6 @@ const (
 	// ListModelsTimeout bounds model-listing CLI calls.
 	ListModelsTimeout = 3 * time.Minute
 
-	// StoryPageImageTimeout bounds a single comic page image pipeline (search +
-	// download) when no parent deadline exists.
-	StoryPageImageTimeout = 25 * time.Minute
-
 	// VeoCLIPerVideoTimeout bounds one gallery-to-MP4 Veo run (start + poll +
 	// download) when the CLI passes Background.
 	VeoCLIPerVideoTimeout = 25 * time.Minute

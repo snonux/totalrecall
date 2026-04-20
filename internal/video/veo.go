@@ -1,6 +1,4 @@
-// Package video provides Veo-based MP4 generation from comic gallery PNGs,
-// interactive gallery page selection after --story runs, and the combined
-// post-story flow (RunStoryVideos).
+// Package video provides Veo-based MP4 generation from selected PNGs.
 package video
 
 import (
