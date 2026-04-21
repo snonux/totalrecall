@@ -4,8 +4,6 @@ import (
 	"context"
 	"math/rand"
 	"time"
-
-	"codeberg.org/snonux/totalrecall/internal/audio"
 )
 
 // randomVoice picks a random voice from the provided list.
@@ -26,16 +24,6 @@ func randomOpenAISpeed() float64 {
 // Each method delegates to getOrchestrator() so tests that create Application
 // directly (setting newAudioProvider / audioConfig / config) continue to work
 // without modification, while production code uses the pre-built orchestrator.
-
-// audioProviderName returns the lowercase TTS provider name.
-func (a *Application) audioProviderName() string {
-	return a.getOrchestrator().audioProviderName()
-}
-
-// audioOutputFormat resolves the effective audio output format.
-func (a *Application) audioOutputFormat() string {
-	return a.getOrchestrator().audioOutputFormat()
-}
 
 // translateWord translates a Bulgarian word to English.
 func (a *Application) translateWord(word string) (string, error) {
@@ -90,19 +78,4 @@ func (a *Application) generateImagesWithPrompt(ctx context.Context, word, custom
 	}
 
 	return o.generateImagesWithPromptAndNotify(ctx, word, customPrompt, translation, cardDir, promptUI)
-}
-
-// getPhoneticInfo fetches phonetic information for a Bulgarian word.
-func (a *Application) getPhoneticInfo(word string) (string, error) {
-	return a.getOrchestrator().GetPhoneticInfo(word)
-}
-
-// saveAudioAttribution saves attribution metadata for a generated audio file.
-func (a *Application) saveAudioAttribution(word, audioFile, voice string, speed float64) error {
-	return a.getOrchestrator().saveAudioAttribution(word, audioFile, voice, speed)
-}
-
-// saveAudioMetadata writes the sidecar metadata file for a generated audio file.
-func (a *Application) saveAudioMetadata(cardDir string, audioCfg audio.Config, voice string, speed float64, cardType, audioFile, audioFileBack string) error {
-	return a.getOrchestrator().saveAudioMetadata(cardDir, audioCfg, voice, speed, cardType, audioFile, audioFileBack)
 }

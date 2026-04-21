@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-// ensureWordDirectoryAndMetadata creates a new card directory and writes word
-// metadata. Delegates to CardService.
-func (a *Application) ensureWordDirectoryAndMetadata(word string) (string, error) {
-	return a.getCardService().EnsureWordDirectoryAndMetadata(word)
-}
-
 // ensureCardDirectory ensures a card directory exists for the given word.
 // Delegates to CardService.
 func (a *Application) ensureCardDirectory(word string) (string, error) {

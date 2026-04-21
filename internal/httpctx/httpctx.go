@@ -20,7 +20,7 @@ const (
 	OpenAIHTTPTimeout = 15 * time.Minute
 
 	// GenAIHTTPTimeout bounds each Google GenAI SDK HTTP request (Gemini text,
-	// image, TTS, Veo polling, file download).
+	// image and TTS generation).
 	GenAIHTTPTimeout = 30 * time.Minute
 
 	// ImageDownloadTimeout limits fetches of remote image URLs (e.g. DALL-E
@@ -33,10 +33,6 @@ const (
 
 	// ListModelsTimeout bounds model-listing CLI calls.
 	ListModelsTimeout = 3 * time.Minute
-
-	// VeoCLIPerVideoTimeout bounds one gallery-to-MP4 Veo run (start + poll +
-	// download) when the CLI passes Background.
-	VeoCLIPerVideoTimeout = 25 * time.Minute
 
 	// SingleWordProcessTimeout caps ProcessWordWithTranslation when the CLI
 	// uses an unbounded context (batch processing already applies per-word

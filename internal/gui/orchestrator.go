@@ -88,13 +88,6 @@ func (o *GenerationOrchestrator) TranslateEnglishToBulgarian(word string) (strin
 
 // --- Audio provider helpers ---
 
-// audioProviderName returns the lowercase provider name from config, defaulting
-// to the shared audio default when none is set. Delegates to AudioConfigResolver
-// so Application and tests keep a stable method on GenerationOrchestrator.
-func (o *GenerationOrchestrator) audioProviderName() string {
-	return o.audioResolver.ProviderName()
-}
-
 // audioOutputFormat resolves the effective output format (e.g. "mp3" or "wav").
 func (o *GenerationOrchestrator) audioOutputFormat() string {
 	return o.audioResolver.OutputFormat()

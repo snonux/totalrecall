@@ -43,10 +43,10 @@ func TestWithTimeoutUnlessSet_NoDeadline(t *testing.T) {
 	}
 }
 
-func TestWithTimeoutUnlessSet_NilUsesBackground(t *testing.T) {
+func TestWithTimeoutUnlessSet_TODOContext(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := WithTimeoutUnlessSet(nil, 50*time.Millisecond)
+	ctx, cancel := WithTimeoutUnlessSet(context.TODO(), 50*time.Millisecond)
 	defer cancel()
 
 	if err := ctx.Err(); err != nil {

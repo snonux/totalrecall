@@ -20,12 +20,6 @@ func (a *Application) resolveBgBgAudioFiles(wordDir string) (string, string) {
 	return resolveBgBgAudioFilesInDir(wordDir)
 }
 
-// hasAnyAudioFile returns true if the card directory contains any audio file.
-// Delegates to the package-level helper used by CardService.
-func (a *Application) hasAnyAudioFile(wordDir string) bool {
-	return hasAnyAudioFileInDir(wordDir)
-}
-
 // resolveAudioFileFromMetadata reads audio_metadata.txt from wordDir and returns
 // the path stored under key. Returns empty string when the key is absent or the
 // file does not exist on disk.

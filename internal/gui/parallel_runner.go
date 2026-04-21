@@ -31,7 +31,6 @@ type imageGenResult struct {
 // phoneticGenResult is an internal channel payload for phonetic goroutines.
 type phoneticGenResult struct {
 	info string
-	err  error
 }
 
 // ParallelRunner coordinates parallel audio, image, and phonetics work for
