@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	"codeberg.org/snonux/totalrecall/internal/cli"
-	"codeberg.org/snonux/totalrecall/internal/processor"
+	"github.com/snonux/totalrecall/internal/cli"
+	"github.com/snonux/totalrecall/internal/processor"
 )
 
 // newProcessorConfig reads all Viper-sourced settings in a single pass and

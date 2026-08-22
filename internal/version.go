@@ -1,3 +1,3 @@
 package internal
 
-const Version = "0.29.4"
+const Version = "0.29.5"

@@ -8,12 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"codeberg.org/snonux/totalrecall/internal/archive"
-	"codeberg.org/snonux/totalrecall/internal/cli"
-	appconfig "codeberg.org/snonux/totalrecall/internal/config"
-	"codeberg.org/snonux/totalrecall/internal/gui"
-	"codeberg.org/snonux/totalrecall/internal/models"
-	"codeberg.org/snonux/totalrecall/internal/processor"
+	"github.com/snonux/totalrecall/internal/archive"
+	"github.com/snonux/totalrecall/internal/cli"
+	appconfig "github.com/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal/gui"
+	"github.com/snonux/totalrecall/internal/models"
+	"github.com/snonux/totalrecall/internal/processor"
 )
 
 // runDeps holds injectable implementations for composition-root wiring (DIP).
