@@ -3,10 +3,10 @@ package gui
 import (
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/image"
-	"codeberg.org/snonux/totalrecall/internal/phonetic"
-	"codeberg.org/snonux/totalrecall/internal/translation"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/image"
+	"github.com/snonux/totalrecall/internal/phonetic"
+	"github.com/snonux/totalrecall/internal/translation"
 )
 
 func TestDefaultConfigUsesGeminiLanguageProviders(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
 
-	appconfig "codeberg.org/snonux/totalrecall/internal/config"
-	"codeberg.org/snonux/totalrecall/internal/httpctx"
+	appconfig "github.com/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal/httpctx"
 )
 
 const (

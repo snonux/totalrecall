@@ -3,7 +3,7 @@ package gui
 import (
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/audio"
 )
 
 // AudioConfigResolver derives effective TTS provider settings from the GUI

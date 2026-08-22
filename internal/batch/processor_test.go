@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal"
 )
 
 func TestReadBatchFile(t *testing.T) {

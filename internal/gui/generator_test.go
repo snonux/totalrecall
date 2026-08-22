@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/image"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/image"
 )
 
 type fakePromptAwareImageClient struct {

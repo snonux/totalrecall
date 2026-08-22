@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/anki"
+	"github.com/snonux/totalrecall/internal/anki"
 )
 
 // resolveSingleAudioFile resolves the en-bg audio file path for a card directory.

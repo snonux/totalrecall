@@ -12,8 +12,8 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
-	"codeberg.org/snonux/totalrecall/internal/apicircuit"
-	"codeberg.org/snonux/totalrecall/internal/httpctx"
+	"github.com/snonux/totalrecall/internal/apicircuit"
+	"github.com/snonux/totalrecall/internal/httpctx"
 )
 
 // Compile-time check that OpenAIClient implements the full ImageClient interface

@@ -3,7 +3,7 @@ package gui
 import (
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/audio"
 )
 
 // VoiceSelector picks voice and speed for a generation run from an

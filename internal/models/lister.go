@@ -11,7 +11,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
 
-	"codeberg.org/snonux/totalrecall/internal/httpctx"
+	"github.com/snonux/totalrecall/internal/httpctx"
 )
 
 // ModelLister lists available OpenAI and Gemini models to the configured

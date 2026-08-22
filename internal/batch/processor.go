@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal"
 )
 
 // WordEntry represents a word with optional translation

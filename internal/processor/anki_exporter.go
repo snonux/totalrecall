@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/anki"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/anki"
 )
 
 // AnkiExporter generates Anki deck output using Processor state (flags, cache,

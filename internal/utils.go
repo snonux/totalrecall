@@ -3,7 +3,7 @@ package internal
 import (
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/store"
+	"github.com/snonux/totalrecall/internal/store"
 )
 
 // GenerateCardID creates a unique ID for a card based on timestamp and Bulgarian word.

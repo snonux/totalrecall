@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/anki"
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/store"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/anki"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/store"
 )
 
 type failedAssetKind string

@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/anki"
-	"codeberg.org/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/anki"
+	"github.com/snonux/totalrecall/internal/audio"
 )
 
 // findOrCreateWordDirectory returns the existing card directory for word

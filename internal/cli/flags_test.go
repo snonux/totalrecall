@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/audio"
 )
 
 func TestNewFlags(t *testing.T) {

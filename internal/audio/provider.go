@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/config"
-	"codeberg.org/snonux/totalrecall/internal/registry"
+	"github.com/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal/registry"
 )
 
 // Provider defines the interface for text-to-speech providers.

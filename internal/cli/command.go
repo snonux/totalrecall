@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"codeberg.org/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal"
 )
 
 // CreateRootCommand creates and configures the root cobra command

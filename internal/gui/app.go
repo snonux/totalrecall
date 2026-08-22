@@ -19,14 +19,14 @@ import (
 	fynetooltip "github.com/dweymouth/fyne-tooltip"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/anki"
-	"codeberg.org/snonux/totalrecall/internal/archive"
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	appconfig "codeberg.org/snonux/totalrecall/internal/config"
-	"codeberg.org/snonux/totalrecall/internal/image"
-	"codeberg.org/snonux/totalrecall/internal/phonetic"
-	"codeberg.org/snonux/totalrecall/internal/translation"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/anki"
+	"github.com/snonux/totalrecall/internal/archive"
+	"github.com/snonux/totalrecall/internal/audio"
+	appconfig "github.com/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal/image"
+	"github.com/snonux/totalrecall/internal/phonetic"
+	"github.com/snonux/totalrecall/internal/translation"
 )
 
 // App is the runnable GUI application constructed at the composition root

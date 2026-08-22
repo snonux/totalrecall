@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal/cli"
-	"codeberg.org/snonux/totalrecall/internal/image"
-	"codeberg.org/snonux/totalrecall/internal/registry"
+	"github.com/snonux/totalrecall/internal/cli"
+	"github.com/snonux/totalrecall/internal/image"
+	"github.com/snonux/totalrecall/internal/registry"
 )
 
 // downloadImagesWithTranslation downloads images for a word into its card

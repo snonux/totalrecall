@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal/store"
+	"github.com/snonux/totalrecall/internal/store"
 )
 
 // TestFindCardDirectory verifies that FindCardDirectory locates a directory by

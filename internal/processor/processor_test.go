@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/cli"
-	"codeberg.org/snonux/totalrecall/internal/gui"
-	"codeberg.org/snonux/totalrecall/internal/image"
-	"codeberg.org/snonux/totalrecall/internal/phonetic"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/cli"
+	"github.com/snonux/totalrecall/internal/gui"
+	"github.com/snonux/totalrecall/internal/image"
+	"github.com/snonux/totalrecall/internal/phonetic"
 )
 
 type stubImageSearcher struct {

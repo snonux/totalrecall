@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/config"
 )
 
 // Flags holds all command-line flag values

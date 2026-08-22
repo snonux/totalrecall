@@ -13,7 +13,7 @@ type KeyboardShortcuts struct {
 }
 
 // hotkeysMarkdown is the markdown reference text shown in the hotkeys dialog.
-const hotkeysMarkdown = `[Project Page: https://codeberg.org/snonux/totalrecall](https://codeberg.org/snonux/totalrecall)
+const hotkeysMarkdown = `[Project Page: https://github.com/snonux/totalrecall](https://github.com/snonux/totalrecall)
 
 ---
 

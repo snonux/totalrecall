@@ -12,9 +12,9 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/snonux/totalrecall/internal"
-	"codeberg.org/snonux/totalrecall/internal/anki"
-	appconfig "codeberg.org/snonux/totalrecall/internal/config"
+	"github.com/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal/anki"
+	appconfig "github.com/snonux/totalrecall/internal/config"
 )
 
 // ExportHandler owns the Export to Anki dialog and APKG/CSV export paths (SRP).

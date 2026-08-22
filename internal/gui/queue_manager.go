@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"codeberg.org/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal"
 )
 
 // QueueManager owns background word-job processing: card contexts, active

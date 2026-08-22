@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeberg.org/snonux/totalrecall/internal"
+	"github.com/snonux/totalrecall/internal"
 )
 
 // Card represents a single Anki flashcard

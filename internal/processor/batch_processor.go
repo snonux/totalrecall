@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/batch"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/batch"
 )
 
 // BatchProcessor orchestrates batch file processing. It holds a reference to

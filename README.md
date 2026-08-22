@@ -55,7 +55,7 @@ It has mainly been vibe coded using Claude Code CLI.
 ### Building from Source
 
 ```bash
-git clone https://codeberg.org/snonux/totalrecall.git
+git clone https://github.com/snonux/totalrecall.git
 cd totalrecall
 go build -o totalrecall ./cmd/totalrecall
 ```
@@ -76,7 +76,7 @@ go install ./cmd/totalrecall
 
 Or install from remote repository:
 ```bash
-go install codeberg.org/snonux/totalrecall/cmd/totalrecall@latest
+go install github.com/snonux/totalrecall/cmd/totalrecall@latest
 ```
 
 This will install the binary to `~/go/bin/totalrecall`, which should be in your PATH.

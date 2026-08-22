@@ -1,4 +1,4 @@
-module codeberg.org/snonux/totalrecall
+module github.com/snonux/totalrecall
 
 go 1.24.4
 

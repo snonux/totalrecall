@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/snonux/totalrecall/internal/audio"
-	"codeberg.org/snonux/totalrecall/internal/cli"
+	"github.com/snonux/totalrecall/internal/audio"
+	"github.com/snonux/totalrecall/internal/cli"
 )
 
 // audioVoicesForProvider returns all available voices for the configured provider
