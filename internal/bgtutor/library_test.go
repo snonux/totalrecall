@@ -174,3 +174,22 @@ func TestNotebookSaveDedupAndList(t *testing.T) {
 		t.Errorf("saved.json: %v %+v", err, onDisk)
 	}
 }
+
+func TestPublish(t *testing.T) {
+	dir := t.TempDir()
+	writeEpisode(t, dir, "001-draft", "draft", 2)
+	ep, err := Publish(filepath.Join(dir, "001-draft"))
+	if err != nil || !ep.Ready() {
+		t.Fatalf("publish valid draft: ready=%v err=%v", ep.Ready(), err)
+	}
+	if again := LoadEpisode(filepath.Join(dir, "001-draft")); !again.Ready() {
+		t.Errorf("status not persisted: %s", again.Problem)
+	}
+
+	writeEpisode(t, dir, "002-broken", "draft", 1)
+	mustWriteJSON(t, filepath.Join(dir, "002-broken", "paragraphs.json"), []Paragraph{{Index: 5}})
+	ep, err = Publish(filepath.Join(dir, "002-broken"))
+	if err == nil || len(ep.Errors) == 0 || ep.Meta.Status != "draft" {
+		t.Errorf("publish invalid draft should fail and stay draft: err=%v errors=%v", err, ep.Errors)
+	}
+}

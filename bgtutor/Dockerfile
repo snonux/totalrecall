@@ -2,9 +2,9 @@
 # Build from the repository root (the context must include go.mod):
 #   docker build -f bgtutor/Dockerfile -t bgtutor:0.1.0 .
 #
-# Only `bgtutor serve` runs in the container. `bgtutor prepare` needs a Gemini
-# key and runs offline on a workstation; its output (episode folders) is copied
-# into the mounted data directory.
+# Only `bgtutor serve` runs in the container. Episodes are prepared offline by
+# a coding agent following bgtutor/PREPARE.md and copied into the mounted data
+# directory.
 FROM golang:1.24-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

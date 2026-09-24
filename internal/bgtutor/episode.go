@@ -71,12 +71,15 @@ type Paragraph struct {
 	Background         *string     `json:"background"`
 }
 
-// Episode is a loaded episode folder. Problem is empty when it is playable.
+// Episode is a loaded episode folder. Errors lists everything wrong with its
+// content; Problem is the one-line reason it can't be played (content errors,
+// or a status other than "ready"), empty when it is playable.
 type Episode struct {
 	ID         string
 	Dir        string
 	Meta       Meta
 	Paragraphs []Paragraph
+	Errors     []string
 	Problem    string
 }
 
@@ -102,24 +105,39 @@ func ValidEpisodeID(id string) bool { return episodeIDPattern.MatchString(id) }
 func LoadEpisode(dir string) *Episode {
 	ep := &Episode{ID: filepath.Base(dir), Dir: dir}
 	if err := readJSON(filepath.Join(dir, "meta.json"), &ep.Meta); err != nil {
-		ep.Problem = describeReadError("meta.json", err)
-		return ep
-	}
-	problems := ValidateMeta(&ep.Meta)
-	if len(problems) == 0 {
+		ep.Errors = []string{describeReadError("meta.json", err)}
+	} else if ep.Errors = ValidateMeta(&ep.Meta); len(ep.Errors) == 0 {
 		if err := readJSON(filepath.Join(dir, "paragraphs.json"), &ep.Paragraphs); err != nil {
-			problems = append(problems, describeReadError("paragraphs.json", err))
+			ep.Errors = []string{describeReadError("paragraphs.json", err)}
 		} else {
-			problems = append(problems, ValidateParagraphs(ep.Paragraphs, speakerLabels(ep.Meta))...)
+			ep.Errors = ValidateParagraphs(ep.Paragraphs, speakerLabels(ep.Meta))
 		}
 	}
 	switch {
-	case len(problems) > 0:
-		ep.Problem = joinProblems(problems)
+	case len(ep.Errors) > 0:
+		ep.Problem = joinProblems(ep.Errors)
 	case ep.Meta.Status != "ready":
 		ep.Problem = fmt.Sprintf("episode status is %q, not \"ready\"", ep.Meta.Status)
 	}
 	return ep
+}
+
+// Publish marks a valid draft episode as ready, which makes the MCP server
+// serve it. It refuses an episode with content errors.
+func Publish(dir string) (*Episode, error) {
+	ep := LoadEpisode(dir)
+	if len(ep.Errors) > 0 {
+		return ep, fmt.Errorf("%s has %d problems; run bgtutor validate %s", ep.ID, len(ep.Errors), ep.ID)
+	}
+	if ep.Meta.Status == "ready" {
+		return ep, nil
+	}
+	ep.Meta.Status = "ready"
+	if err := WriteJSONAtomic(filepath.Join(dir, "meta.json"), ep.Meta); err != nil {
+		return ep, err
+	}
+	ep.Problem = ""
+	return ep, nil
 }
 
 // ValidateMeta returns a list of problems with meta.json; empty means valid.

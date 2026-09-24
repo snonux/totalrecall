@@ -7,7 +7,7 @@ translates it into Bulgarian live, reads it aloud, and teaches grammar and
 vocabulary along the way.
 
 ```
-English transcript ──► bgtutor prepare (Gemini, offline) ──► bgtutor/data/episodes/<id>/
+English transcript ──► coding agent + PREPARE.md (offline) ──► bgtutor/data/episodes/<id>/
                                                                   │
                      voice AI ◄── MCP over HTTPS ◄── bgtutor serve ┘
 ```
@@ -20,27 +20,22 @@ go build -o bgtutor ./cmd/bgtutor
 
 ## 1. Prepare an episode
 
-Needs `GOOGLE_API_KEY`, like the rest of totalrecall.
+Episodes are prepared by a coding agent, not by an API call: Claude Code,
+Codex, or a Claude cloud session reads [PREPARE.md](PREPARE.md), splits the
+transcript into paragraphs, translates them and writes the teaching notes
+itself. In Claude Code the `bgtutor-prepare` skill loads that guide; other
+harnesses find it through `AGENTS.md`. For example:
+
+> Prepare a bgtutor episode from transcripts/morning-news.txt, level B1.
+
+The agent writes the folder as a draft, then:
 
 ```bash
-./bgtutor prepare transcript.txt \
-  --id 002-morning-news --title "Morning News" \
-  --speaker "Host:Maria:news anchor" --speaker "Guest:Peter:economist" \
-  --difficulty B1 --minutes 25 --audio episode.mp3
+./bgtutor validate 002-morning-news   # lists every problem with the folder
+./bgtutor publish 002-morning-news    # marks a valid draft as ready to serve
 ```
 
-- The transcript is plain text; `Speaker: text` lines help but are not required.
-- `--difficulty` is the CEFR level the notes are pitched at.
-- `--reference notes.txt` passes a grammar reference or textbook excerpt so
-  notes use your course's terminology (optional).
-- Long transcripts are sent in chunks (`--chunk-words`, default 1200). The
-  episode stays `draft` until every chunk succeeded and validated, so the server
-  never serves a half-prepared episode.
-
-The prompt lives in `internal/bgtutor/prepare/prompt.md`. The folder format is
-in [FORMAT.md](FORMAT.md). `./bgtutor validate` checks every episode.
-
-A small hand-prepared test episode ships in
+The folder format is in [FORMAT.md](FORMAT.md). A small test episode ships in
 `bgtutor/data/episodes/001-cooking-basics` (source transcript in
 `bgtutor/examples/`).
 

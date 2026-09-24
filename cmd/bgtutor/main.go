@@ -1,10 +1,11 @@
 // Command bgtutor is the Bulgarian Podcast Tutor, a sub-project of totalrecall.
 //
-//	bgtutor prepare   turn an English transcript into an episode folder (Gemini)
 //	bgtutor serve     run the MCP server (Streamable HTTP) over the episode library
 //	bgtutor validate  check episode folders against bgtutor/FORMAT.md
+//	bgtutor publish   mark a valid draft episode as ready
 //
-// See bgtutor/README.md for the full workflow.
+// Episodes are prepared by a coding agent (Claude Code, Codex, ...) following
+// bgtutor/PREPARE.md, not by this binary. See bgtutor/README.md.
 package main
 
 import (
@@ -26,7 +27,7 @@ func main() {
 	}
 	root.PersistentFlags().String("data-dir", envOr("BGTUTOR_DATA_DIR", "bgtutor/data"),
 		"library directory holding episodes/ and vocabulary/ (env BGTUTOR_DATA_DIR)")
-	root.AddCommand(newServeCmd(), newPrepareCmd(), newValidateCmd())
+	root.AddCommand(newServeCmd(), newValidateCmd(), newPublishCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "bgtutor:", err)
 		os.Exit(1)

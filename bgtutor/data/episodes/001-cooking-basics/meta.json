@@ -23,5 +23,5 @@
   },
   "status": "ready",
   "prepared_at": "2026-09-24",
-  "prepared_by": "hand-prepared following internal/bgtutor/prepare/prompt.md"
+  "prepared_by": "Claude, following bgtutor/PREPARE.md"
 }

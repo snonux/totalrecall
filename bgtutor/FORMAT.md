@@ -35,7 +35,7 @@ digits, dashes). The id is what the voice AI passes to `get_paragraph`.
   "source": {"podcast": "...", "episode_url": "...", "audio_file": "audio.mp3"},
   "status": "ready",
   "prepared_at": "2026-09-24",
-  "prepared_by": "totalrecall bgtutor prepare / gemini-2.5-pro"
+  "prepared_by": "Claude Code, following bgtutor/PREPARE.md"
 }
 ```
 
@@ -125,6 +125,6 @@ note, which is a useful "this keeps tripping me up" signal for review.
 
 ## Validation
 
-`bgtutor validate` checks every folder against this
-spec. The server also validates on load; an invalid or `draft` episode is
+`bgtutor validate [id...]` checks folders against this spec and lists every
+problem; `bgtutor publish <id>` flips a valid draft to `ready`. The server also validates on load; an invalid or `draft` episode is
 listed with `ready: false` and a reason, and `get_paragraph` refuses it.
