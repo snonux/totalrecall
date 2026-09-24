@@ -80,6 +80,16 @@ to 9". The session instructions for the voice AI are sent on initialize; see
 
 The vocabulary notebook is `bgtutor/data/vocabulary/saved.json` (git-ignored).
 
+## Container image
+
+```bash
+docker build -f bgtutor/Dockerfile -t bgtutor:0.1.0 .   # from the repo root
+docker run -e BGTUTOR_TOKEN=... -v $PWD/bgtutor/data:/data -p 8080:8080 bgtutor:0.1.0
+```
+
+The image runs only `bgtutor serve` (static binary on distroless), with the
+library at `/data`. The k3s deployment lives in snonux/conf under `f3s/bgtutor`.
+
 ## 3. Connect a voice AI (not done yet)
 
 Both Claude (custom connector) and ChatGPT (developer mode connector) need a
