@@ -1,0 +1,302 @@
+[
+  {
+    "index": 1,
+    "speaker": "Host",
+    "english": "Welcome back to Kitchen Stories. I'm Anna, and today I'm in the kitchen with chef Georgi, who is going to show us how to make banitsa, probably the most famous Bulgarian pastry. Georgi, thanks for coming.",
+    "bulgarian_reference": "Добре дошли отново в „Кухненски истории“. Аз съм Анна и днес съм в кухнята с шеф Георги, който ще ни покаже как се прави баница – може би най-известното българско печиво. Георги, благодаря ти, че дойде.",
+    "grammar_notes": [
+      "„ще ни покаже“: future tense = ще + present form; the short pronoun ни (to us) sits between ще and the verb.",
+      "„как се прави“: „се“ + 3rd person makes an impersonal/passive meaning, 'how it is made' / 'how one makes it'."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "добре дошли",
+        "en": "welcome",
+        "note": "plural/polite form; to one friend: добре дошъл (m) / дошла (f)"
+      },
+      {
+        "bg": "покажа / показвам",
+        "en": "to show",
+        "note": "perfective / imperfective pair"
+      },
+      {
+        "bg": "известен",
+        "en": "famous",
+        "note": "neuter: известно, with article: известното"
+      },
+      {
+        "bg": "печиво",
+        "en": "baked good, pastry",
+        "note": "neuter noun"
+      },
+      {
+        "bg": "дойда / идвам",
+        "en": "to come",
+        "note": "perfective / imperfective; „че дойде“ = that you came"
+      }
+    ],
+    "background": "Banitsa is layered filo pastry baked with eggs and white brined cheese. It is the classic Bulgarian breakfast pastry, sold in bakeries everywhere."
+  },
+  {
+    "index": 2,
+    "speaker": "Guest",
+    "english": "Thank you for having me. Banitsa is something every Bulgarian grandmother makes, and every family thinks theirs is the best. So I'll try not to start an argument today.",
+    "bulgarian_reference": "Благодаря за поканата. Баницата е нещо, което прави всяка българска баба, и всяко семейство смята, че неговата е най-хубавата. Така че днес ще се опитам да не започна спор.",
+    "grammar_notes": [
+      "Definite article on feminine nouns ending in -а: баница → баницата, покана → поканата. Superlative: най- + adjective, here with the article: най-хубавата (the best one).",
+      "No infinitive in Bulgarian: 'try not to start' = „да се опитам да не започна“, i.e. да + present form. Negation „не“ goes right after „да“."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "покана",
+        "en": "invitation",
+        "note": "feminine; „благодаря за поканата“ = thanks for having me"
+      },
+      {
+        "bg": "баба",
+        "en": "grandmother",
+        "note": "also used for any old woman"
+      },
+      {
+        "bg": "смятам",
+        "en": "to think, to consider",
+        "note": "imperfective; синоним: мисля"
+      },
+      {
+        "bg": "опитам се / опитвам се",
+        "en": "to try",
+        "note": "reflexive with „се“"
+      },
+      {
+        "bg": "спор",
+        "en": "argument, dispute",
+        "note": "masculine; „започна спор“ = start an argument"
+      }
+    ],
+    "background": null
+  },
+  {
+    "index": 3,
+    "speaker": "Host",
+    "english": "Let's start simple. What do we need?",
+    "bulgarian_reference": "Да започнем с простите неща. Какво ни трябва?",
+    "grammar_notes": [
+      "„Да започнем“: да + 1st person plural = 'let's ...'.",
+      "„Какво ни трябва?“: трябва + short dative pronoun expresses need: трябва ми = I need, трябва ни = we need (literally 'what is needed to us')."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "започна / започвам",
+        "en": "to start, to begin",
+        "note": "perfective / imperfective"
+      },
+      {
+        "bg": "прост",
+        "en": "simple",
+        "note": "plural with article: простите"
+      },
+      {
+        "bg": "трябва ми",
+        "en": "I need",
+        "note": "трябва does not change; the pronoun shows who needs"
+      }
+    ],
+    "background": null
+  },
+  {
+    "index": 4,
+    "speaker": "Guest",
+    "english": "Not much. A pack of thin filo pastry, four eggs, about two hundred grams of white brined cheese, a cup of yoghurt, a little baking soda and some butter or oil. That's it. The cheese is the important part. In Bulgaria we call it sirene, and it's a bit like feta.",
+    "bulgarian_reference": "Не много. Един пакет тънки кори, четири яйца, около двеста грама бяло саламурено сирене, една чаша кисело мляко, малко сода за хляб и малко масло или олио. Това е. Сиренето е най-важното. В България му казваме „сирене“ и то прилича малко на фета.",
+    "grammar_notes": [
+      "After numbers, masculine nouns take the count form in -а: двеста грама (not грамове). Neuter plural: яйце → яйца.",
+      "„му казваме“: the short dative pronoun „му“ (to it) = 'we call it'. Adjectives agree with the noun: бяло сирене, кисело мляко (neuter)."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "кори",
+        "en": "filo pastry sheets",
+        "note": "singular кора; also means crust or bark"
+      },
+      {
+        "bg": "яйце",
+        "en": "egg",
+        "note": "neuter; plural яйца"
+      },
+      {
+        "bg": "сирене",
+        "en": "white brined cheese",
+        "note": "neuter; yellow cheese is кашкавал"
+      },
+      {
+        "bg": "кисело мляко",
+        "en": "yoghurt",
+        "note": "literally 'sour milk'"
+      },
+      {
+        "bg": "сода за хляб",
+        "en": "baking soda",
+        "note": "literally 'soda for bread'"
+      },
+      {
+        "bg": "масло / олио",
+        "en": "butter / cooking oil",
+        "note": "масло alone usually means butter"
+      }
+    ],
+    "background": "Bulgarians are proud of their yoghurt: the bacterium Lactobacillus bulgaricus is named after the country. Сирене is similar to feta and is on almost every Bulgarian table."
+  },
+  {
+    "index": 5,
+    "speaker": "Host",
+    "english": "And how do you make it?",
+    "bulgarian_reference": "И как се приготвя?",
+    "grammar_notes": [
+      "„се приготвя“: impersonal/passive with „се“ again, 'how is it prepared'. Imperfective приготвям is used because this is a general process, not one completed act."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "приготвя / приготвям",
+        "en": "to prepare (food)",
+        "note": "perfective / imperfective"
+      }
+    ],
+    "background": null
+  },
+  {
+    "index": 6,
+    "speaker": "Guest",
+    "english": "First you mix the eggs, the yoghurt and the crumbled cheese in a bowl. Then you take two sheets of pastry, brush them with butter, spread some filling on top and roll them up loosely. You put the rolls in a round tray, one after another, like a spiral. When the tray is full, you pour the rest of the filling over the top and bake it for about forty minutes at one hundred and eighty degrees.",
+    "bulgarian_reference": "Първо смесваш яйцата, киселото мляко и натрошеното сирене в купа. После взимаш две кори, намазваш ги с масло, слагаш отгоре малко от плънката и ги навиваш хлабаво на руло. Нареждаш рулата в кръгла тава едно след друго, като спирала. Когато тавата се напълни, заливаш отгоре останалата плънка и я печеш около четиридесет минути на сто и осемдесет градуса.",
+    "grammar_notes": [
+      "Recipes often use the 2nd person singular present for a general 'you': смесваш, взимаш, печеш. The imperfective verbs describe repeated steps.",
+      "Short object pronouns: „ги“ (them), „я“ (it, feminine: here the banitsa). They come before the verb („и ги навиваш“) but after it when the verb starts the clause („намазваш ги“).",
+      "„Когато тавата се напълни“: after когато, a perfective present describes a completed event: 'once the tray is full'."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "смесвам / смеся",
+        "en": "to mix",
+        "note": "imperfective / perfective"
+      },
+      {
+        "bg": "купа",
+        "en": "bowl",
+        "note": "feminine"
+      },
+      {
+        "bg": "плънка",
+        "en": "filling",
+        "note": "feminine; the filling = плънката"
+      },
+      {
+        "bg": "навивам / навия",
+        "en": "to roll up",
+        "note": "„навивам на руло“ = roll into a roll"
+      },
+      {
+        "bg": "тава",
+        "en": "baking tray",
+        "note": "feminine"
+      },
+      {
+        "bg": "пека",
+        "en": "to bake",
+        "note": "irregular: пека, печеш, пече"
+      }
+    ],
+    "background": null
+  },
+  {
+    "index": 7,
+    "speaker": "Host",
+    "english": "That smells amazing already. When do people usually eat it?",
+    "bulgarian_reference": "Вече ухае невероятно. Кога обикновено се яде?",
+    "grammar_notes": [
+      "„се яде“: 'is eaten' / 'do people eat it'. The verb ям is irregular: ям, ядеш, яде, ядем, ядете, ядат."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "ухая",
+        "en": "to smell nice",
+        "note": "3rd person: ухае; for a bad smell: мириша"
+      },
+      {
+        "bg": "невероятно",
+        "en": "amazingly, incredibly",
+        "note": "adverb from невероятен"
+      },
+      {
+        "bg": "обикновено",
+        "en": "usually",
+        "note": ""
+      }
+    ],
+    "background": null
+  },
+  {
+    "index": 8,
+    "speaker": "Guest",
+    "english": "Mostly for breakfast, with a glass of ayran or boza. But on New Year's Eve banitsa is special. We hide little notes with wishes inside, called kasmeti, and everyone gets a piece. Whatever your note says, health, love, a trip, that's your luck for the new year.",
+    "bulgarian_reference": "Най-често на закуска, с чаша айрян или боза. Но на Нова година баницата е специална. Слагаме вътре малки бележки с пожелания, наречени късмети, и всеки получава парче. Каквото пише на твоята бележка – здраве, любов, пътуване – това е късметът ти за новата година.",
+    "grammar_notes": [
+      "„късметът ти“: full article -ът on a masculine subject, followed by the short possessive „ти“ (your). Compare the long form „твоята бележка“ (your note).",
+      "„наречени“ is a past passive participle of нарека (to name): 'called'. „Каквото пише“ = 'whatever it says'; пиша (to write) is used impersonally for written text: пише = it says."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "закуска",
+        "en": "breakfast",
+        "note": "„на закуска“ = for breakfast"
+      },
+      {
+        "bg": "пожелание",
+        "en": "wish",
+        "note": "neuter; plural пожелания"
+      },
+      {
+        "bg": "късмет",
+        "en": "luck; the fortune note in the banitsa",
+        "note": "masculine; plural късмети"
+      },
+      {
+        "bg": "парче",
+        "en": "piece",
+        "note": "neuter"
+      },
+      {
+        "bg": "получавам / получа",
+        "en": "to receive, to get",
+        "note": "imperfective / perfective"
+      }
+    ],
+    "background": "On New Year's Eve the banitsa is baked with късмети: small paper notes (often wrapped around a dogwood twig) with wishes such as health, love or travel. Айрян is a salty yoghurt drink; боза is a thick, slightly sweet fermented grain drink, a classic partner to banitsa."
+  },
+  {
+    "index": 9,
+    "speaker": "Host",
+    "english": "I love that. Georgi, thank you. Next week we'll try something sweet.",
+    "bulgarian_reference": "Страхотно. Георги, благодаря ти. Следващата седмица ще опитаме нещо сладко.",
+    "grammar_notes": [
+      "Time expressions often need no preposition, just the article: „следващата седмица“ = next week. After „нещо“ the adjective is neuter: нещо сладко (something sweet)."
+    ],
+    "vocabulary_notes": [
+      {
+        "bg": "страхотно",
+        "en": "great, awesome",
+        "note": "colloquial"
+      },
+      {
+        "bg": "следващ",
+        "en": "next",
+        "note": "feminine with article: следващата"
+      },
+      {
+        "bg": "сладък",
+        "en": "sweet",
+        "note": "neuter: сладко; сладкиш = a sweet pastry or cake"
+      }
+    ],
+    "background": null
+  }
+]

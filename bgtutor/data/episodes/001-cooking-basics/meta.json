@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "title": "Cooking Basics: Banitsa for Beginners",
+  "topic": "Food and cooking",
+  "description": "A host and a chef talk through making banitsa at home and the New Year's tradition of hiding wishes inside.",
+  "difficulty": "A2",
+  "duration_minutes": 3,
+  "speakers": [
+    {
+      "label": "Host",
+      "name": "Anna",
+      "role": "podcast host"
+    },
+    {
+      "label": "Guest",
+      "name": "Georgi",
+      "role": "chef"
+    }
+  ],
+  "source": {
+    "podcast": "Test episode written for bgtutor",
+    "transcript": "bgtutor/examples/001-cooking-basics.txt"
+  },
+  "status": "ready",
+  "prepared_at": "2026-09-24",
+  "prepared_by": "hand-prepared following internal/bgtutor/prepare/prompt.md"
+}
