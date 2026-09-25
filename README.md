@@ -263,3 +263,10 @@ The GUI mode offers an export dialog where you can:
 - Choose between APKG and CSV formats
 - Set a custom deck name
 - Export all generated cards at once
+
+## Sub-project: bgtutor (Bulgarian Podcast Tutor)
+
+`cmd/bgtutor` is an MCP server that lets a voice AI (Claude or ChatGPT) turn
+prepared English podcast episodes into live Bulgarian listening lessons,
+paragraph by paragraph, with grammar and vocabulary notes and a vocabulary
+notebook. See [bgtutor/README.md](bgtutor/README.md).
