@@ -66,6 +66,7 @@ id and paragraph index on every call, and the server keeps no session state.
 | `list_episodes` | none | Episodes with title, topic, difficulty, speakers, paragraph count, `ready` (and why not) |
 | `get_paragraph` | `episode_id`, `index` (1-based) | One paragraph: `english` (primary), `bulgarian_reference` (fallback, with a note saying so), grammar and vocabulary notes, background, speaker, `position` ("3 of 9"), `is_last`, `next_index` |
 | `save_vocabulary` | `term`, optional `kind` (word, phrase, rule), `translation`, `note`, `episode_id`, `paragraph_index` | The saved item; saving the same term again bumps `times_saved` |
+| `delete_vocabulary` | `term`, optional `kind` | The removed items and how many; matches the term case-insensitively, under every kind unless `kind` is given |
 | `list_vocabulary` | optional `query`, `kind`, `episode_id`, `limit` | Saved items, newest first |
 
 Errors (unknown episode, index out of range, episode not prepared) come back

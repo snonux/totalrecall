@@ -85,7 +85,7 @@ func TestSessionFlowOverHTTP(t *testing.T) {
 		t.Error("server instructions missing")
 	}
 	tools, err := cs.ListTools(context.Background(), nil)
-	if err != nil || len(tools.Tools) != 4 {
+	if err != nil || len(tools.Tools) != 5 {
 		t.Fatalf("tools: %v %v", tools, err)
 	}
 
@@ -114,6 +114,17 @@ func TestSessionFlowOverHTTP(t *testing.T) {
 	list, _ := call(t, cs, "list_vocabulary", map[string]any{"query": "tray"})
 	if list["total_matching"].(float64) != 1 {
 		t.Errorf("list_vocabulary: %v", list)
+	}
+	del, _ := call(t, cs, "delete_vocabulary", map[string]any{"term": "ТАВА"})
+	if del["deleted"].(float64) != 1 {
+		t.Errorf("delete_vocabulary: %v", del)
+	}
+	list, _ = call(t, cs, "list_vocabulary", map[string]any{"query": "tray"})
+	if list["total_matching"].(float64) != 0 {
+		t.Errorf("list_vocabulary after delete: %v", list)
+	}
+	if bad, isErr := call(t, cs, "delete_vocabulary", map[string]any{"term": " "}); !isErr {
+		t.Errorf("blank term: %v", bad)
 	}
 }
 

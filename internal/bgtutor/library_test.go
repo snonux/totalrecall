@@ -175,6 +175,41 @@ func TestNotebookSaveDedupAndList(t *testing.T) {
 	}
 }
 
+func TestNotebookDelete(t *testing.T) {
+	nb := NewNotebook(filepath.Join(t.TempDir(), "saved.json"), nil)
+	for _, req := range []SaveRequest{
+		{Term: "тесто"}, {Term: "тесто", Kind: "rule"}, {Term: "тава"},
+	} {
+		if _, err := nb.Save(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r, err := nb.Delete(DeleteRequest{Term: "ТЕСТО", Kind: "rule"})
+	if err != nil || r.Deleted != 1 || r.Items[0].Kind != "rule" {
+		t.Fatalf("delete one kind: %+v %v", r, err)
+	}
+	r, err = nb.Delete(DeleteRequest{Term: " тесто "})
+	if err != nil || r.Deleted != 1 || r.Items[0].Kind != "word" {
+		t.Fatalf("delete every kind: %+v %v", r, err)
+	}
+	r, err = nb.Delete(DeleteRequest{Term: "тесто"})
+	if err != nil || r.Deleted != 0 {
+		t.Errorf("delete missing term: %+v %v", r, err)
+	}
+	if _, err := nb.Delete(DeleteRequest{Term: ""}); err == nil {
+		t.Error("expected error for empty term")
+	}
+	if _, err := nb.Delete(DeleteRequest{Term: "тава", Kind: "bogus"}); err == nil {
+		t.Error("expected error for bad kind")
+	}
+
+	left, _ := nb.List(ListRequest{})
+	if left.TotalMatching != 1 || left.Items[0].Term != "тава" || left.Items[0].ID != 3 {
+		t.Errorf("remaining: %+v", left)
+	}
+}
+
 func TestPublish(t *testing.T) {
 	dir := t.TempDir()
 	writeEpisode(t, dir, "001-draft", "draft", 2)
