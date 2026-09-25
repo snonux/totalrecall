@@ -51,6 +51,19 @@ type SaveResult struct {
 	Item   VocabItem `json:"item"`
 }
 
+// DeleteRequest is the input of delete_vocabulary. Term matches case-
+// insensitively; an empty Kind removes the term under every kind.
+type DeleteRequest struct {
+	Term string
+	Kind string
+}
+
+// DeleteResult lists the items that were removed.
+type DeleteResult struct {
+	Deleted int         `json:"deleted"`
+	Items   []VocabItem `json:"items"`
+}
+
 // ListRequest is the input of list_vocabulary; zero values mean "no filter".
 type ListRequest struct {
 	Query     string
@@ -138,6 +151,40 @@ func (n *Notebook) List(req ListRequest) (*ListResult, error) {
 	}
 	limit = min(limit, 500, len(matches))
 	return &ListResult{TotalMatching: len(matches), Returned: limit, Items: matches[:limit]}, nil
+}
+
+// Delete removes the items saved under a term. Removing a term that isn't in
+// the notebook is not an error: it reports deleted = 0.
+func (n *Notebook) Delete(req DeleteRequest) (*DeleteResult, error) {
+	req.Term = strings.TrimSpace(req.Term)
+	switch {
+	case req.Term == "":
+		return nil, userErrorf("term must not be empty.")
+	case req.Kind != "" && !validKind(req.Kind):
+		return nil, userErrorf("kind must be one of %s.", strings.Join(VocabKinds, ", "))
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	f, err := n.read()
+	if err != nil {
+		return nil, err
+	}
+	res := &DeleteResult{Items: []VocabItem{}}
+	kept := f.Items[:0]
+	for _, it := range f.Items {
+		if strings.EqualFold(it.Term, req.Term) && (req.Kind == "" || it.Kind == req.Kind) {
+			res.Items = append(res.Items, it)
+			continue
+		}
+		kept = append(kept, it)
+	}
+	res.Deleted = len(res.Items)
+	if res.Deleted == 0 {
+		return res, nil
+	}
+	f.Items = kept
+	return res, n.write(f)
 }
 
 func validateSave(req SaveRequest) error {

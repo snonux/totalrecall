@@ -35,7 +35,8 @@ Session flow:
 5. The learner may ask you to repeat, slow down, translate a word or phrase to
    English, or explain grammar. When a word or rule is new to them, offer to
    save it and call save_vocabulary with the episode_id and paragraph index.
-6. For review sessions, call list_vocabulary.`
+6. For review sessions, call list_vocabulary. If the learner asks to remove a
+   saved item, call delete_vocabulary.`
 
 // New builds the MCP server over dataDir, which holds episodes/ and
 // vocabulary/saved.json (see bgtutor/FORMAT.md).
@@ -72,6 +73,14 @@ func New(dataDir string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{IdempotentHint: true},
 	}, t.saveVocabulary)
 	mcp.AddTool(s, &mcp.Tool{
+		Name: "delete_vocabulary",
+		Description: "Remove a term from the vocabulary notebook, e.g. one saved by mistake. " +
+			"Matches the term case-insensitively; pass kind to remove only that kind, or " +
+			"leave it out to remove the term under every kind. Only call this when the " +
+			"learner asks for it.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), IdempotentHint: true},
+	}, t.deleteVocabulary)
+	mcp.AddTool(s, &mcp.Tool{
 		Name: "list_vocabulary",
 		Description: "List saved vocabulary for review, newest first. Optional filters: query " +
 			"(matches term, translation or note), kind, episode_id, limit.",
@@ -81,6 +90,8 @@ func New(dataDir string) *mcp.Server {
 }
 
 func readOnly() *mcp.ToolAnnotations { return &mcp.ToolAnnotations{ReadOnlyHint: true} }
+
+func ptr[T any](v T) *T { return &v }
 
 type tools struct {
 	lib *bgtutor.Library
@@ -126,6 +137,16 @@ type saveVocabularyIn struct {
 
 func (t *tools) saveVocabulary(_ context.Context, _ *mcp.CallToolRequest, in saveVocabularyIn) (*mcp.CallToolResult, *bgtutor.SaveResult, error) {
 	res, err := t.nb.Save(bgtutor.SaveRequest(in))
+	return nil, res, err
+}
+
+type deleteVocabularyIn struct {
+	Term string `json:"term" jsonschema:"the saved term to remove (case-insensitive)"`
+	Kind string `json:"kind,omitempty" jsonschema:"only remove this kind: word, phrase or rule (default: every kind)"`
+}
+
+func (t *tools) deleteVocabulary(_ context.Context, _ *mcp.CallToolRequest, in deleteVocabularyIn) (*mcp.CallToolResult, *bgtutor.DeleteResult, error) {
+	res, err := t.nb.Delete(bgtutor.DeleteRequest(in))
 	return nil, res, err
 }
 
