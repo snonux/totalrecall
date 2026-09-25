@@ -105,6 +105,7 @@ package main  // NOT package bulg
 
 ## bgtutor (Bulgarian Podcast Tutor)
 - To prepare a bgtutor episode from a podcast transcript, follow `bgtutor/PREPARE.md` (Claude Code: the `bgtutor-prepare` skill). The agent writes the episode itself; no LLM API is involved.
+- Prepared episodes are committed to https://github.com/snonux/bgtutor-assets (`episodes/`), not to this repository; only the `001-cooking-basics` sample lives here.
 
 ## Bulgarian Language Notes
 - Input should be in Cyrillic script

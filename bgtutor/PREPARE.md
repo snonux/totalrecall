@@ -17,8 +17,9 @@ Ask the person for anything missing that you can't infer:
 
 - **Transcript** (required): English text, ideally with `Speaker: text` lines.
   Audio alone is not enough; you need a transcript.
-- **Episode id**: `NNN-short-slug`, the next free number in
-  `bgtutor/data/episodes/` (e.g. `002-morning-news`).
+- **Episode id**: `NNN-short-slug`, the next free number across
+  `bgtutor/data/episodes/` and `episodes/` in
+  [snonux/bgtutor-assets](https://github.com/snonux/bgtutor-assets) (e.g. `002-morning-news`).
 - **Title, speakers** (label, name, role), topic, a one-sentence description,
   audio length in minutes. Infer them from the transcript when you can.
 - **Learner level** (CEFR). Default `B1` if not given.
@@ -42,7 +43,12 @@ Ask the person for anything missing that you can't infer:
    anything that sounds translated rather than spoken.
 6. Run `go run ./cmd/bgtutor publish <id>`. This flips the status to `ready`;
    only then does the MCP server serve the episode.
-7. Tell the person the episode id, the paragraph count, and how to upload it
+7. Move the finished folder into `episodes/` of
+   [snonux/bgtutor-assets](https://github.com/snonux/bgtutor-assets) and commit
+   it there. Real episodes are not committed to this repository, because their
+   transcripts come from third-party podcasts; only the `001-cooking-basics`
+   sample stays here.
+8. Tell the person the episode id, the paragraph count, and how to upload it
    (on f3s: `just upload-episode <folder>` in `snonux/conf` `f3s/bgtutor`).
 
 ## Paragraphs

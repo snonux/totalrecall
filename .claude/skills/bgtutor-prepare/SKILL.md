@@ -10,4 +10,8 @@ finished example.
 
 You do the translation and note writing yourself. Do not call an external LLM
 API. Finish with `go run ./cmd/bgtutor validate <id>` passing and
-`go run ./cmd/bgtutor publish <id>`.
+`go run ./cmd/bgtutor publish <id>`. Then commit the finished folder to
+`episodes/` in [snonux/bgtutor-assets](https://github.com/snonux/bgtutor-assets),
+where all real episodes live, not to this repository (only the
+`001-cooking-basics` sample stays here). Pick the next free episode number
+across both repositories.

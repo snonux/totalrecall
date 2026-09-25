@@ -37,7 +37,10 @@ The agent writes the folder as a draft, then:
 
 The folder format is in [FORMAT.md](FORMAT.md). A small test episode ships in
 `bgtutor/data/episodes/001-cooking-basics` (source transcript in
-`bgtutor/examples/`).
+`bgtutor/examples/`). Real episodes live in
+[snonux/bgtutor-assets](https://github.com/snonux/bgtutor-assets) under
+`episodes/`, not in this repository, because their transcripts come from
+third-party podcasts.
 
 ## 2. Run the MCP server
 
