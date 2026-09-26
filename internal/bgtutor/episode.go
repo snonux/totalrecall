@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -172,11 +171,11 @@ func ValidateParagraphs(ps []Paragraph, labels map[string]bool) []string {
 		if p.Index != i+1 {
 			problems = append(problems, fmt.Sprintf("%s: index is %d, expected %d", where, p.Index, i+1))
 		}
-		for name, v := range map[string]string{
-			"speaker": p.Speaker, "english": p.English, "bulgarian_reference": p.BulgarianReference,
+		for _, f := range []struct{ name, value string }{
+			{"speaker", p.Speaker}, {"english", p.English}, {"bulgarian_reference", p.BulgarianReference},
 		} {
-			if strings.TrimSpace(v) == "" {
-				problems = append(problems, fmt.Sprintf("%s: %s must not be empty", where, name))
+			if strings.TrimSpace(f.value) == "" {
+				problems = append(problems, fmt.Sprintf("%s: %s must not be empty", where, f.name))
 			}
 		}
 		if labels != nil && p.Speaker != "" && !labels[p.Speaker] {
@@ -188,7 +187,6 @@ func ValidateParagraphs(ps []Paragraph, labels map[string]bool) []string {
 			}
 		}
 	}
-	sort.Strings(problems) // map iteration above is unordered; keep output stable
 	return problems
 }
 

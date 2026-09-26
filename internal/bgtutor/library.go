@@ -63,7 +63,7 @@ func (l *Library) Episodes() ([]*Episode, error) {
 	}
 	var eps []*Episode
 	for _, e := range entries {
-		if e.IsDir() && ValidEpisodeID(e.Name()) {
+		if ValidEpisodeID(e.Name()) && isDir(filepath.Join(l.Dir, e.Name())) {
 			eps = append(eps, LoadEpisode(filepath.Join(l.Dir, e.Name())))
 		}
 	}
@@ -78,10 +78,17 @@ func (l *Library) Episode(id string) (*Episode, error) {
 		return nil, userErrorf("Invalid episode id %q. Use an episode_id from list_episodes.", id)
 	}
 	dir := filepath.Join(l.Dir, id)
-	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+	if !isDir(dir) {
 		return nil, userErrorf("Unknown episode %q. Available episodes: %s.", id, l.readyIDs())
 	}
 	return LoadEpisode(dir), nil
+}
+
+// isDir follows symlinks, so a symlinked episode folder is both listed and
+// playable.
+func isDir(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.IsDir()
 }
 
 func (l *Library) readyIDs() string {
