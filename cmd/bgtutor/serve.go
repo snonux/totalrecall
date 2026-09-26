@@ -49,7 +49,11 @@ func serve(ctx context.Context, dataDir, addr, token string) error {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// ListenAndServe returns as soon as Shutdown starts, so wait for
+	// Shutdown to finish draining in-flight requests before returning.
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -63,6 +67,7 @@ func serve(ctx context.Context, dataDir, addr, token string) error {
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	<-shutdownDone
 	return nil
 }
 

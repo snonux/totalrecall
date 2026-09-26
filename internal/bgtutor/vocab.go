@@ -99,13 +99,14 @@ func NewNotebook(path string, lib *Library) *Notebook {
 // tripping me up" signal instead of duplicates.
 func (n *Notebook) Save(req SaveRequest) (*SaveResult, error) {
 	req.Term = strings.TrimSpace(req.Term)
+	req.Kind = normalizeKind(req.Kind)
 	if req.Kind == "" {
 		req.Kind = "word"
 	}
 	if err := validateSave(req); err != nil {
 		return nil, err
 	}
-	context := n.sourceSentence(req.EpisodeID, req.ParagraphIndex)
+	source := n.sourceSentence(req.EpisodeID, req.ParagraphIndex)
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -115,13 +116,13 @@ func (n *Notebook) Save(req SaveRequest) (*SaveResult, error) {
 	}
 	stamp := n.now().UTC().Format(time.RFC3339)
 	if i := findItem(f.Items, req.Term, req.Kind); i >= 0 {
-		mergeItem(&f.Items[i], req, stamp)
+		mergeItem(&f.Items[i], req, source, stamp)
 		return &SaveResult{Status: "already_saved", Item: f.Items[i]}, n.write(f)
 	}
 	item := VocabItem{
 		ID: nextID(f.Items), Term: req.Term, Kind: req.Kind, Translation: req.Translation,
 		Note: req.Note, EpisodeID: req.EpisodeID, ParagraphIndex: req.ParagraphIndex,
-		Context: context, SavedAt: stamp, TimesSaved: 1,
+		Context: source, SavedAt: stamp, TimesSaved: 1,
 	}
 	f.Items = append(f.Items, item)
 	return &SaveResult{Status: "saved", Item: item}, n.write(f)
@@ -129,6 +130,8 @@ func (n *Notebook) Save(req SaveRequest) (*SaveResult, error) {
 
 // List returns matching items, newest first.
 func (n *Notebook) List(req ListRequest) (*ListResult, error) {
+	req.Kind = normalizeKind(req.Kind)
+	req.Query = strings.TrimSpace(req.Query)
 	if req.Kind != "" && !validKind(req.Kind) {
 		return nil, userErrorf("kind must be one of %s.", strings.Join(VocabKinds, ", "))
 	}
@@ -144,7 +147,13 @@ func (n *Notebook) List(req ListRequest) (*ListResult, error) {
 			matches = append(matches, it)
 		}
 	}
-	sort.SliceStable(matches, func(i, j int) bool { return matches[i].SavedAt > matches[j].SavedAt })
+	// saved_at has one-second resolution, so break ties by id (higher = newer).
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].SavedAt != matches[j].SavedAt {
+			return matches[i].SavedAt > matches[j].SavedAt
+		}
+		return matches[i].ID > matches[j].ID
+	})
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 50
@@ -157,6 +166,7 @@ func (n *Notebook) List(req ListRequest) (*ListResult, error) {
 // the notebook is not an error: it reports deleted = 0.
 func (n *Notebook) Delete(req DeleteRequest) (*DeleteResult, error) {
 	req.Term = strings.TrimSpace(req.Term)
+	req.Kind = normalizeKind(req.Kind)
 	switch {
 	case req.Term == "":
 		return nil, userErrorf("term must not be empty.")
@@ -197,6 +207,10 @@ func validateSave(req SaveRequest) error {
 		return userErrorf("kind must be one of %s.", strings.Join(VocabKinds, ", "))
 	case req.EpisodeID != "" && !ValidEpisodeID(req.EpisodeID):
 		return userErrorf("Invalid episode id %q.", req.EpisodeID)
+	case req.ParagraphIndex < 0:
+		return userErrorf("paragraph_index must be 1 or more.")
+	case req.ParagraphIndex > 0 && req.EpisodeID == "":
+		return userErrorf("paragraph_index needs episode_id.")
 	}
 	return nil
 }
@@ -223,11 +237,15 @@ func findItem(items []VocabItem, term, kind string) int {
 	return -1
 }
 
-func mergeItem(it *VocabItem, req SaveRequest, stamp string) {
+func mergeItem(it *VocabItem, req SaveRequest, source, stamp string) {
 	it.TimesSaved++
 	it.LastSavedAt = stamp
 	if it.Translation == "" {
 		it.Translation = req.Translation
+	}
+	// An item first saved without a source picks one up from a later save.
+	if it.EpisodeID == "" && req.EpisodeID != "" {
+		it.EpisodeID, it.ParagraphIndex, it.Context = req.EpisodeID, req.ParagraphIndex, source
 	}
 	if req.Note != "" && !strings.Contains(it.Note, req.Note) {
 		if it.Note == "" {
@@ -264,6 +282,9 @@ func matchesFilter(it VocabItem, req ListRequest) bool {
 	}
 	return false
 }
+
+// normalizeKind accepts "Word" or " phrase " from the voice AI.
+func normalizeKind(kind string) string { return strings.ToLower(strings.TrimSpace(kind)) }
 
 func validKind(kind string) bool {
 	for _, k := range VocabKinds {
@@ -303,6 +324,13 @@ func WriteJSONAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	// CreateTemp makes the file 0600; keep the mode of the file being
+	// replaced (or 0644 for a new one) so e.g. publishing an episode doesn't
+	// leave meta.json unreadable to a server running as another user.
+	mode := os.FileMode(0o644)
+	if st, err := os.Stat(path); err == nil {
+		mode = st.Mode().Perm()
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -313,6 +341,9 @@ func WriteJSONAtomic(path string, v any) error {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
