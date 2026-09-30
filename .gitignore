@@ -31,6 +31,3 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-
-# bgtutor: the learner's personal vocabulary notebook
-/bgtutor/data/vocabulary/
