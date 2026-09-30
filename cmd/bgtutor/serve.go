@@ -41,10 +41,13 @@ func serve(ctx context.Context, dataDir, addr, token string) error {
 	if st, err := os.Stat(dataDir); err != nil || !st.IsDir() {
 		return fmt.Errorf("data dir %q does not exist", dataDir)
 	}
+	// Keep SDK diagnostics at warning level while recording every HTTP request
+	// through a separate access logger, so normal traffic is visible in pod logs.
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	accessLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mcpserver.Handler(mcpserver.New(dataDir), mcpserver.HTTPOptions{Token: token, Logger: logger}),
+		Handler:           mcpserver.Handler(mcpserver.New(dataDir), mcpserver.HTTPOptions{Token: token, Logger: logger, AccessLogger: accessLogger}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/felixge/httpsnoop"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -16,8 +17,11 @@ type HTTPOptions struct {
 	// connector UIs only accept a URL). Empty disables auth, which is only
 	// sensible when listening on localhost.
 	Token string
-	// Logger receives request logs; nil discards them.
+	// Logger receives diagnostics from the MCP transport.
 	Logger *slog.Logger
+	// AccessLogger records every HTTP request without headers, query strings,
+	// or bodies, which may contain the bearer token or learner content.
+	AccessLogger *slog.Logger
 }
 
 // Handler returns an http.Handler serving MCP at /mcp and a health check at
@@ -47,7 +51,20 @@ func Handler(server *mcp.Server, opts HTTPOptions) http.Handler {
 		h = requireToken(opts.Token, h)
 	}
 	mux.Handle("/mcp", h)
-	return mux
+	return logHTTPRequests(opts.AccessLogger, mux)
+}
+
+// logHTTPRequests records the final response for every route, including
+// health checks and rejected requests, without logging credentials or content.
+func logHTTPRequests(logger *slog.Logger, next http.Handler) http.Handler {
+	if logger == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metrics := httpsnoop.CaptureMetrics(next, w, r)
+		logger.Info("http request", "method", r.Method, "path", r.URL.Path,
+			"status", metrics.Code, "duration", metrics.Duration, "bytes", metrics.Written)
+	})
 }
 
 // requireToken rejects requests that don't carry the expected token. The

@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	fyne.io/fyne/v2 v2.6.1
 	github.com/dweymouth/fyne-tooltip v0.3.3
+	github.com/felixge/httpsnoop v1.0.4
 	github.com/magefile/mage v1.15.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/modelcontextprotocol/go-sdk v1.4.0
@@ -23,7 +24,6 @@ require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fyne-io/gl-js v0.1.0 // indirect

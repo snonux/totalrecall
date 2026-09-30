@@ -1,8 +1,10 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -143,6 +145,41 @@ func TestHealthzIsOpen(t *testing.T) {
 	resp, err := http.Get(ts.URL + "/healthz")
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("healthz: %v %v", resp, err)
+	}
+}
+
+func TestAccessLogsEveryRequestWithoutSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	h := Handler(New(sampleDataDir(t)), HTTPOptions{Token: "test-secret", AccessLogger: logger})
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	requests := []struct {
+		method, target, body string
+		status               int
+	}{
+		{http.MethodGet, "/healthz", "", http.StatusOK},
+		{http.MethodGet, "/mcp", "", http.StatusUnauthorized},
+		{http.MethodPost, "/mcp?token=test-secret", body, http.StatusOK},
+		{http.MethodGet, "/missing", "", http.StatusNotFound},
+	}
+	for _, tc := range requests {
+		r := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Accept", "application/json, text/event-stream")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Errorf("%s %s: status %d, want %d", tc.method, tc.target, w.Code, tc.status)
+		}
+		if want := "method=" + tc.method + " path=" + strings.Split(tc.target, "?")[0]; !strings.Contains(logs.String(), want) {
+			t.Errorf("missing access log %q: %s", want, logs.String())
+		}
+	}
+	if got := strings.Count(logs.String(), "msg=\"http request\""); got != len(requests) {
+		t.Errorf("got %d access logs, want %d: %s", got, len(requests), logs.String())
+	}
+	if strings.Contains(logs.String(), "test-secret") || strings.Contains(logs.String(), "tools/list") {
+		t.Errorf("access logs leaked request data: %s", logs.String())
 	}
 }
 

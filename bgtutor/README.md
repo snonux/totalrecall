@@ -79,11 +79,16 @@ to 9". The session instructions for the voice AI are sent on initialize; see
 
 The vocabulary notebook is `bgtutor/data/vocabulary/saved.json` (git-ignored).
 
+The server logs every HTTP request to stderr, including health checks and
+rejected requests. Each access log has the method, path, status, duration, and
+response size. Query strings, headers, and bodies are omitted so tokens and
+lesson content do not appear in the logs.
+
 ## Container image
 
 ```bash
-docker build -f bgtutor/Dockerfile -t bgtutor:0.1.0 .   # from the repo root
-docker run -e BGTUTOR_TOKEN=... -v $PWD/bgtutor/data:/data -p 8080:8080 bgtutor:0.1.0
+docker build -f bgtutor/Dockerfile -t bgtutor:0.1.2 .   # from the repo root
+docker run -e BGTUTOR_TOKEN=... -v $PWD/bgtutor/data:/data -p 8080:8080 bgtutor:0.1.2
 ```
 
 The image runs only `bgtutor serve` (static binary on distroless), with the
